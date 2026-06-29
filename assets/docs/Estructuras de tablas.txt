@@ -1,0 +1,276 @@
+-- ============================================================================
+-- MÓDULO 0: AUDITORÍA, ROLES Y SEGURIDAD
+-- ============================================================================
+
+CREATE TABLE roles (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    nombre TEXT NOT NULL UNIQUE, -- 'admin', 'despachador', 'chofer_cobrador', 'gerente'
+    descripcion TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE permisos (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    codigo TEXT NOT NULL UNIQUE, -- 'ver:reportes', 'crear:ordenes', 'aprobar:pagos'
+    descripcion TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE roles_permisos (
+    rol_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    permiso_id UUID REFERENCES permisos(id) ON DELETE CASCADE,
+    PRIMARY KEY (rol_id, permiso_id)
+);
+
+-- Tabla para vincular usuarios de Supabase Auth con los roles de LogiTrack
+CREATE TABLE perfiles_usuario (
+    id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+    rol_id UUID REFERENCES roles(id) ON DELETE SET NULL,
+    nombre_completo TEXT NOT NULL,
+    telefono TEXT,
+    activo BOOLEAN DEFAULT TRUE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Log de Auditoría Global (Captura cambios críticos en el sistema)
+CREATE TABLE logs_auditoria (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    usuario_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    tabla_afectada TEXT NOT NULL,
+    accion TEXT NOT NULL, -- 'INSERT', 'UPDATE', 'DELETE'
+    registro_id UUID NOT NULL,
+    valores_anteriores JSONB,
+    valores_nuevos JSONB,
+    fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ============================================================================
+-- MÓDULO 1: ENTIDADES MAESTRAS (CONTACTOS Y LOGÍSTICA)
+-- ============================================================================
+
+CREATE TABLE clientes (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    rif_nit TEXT NOT NULL UNIQUE,
+    razon_social TEXT NOT NULL,
+    direccion_fiscal TEXT NOT NULL,
+    telefono TEXT,
+	movil1 TEXT,
+	movil2 TEXT,
+	movil3 TEXT,
+    correo_e TEXT,
+	cond_liq NUMERIC(1,0),
+	max_liq NUMERIC(14,2),
+    activo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE proveedores (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    rif_nit TEXT NOT NULL UNIQUE,
+    razon_social TEXT NOT NULL,
+    direccion_fiscal TEXT,
+    telefono TEXT,
+	movil1 TEXT,
+	movil2 TEXT,
+	movil3 TEXT,
+    correo_e TEXT,
+    activo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE camiones (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    placa TEXT NOT NULL UNIQUE,
+    modelo TEXT NOT NULL,
+    capacidad_kg NUMERIC(10,2) NOT NULL,
+    volumen_m3 NUMERIC(10,2),
+    estado TEXT DEFAULT 'disponible' CHECK (estado IN ('disponible', 'en_ruta', 'mantenimiento', 'inactivo')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- EXTENSIÓN: Datos exclusivos para usuarios con rol de Chofer
+CREATE TABLE choferes (
+    perfil_id UUID REFERENCES perfiles_usuario(id) ON DELETE CASCADE PRIMARY KEY, -- Relación 1:1 estricta con la tabla base
+    cedula_licencia TEXT NOT NULL UNIQUE,
+    movil1 TEXT,
+    movil2 TEXT,
+    movil3 TEXT,	
+    estado TEXT DEFAULT 'disponible' CHECK (estado IN ('disponible', 'en_ruta', 'libre', 'suspendido')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- ============================================================================
+-- MÓDULO 2: CONTROL DE INVENTARIOS (ALMACÉN Y MÓVIL)
+-- ============================================================================
+
+CREATE TABLE productos (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    codigo_barras TEXT UNIQUE,
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    unidad_medida TEXT DEFAULT 'unidades', -- 'bulto', 'caja', 'kg'
+    peso_unitario_kg NUMERIC(10,2) DEFAULT 0.00,
+	cant_unidad_medida NUMERIC(2,0) DEFAULT 0.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Inventario estático en el Centro de Distribución
+CREATE TABLE inventario_almacen (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    producto_id UUID REFERENCES productos(id) ON DELETE RESTRICT UNIQUE,
+    stock_disponible INT NOT NULL DEFAULT 0 CHECK (stock_disponible >= 0),
+    stock_comprometido INT NOT NULL DEFAULT 0 DEFAULT 0, -- Reservado para órdenes cargadas
+    ubicacion_pasillo TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Inventario Móvil (Carga actual sobre las unidades de transporte en ruta)
+CREATE TABLE inventario_movil (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    camion_id UUID REFERENCES camiones(id) ON DELETE RESTRICT,
+    producto_id UUID REFERENCES productos(id) ON DELETE RESTRICT,
+    cantidad_cargada INT NOT NULL DEFAULT 0 CHECK (cantidad_cargada >= 0),
+    cantidad_entregada INT NOT NULL DEFAULT 0 CHECK (cantidad_entregada >= 0),
+    cantidad_devolucion INT NOT NULL DEFAULT 0 CHECK (cantidad_devolucion >= 0),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(camion_id, producto_id)
+);
+
+-- ============================================================================
+-- MÓDULO 3: DISTRIBUCIÓN Y DESPACHO (MAESTRO-DETALLE)
+-- ============================================================================
+
+-- Resumen de la Orden de Distribución / Clientes / Despacho
+CREATE TABLE ordenes_distribucion (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    correlativo SERIAL UNIQUE,
+    cliente_id UUID REFERENCES clientes(id) ON DELETE RESTRICT,
+    camion_id UUID REFERENCES camiones(id) ON DELETE RESTRICT,
+    chofer_id UUID REFERENCES choferes(perfil_id) ON DELETE RESTRICT, -- ¡Corregido! Apunta a perfil_id
+    estado TEXT DEFAULT 'borrador' CHECK (estado IN ('borrador', 'lista_para_carga', 'en_transito', 'liquidada', 'anulada')),
+    fecha_despacho TIMESTAMP WITH TIME ZONE,
+    peso_total_calculado NUMERIC(10,2) DEFAULT 0.00,
+    factura_origen_numero VARCHAR(30) NOT NULL, 
+    creado_por UUID REFERENCES auth.users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE detalle_distribucion (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    orden_id UUID REFERENCES ordenes_distribucion(id) ON DELETE CASCADE,
+    producto_id UUID REFERENCES productos(id) ON DELETE RESTRICT,
+    cantidad_solicitada INT NOT NULL CHECK (cantidad_solicitada > 0),
+    cantidad_despachada INT DEFAULT 0,
+    valor_unitario_recaudar NUMERIC(14, 2) NOT NULL DEFAULT 0.00,
+    subtotal_recaudar NUMERIC(12, 2) NOT NULL DEFAULT 0.00,     
+    secuencia_entrega INT, 
+    estado_entrega TEXT DEFAULT 'pendiente' CHECK (estado_entrega IN ('pendiente', 'entregado', 'entregado_parcial', 'rechazado')),
+    motivo_rechazo TEXT,
+    UNIQUE(orden_id, producto_id) -- ¡Corregido! Removido cliente_id ya que no pertenece a esta tabla
+);
+-- ============================================================================
+-- MÓDULO 4: RENDICIÓN DE CUENTAS EN RUTA (MAESTRO Y DOS DETALLES)
+-- ============================================================================
+
+-- Resumen de la Rendición (Al retornar el chofer del viaje)
+CREATE TABLE rendiciones_cuentas (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+	cliente_id UUID REFERENCES clientes(id) ON DELETE RESTRICT,	    
+    fecha_rendicion TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    total_efectivo_recaudado NUMERIC(12,2) DEFAULT 0.00,
+    total_transferencias_recaudado NUMERIC(12,2) DEFAULT 0.00,
+    total_devoluciones_valoradas NUMERIC(12,2) DEFAULT 0.00,
+    estado TEXT DEFAULT 'revision' CHECK (estado IN ('revision', 'aprobada', 'con_discrepancia')),
+    observaciones TEXT,
+    auditado_por UUID REFERENCES auth.users(id)
+);
+
+-- Detalle 1: Recepción e Inspección Física de Devoluciones / Rechazos de mercancía
+CREATE TABLE detalle_rendicion_ordenes (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,	
+    rendicion_id UUID REFERENCES rendiciones_cuentas(id) ON DELETE CASCADE,
+	orden_distribucion_id UUID REFERENCES ordenes_distribucion(id) ON DELETE RESTRICT UNIQUE,
+	recaudado NUMERIC(14,2) DEFAULT 0.00
+);
+
+-- Detalle 2: Reporte Financiero de Cobranzas realizadas en la ruta (Sellers/Collectors)
+CREATE TABLE detalle_rendicion_pagos (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    rendicion_id UUID REFERENCES rendiciones_cuentas(id) ON DELETE CASCADE,
+    metodo_pago TEXT NOT NULL CHECK (metodo_pago IN ('efectivo_usd', 'efectivo_bs', 'transferencia', 'pago_movil')),
+    monto NUMERIC(12,2) NOT NULL CHECK (monto >= 0),
+    referencia_bancaria TEXT, -- Si aplica
+	cuenta_bancaria TEXT,
+    capture_url TEXT -- Almacenamiento en Supabase Storage
+);
+
+-- ============================================================================
+-- MÓDULO 5: COMPRAS Y PAGOS A PROVEEDORES
+-- ============================================================================
+
+-- Resumen de Facturas de Compras (Recepción de mercancía de proveedores)
+CREATE TABLE facturas_compras (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    proveedor_id UUID REFERENCES proveedores(id) ON DELETE RESTRICT,
+    numero_factura TEXT NOT NULL,
+    fecha_emision DATE NOT NULL,
+    fecha_vencimiento DATE,
+    monto_subtotal NUMERIC(12,2) NOT NULL,
+    monto_impuesto NUMERIC(12,2) DEFAULT 0.00,
+    monto_total NUMERIC(12,2) NOT NULL,
+    estado_pago TEXT DEFAULT 'pendiente' CHECK (estado_pago IN ('pendiente', 'pago_parcial', 'pagada', 'vencida')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(proveedor_id, numero_factura)
+);
+
+-- Detalle de Facturas de Compras (Alimentos/bienes que entran al almacén principal)
+CREATE TABLE detalle_facturas_compras (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    factura_id UUID REFERENCES facturas_compras(id) ON DELETE CASCADE,
+    producto_id UUID REFERENCES productos(id) ON DELETE RESTRICT,
+    cantidad_comprada INT NOT NULL CHECK (cantidad_comprada > 0),
+    precio_unitario_compra NUMERIC(10,2) NOT NULL,
+	sub_total_compra NUMERIC(10,2) NOT NULL,
+    monto_linea NUMERIC(12,2) NOT NULL
+);
+
+-- Resumen de Órdenes de Pago a Proveedores
+CREATE TABLE pagos_proveedores (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    proveedor_id UUID REFERENCES proveedores(id) ON DELETE RESTRICT,
+    fecha_pago TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    monto_total_pagado NUMERIC(12,2) NOT NULL CHECK (monto_total_pagado > 0),
+    glosa_concepto TEXT,
+    ejecutado_por UUID REFERENCES auth.users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Detalle 1: Amortización de Facturas (A qué facturas afecta y cuánto se les abona)
+CREATE TABLE detalle_pago_facturas (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pago_id UUID REFERENCES pagos_proveedores(id) ON DELETE CASCADE,
+    factura_id UUID REFERENCES facturas_compras(id) ON DELETE RESTRICT,
+    monto_abonado NUMERIC(12,2) NOT NULL CHECK (monto_abonado > 0)
+);
+
+-- Detalle 2: Desglose de Cuentas Bancarias / Métodos de salida del dinero
+CREATE TABLE detalle_pago_metodos (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pago_id UUID REFERENCES pagos_proveedores(id) ON DELETE CASCADE,
+    banco_origen TEXT NOT NULL, -- Ej: 'Banco Provincial', 'Banesco', 'Caja USD'
+    forma_pago TEXT NOT NULL CHECK (forma_pago IN ('transferencia', 'efectivo', 'cheque')),
+    monto_egreso NUMERIC(12,2) NOT NULL CHECK (monto_egreso > 0),
+    numero_referencia TEXT
+);
+
+-- Habilitar RLS explícitamente (por si acaso)
+ALTER TABLE perfiles_usuario ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ordenes_distribucion ENABLE ROW LEVEL SECURITY;
+-- ... (se aplica a todas las tablas)
+
+-- Crear una política abierta para usuarios autenticados (Fase de Desarrollo)
+CREATE POLICY "Permitir todo a usuarios autenticados" 
+ON ordenes_distribucion 
+FOR ALL 
+TO authenticated 
+USING (true) 
+WITH CHECK (true);
