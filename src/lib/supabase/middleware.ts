@@ -1,7 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/login", "/register"];
+const PUBLIC_ROUTES = ["/login", "/register", "/~offline"];
+
+function isPublicAssetPath(pathname: string) {
+  return (
+    pathname.startsWith("/serwist/") ||
+    pathname.startsWith("/icon") ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/apple-icon"
+  );
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -34,7 +43,8 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic =
     PUBLIC_ROUTES.some((route) => pathname.startsWith(route)) ||
-    pathname.startsWith("/api/");
+    pathname.startsWith("/api/") ||
+    isPublicAssetPath(pathname);
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
