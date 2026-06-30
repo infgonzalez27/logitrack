@@ -6,9 +6,9 @@ const PUBLIC_ROUTES = ["/login", "/register", "/~offline"];
 function isPublicAssetPath(pathname: string) {
   return (
     pathname.startsWith("/serwist/") ||
-    pathname.startsWith("/icon") ||
+    pathname.startsWith("/icons/") ||
     pathname === "/manifest.webmanifest" ||
-    pathname === "/apple-icon"
+    pathname === "/apple-icon.png"
   );
 }
 

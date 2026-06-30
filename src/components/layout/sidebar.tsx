@@ -2,30 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Logo } from "@/components/brand/logo";
 import { NAV_SECTIONS } from "@/lib/constants";
 import { logoutAction } from "@/lib/actions/auth";
-
-function LogoMark() {
-  return (
-    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-lt-primary shadow-sm">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className="h-5 w-5 text-white"
-        aria-hidden
-      >
-        <path
-          d="M3 7h11v8H3V7zm11 2h4l3 3v3h-7V9z"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinejoin="round"
-        />
-        <circle cx="7" cy="17" r="2" fill="currentColor" />
-        <circle cx="17" cy="17" r="2" fill="currentColor" />
-      </svg>
-    </div>
-  );
-}
 
 export function Sidebar({ userName }: { userName: string }) {
   const pathname = usePathname();
@@ -36,15 +15,7 @@ export function Sidebar({ userName }: { userName: string }) {
       style={{ boxShadow: "var(--lt-shadow-sidebar)" }}
     >
       <div className="border-b border-lt-border-light px-5 py-5">
-        <div className="flex items-center gap-3">
-          <LogoMark />
-          <div>
-            <p className="font-display text-sm font-bold tracking-tight text-lt-text">
-              LogiTrack
-            </p>
-            <p className="text-xs text-lt-text-muted">Distribución</p>
-          </div>
-        </div>
+        <Logo href="/ordenes" size="md" subtitle="Distribución" />
         <p className="mt-4 truncate text-sm font-medium text-lt-text">
           {userName}
         </p>
