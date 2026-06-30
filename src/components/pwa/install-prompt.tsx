@@ -55,11 +55,20 @@ export function InstallPwaPrompt() {
           Añade la app a tu pantalla de inicio para acceso rápido.
         </p>
       </div>
-      <div className="flex shrink-0 gap-2">
-        <Button type="button" variant="secondary" onClick={() => setDismissed(true)}>
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:shrink-0">
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full sm:w-auto"
+          onClick={() => setDismissed(true)}
+        >
           Ahora no
         </Button>
-        <Button type="button" onClick={handleInstall}>
+        <Button
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={handleInstall}
+        >
           Instalar
         </Button>
       </div>

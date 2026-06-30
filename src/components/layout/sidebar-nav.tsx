@@ -6,16 +6,52 @@ import { Logo } from "@/components/brand/logo";
 import { NAV_SECTIONS } from "@/lib/constants";
 import { logoutAction } from "@/lib/actions/auth";
 
-export function Sidebar({ userName }: { userName: string }) {
+export function SidebarNav({
+  userName,
+  onNavigate,
+  showClose,
+  onClose,
+}: {
+  userName: string;
+  onNavigate?: () => void;
+  showClose?: boolean;
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
-    <aside
-      className="flex w-64 shrink-0 flex-col border-r border-lt-border-light bg-lt-surface"
-      style={{ boxShadow: "var(--lt-shadow-sidebar)" }}
-    >
-      <div className="border-b border-lt-border-light px-5 py-5">
-        <Logo href="/ordenes" size="md" subtitle="Distribución" />
+    <>
+      <div className="border-b border-lt-border-light px-4 py-4 sm:px-5 sm:py-5">
+        <div className="flex items-start justify-between gap-3">
+          <Logo
+            href="/ordenes"
+            size="md"
+            subtitle="Distribución"
+            onNavigate={onNavigate}
+          />
+          {showClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar menú"
+              className="cursor-pointer rounded-lg p-2 text-lt-text-muted transition-colors hover:bg-lt-primary-muted hover:text-lt-text"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-5 w-5"
+                aria-hidden
+              >
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          ) : null}
+        </div>
         <p className="mt-4 truncate text-sm font-medium text-lt-text">
           {userName}
         </p>
@@ -36,7 +72,8 @@ export function Sidebar({ userName }: { userName: string }) {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className={`block cursor-pointer rounded-xl px-3 py-2 text-sm transition-all duration-200 ${
+                      onClick={onNavigate}
+                      className={`block cursor-pointer rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${
                         active
                           ? "bg-lt-primary font-medium text-white shadow-sm"
                           : "text-lt-text-muted hover:bg-lt-primary-muted hover:text-lt-text"
@@ -55,11 +92,11 @@ export function Sidebar({ userName }: { userName: string }) {
       <form action={logoutAction} className="border-t border-lt-border-light p-3">
         <button
           type="submit"
-          className="w-full cursor-pointer rounded-xl px-3 py-2 text-left text-sm text-lt-text-muted transition-colors duration-200 hover:bg-lt-primary-muted hover:text-lt-text"
+          className="w-full cursor-pointer rounded-xl px-3 py-2.5 text-left text-sm text-lt-text-muted transition-colors duration-200 hover:bg-lt-primary-muted hover:text-lt-text"
         >
           Cerrar sesión
         </button>
       </form>
-    </aside>
+    </>
   );
 }

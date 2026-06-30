@@ -1,5 +1,5 @@
 import { getCurrentProfile } from "@/lib/auth";
-import { Sidebar } from "@/components/layout/sidebar";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { InstallPwaPrompt } from "@/components/pwa/install-prompt";
 
 export default async function DashboardLayout({
@@ -10,14 +10,11 @@ export default async function DashboardLayout({
   const profile = await getCurrentProfile();
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar userName={profile?.nombre_completo ?? "Usuario"} />
-      <div className="flex flex-1 flex-col">
-        <main className="flex-1 overflow-y-auto bg-lt-bg p-6 lg:p-8">
-          <InstallPwaPrompt />
-          {children}
-        </main>
-      </div>
-    </div>
+    <DashboardShell userName={profile?.nombre_completo ?? "Usuario"}>
+      <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
+        <InstallPwaPrompt />
+        {children}
+      </main>
+    </DashboardShell>
   );
 }

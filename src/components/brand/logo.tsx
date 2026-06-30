@@ -14,6 +14,7 @@ type LogoProps = {
   showWordmark?: boolean;
   subtitle?: string;
   href?: string;
+  onNavigate?: () => void;
   className?: string;
   imageClassName?: string;
 };
@@ -24,6 +25,7 @@ export function Logo({
   showWordmark = true,
   subtitle,
   href,
+  onNavigate,
   className = "",
   imageClassName = "",
 }: LogoProps) {
@@ -65,7 +67,11 @@ export function Logo({
 
   if (href) {
     return (
-      <Link href={href} className="inline-flex transition-opacity hover:opacity-90">
+      <Link
+        href={href}
+        onClick={() => onNavigate?.()}
+        className="inline-flex transition-opacity hover:opacity-90"
+      >
         {content}
       </Link>
     );

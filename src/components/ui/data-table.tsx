@@ -17,39 +17,76 @@ export function DataTable({
     );
   }
 
+  const dataColumns = columns.filter(
+    (col) => col.key !== "acciones" && col.label.trim() !== "",
+  );
+  const actionColumn = columns.find((col) => col.key === "acciones");
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-lt-border-light bg-lt-surface">
-      <table className="min-w-full divide-y divide-lt-border-light text-sm">
-        <thead className="bg-lt-surface-muted">
-          <tr>
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-lt-text-muted ${col.className ?? ""}`}
-              >
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-lt-border-light bg-lt-surface">
-          {rows.map((row) => (
-            <tr
-              key={row.id}
-              className="transition-colors duration-200 hover:bg-lt-primary-muted/40"
-            >
-              {columns.map((col) => (
-                <td
+    <>
+      <div className="space-y-3 md:hidden">
+        {rows.map((row) => (
+          <article
+            key={row.id}
+            className="rounded-xl border border-lt-border-light bg-lt-surface p-4 shadow-sm"
+          >
+            <dl className="space-y-3">
+              {dataColumns.map((col) => (
+                <div
                   key={col.key}
-                  className={`px-4 py-3 text-lt-text ${col.className ?? ""}`}
+                  className="flex items-start justify-between gap-4"
                 >
-                  {row.cells[col.key]}
-                </td>
+                  <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-lt-text-subtle">
+                    {col.label}
+                  </dt>
+                  <dd className="min-w-0 text-right text-sm text-lt-text">
+                    {row.cells[col.key]}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {actionColumn && row.cells.acciones ? (
+              <div className="mt-4 border-t border-lt-border-light pt-3">
+                {row.cells.acciones}
+              </div>
+            ) : null}
+          </article>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-xl border border-lt-border-light bg-lt-surface md:block">
+        <table className="min-w-full divide-y divide-lt-border-light text-sm">
+          <thead className="bg-lt-surface-muted">
+            <tr>
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-lt-text-muted ${col.className ?? ""}`}
+                >
+                  {col.label}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-lt-border-light bg-lt-surface">
+            {rows.map((row) => (
+              <tr
+                key={row.id}
+                className="transition-colors duration-200 hover:bg-lt-primary-muted/40"
+              >
+                {columns.map((col) => (
+                  <td
+                    key={col.key}
+                    className={`px-4 py-3 text-lt-text ${col.className ?? ""}`}
+                  >
+                    {row.cells[col.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
