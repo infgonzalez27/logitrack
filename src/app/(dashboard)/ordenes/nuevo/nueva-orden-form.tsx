@@ -146,7 +146,7 @@ export function NuevaOrdenForm({
             {lineas.map((linea, index) => (
               <div
                 key={index}
-                className="grid gap-3 rounded-lg border border-zinc-100 p-4 sm:grid-cols-5"
+                className="grid gap-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/50 p-4 sm:grid-cols-5"
               >
                 <Select
                   label="Producto"
@@ -207,16 +207,16 @@ export function NuevaOrdenForm({
             ))}
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-6 text-sm text-zinc-600">
+          <div className="mt-4 flex flex-wrap gap-6 text-sm text-lt-text-muted">
             <p>
               Peso estimado:{" "}
-              <span className="font-medium text-zinc-900">
+              <span className="font-medium text-lt-text">
                 {pesoEstimado.toFixed(2)} kg
               </span>
             </p>
             <p>
               Total a recaudar:{" "}
-              <span className="font-medium text-zinc-900">
+              <span className="font-medium text-lt-text">
                 ${totalRecaudar.toFixed(2)}
               </span>
             </p>
@@ -224,7 +224,7 @@ export function NuevaOrdenForm({
         </Card>
 
         {error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="lt-alert-error">
             {error}
           </p>
         )}

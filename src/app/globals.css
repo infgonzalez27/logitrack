@@ -1,26 +1,187 @@
 @import "tailwindcss";
 
+/* LogiTrack — Soft UI + Azul pastel (ui-ux-pro-max)
+   Tokens con valores directos para Tailwind v4 */
+
+@theme {
+  --color-lt-bg: #f5faff;
+  --color-lt-surface: #ffffff;
+  --color-lt-surface-muted: #edf5fc;
+  --color-lt-border: #c8ddf0;
+  --color-lt-border-light: #e2eef8;
+  --color-lt-primary: #5b9bd5;
+  --color-lt-primary-hover: #4a8ac4;
+  --color-lt-primary-active: #3d7ab3;
+  --color-lt-primary-soft: #d6e8f7;
+  --color-lt-primary-pastel: #b8d4f0;
+  --color-lt-primary-muted: #e8f2fb;
+  --color-lt-text: #1e3a5f;
+  --color-lt-text-muted: #5a7a9a;
+  --color-lt-text-subtle: #8ba3bd;
+  --color-lt-success-bg: #e8f5f0;
+  --color-lt-success-text: #2d6a4f;
+  --color-lt-danger-bg: #fdeef0;
+  --color-lt-danger-text: #b42337;
+  --color-lt-warning-bg: #fef6e8;
+  --color-lt-warning-text: #92600a;
+  --color-lt-info-bg: #e8f2fc;
+  --color-lt-info-text: #2e5f8a;
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --radius-lt: 0.75rem;
+  --radius-lt-lg: 1rem;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --lt-bg: #f5faff;
+  --lt-surface: #ffffff;
+  --lt-surface-muted: #edf5fc;
+  --lt-border: #c8ddf0;
+  --lt-border-light: #e2eef8;
+  --lt-primary: #5b9bd5;
+  --lt-primary-hover: #4a8ac4;
+  --lt-primary-active: #3d7ab3;
+  --lt-primary-soft: #d6e8f7;
+  --lt-primary-pastel: #b8d4f0;
+  --lt-primary-muted: #e8f2fb;
+  --lt-text: #1e3a5f;
+  --lt-text-muted: #5a7a9a;
+  --lt-text-subtle: #8ba3bd;
+  --lt-success-bg: #e8f5f0;
+  --lt-success-text: #2d6a4f;
+  --lt-danger-bg: #fdeef0;
+  --lt-danger-text: #b42337;
+  --lt-warning-bg: #fef6e8;
+  --lt-warning-text: #92600a;
+  --lt-info-bg: #e8f2fc;
+  --lt-info-text: #2e5f8a;
+  --lt-shadow-soft: 0 4px 20px -4px rgba(30, 58, 95, 0.08);
+  --lt-shadow-card:
+    0 1px 2px rgba(30, 58, 95, 0.04),
+    0 8px 24px -8px rgba(91, 155, 213, 0.18);
+  --lt-shadow-sidebar: 4px 0 24px -8px rgba(30, 58, 95, 0.06);
+  --lt-radius: 0.75rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--lt-bg);
+  color: var(--lt-text);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  color: var(--lt-text);
+}
+
+/* Componentes base (respaldo si Tailwind no regenera utilidades en dev) */
+@layer components {
+  .lt-btn {
+    display: inline-flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--lt-radius);
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .lt-btn-primary {
+    background-color: var(--lt-primary);
+    color: #ffffff;
+    box-shadow: var(--lt-shadow-soft);
+  }
+
+  .lt-btn-primary:hover {
+    background-color: var(--lt-primary-hover);
+  }
+
+  .lt-btn-primary:active {
+    background-color: var(--lt-primary-active);
+  }
+
+  .lt-card {
+    border-radius: 1rem;
+    border: 1px solid var(--lt-border-light);
+    background-color: var(--lt-surface);
+    box-shadow: var(--lt-shadow-card);
+  }
+
+  .lt-input {
+    width: 100%;
+    border-radius: var(--lt-radius);
+    border: 1px solid var(--lt-border);
+    background-color: var(--lt-surface);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--lt-text);
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+
+  .lt-input::placeholder {
+    color: var(--lt-text-subtle);
+  }
+
+  .lt-input:focus {
+    outline: none;
+    border-color: var(--lt-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--lt-primary) 25%, transparent);
+  }
+}
+
+.lt-alert-success {
+  border-radius: var(--lt-radius);
+  background: var(--lt-success-bg);
+  color: var(--lt-success-text);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.lt-alert-error {
+  border-radius: var(--lt-radius);
+  background: var(--lt-danger-bg);
+  color: var(--lt-danger-text);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.lt-alert-debug {
+  border-radius: var(--lt-radius);
+  border: 1px solid var(--lt-primary-pastel);
+  background: var(--lt-primary-muted);
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.lt-auth-bg {
+  background-color: var(--lt-bg);
+  background-image:
+    radial-gradient(
+      ellipse 80% 60% at 50% -10%,
+      var(--lt-primary-soft) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 50% 40% at 100% 100%,
+      var(--lt-primary-pastel) 0%,
+      transparent 50%
+    );
 }

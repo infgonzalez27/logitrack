@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { toDisplayError } from "@/lib/errors";
+import { isDevDebug, logAuthDebug, serializeErrorForLog } from "@/lib/debug";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -14,18 +14,31 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/ordenes";
   const registered = searchParams.get("registered") === "1";
+  const showDebug = isDevDebug();
 
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPending(true);
     setError(null);
+    setDebugInfo(null);
 
     const formData = new FormData(e.currentTarget);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+
+    logAuthDebug("login:start", {
+      email,
+      hasPassword: Boolean(password),
+      mode: "server-api",
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "MISSING",
+      anonKeyLength: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length ?? 0,
+    });
 
     if (!email || !password) {
       setError("Ingresa correo y contraseña.");
@@ -34,20 +47,35 @@ export default function LoginForm() {
     }
 
     try {
-      const supabase = createClient();
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (authError) {
-        setError(toDisplayError(authError));
-        setPending(false);
-        return;
-      }
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        debug?: Record<string, unknown>;
+        userId?: string;
+      };
 
-      if (!data.session) {
-        setError("No se pudo crear la sesión. Intenta de nuevo.");
+      logAuthDebug("login:response", {
+        status: res.status,
+        ok: payload.ok,
+        error: payload.error,
+        debug: payload.debug,
+      });
+
+      if (!res.ok || payload.error) {
+        setError(payload.error ?? "Error al iniciar sesión.");
+        if (showDebug) {
+          setDebugInfo({
+            phase: "api/auth/login",
+            httpStatus: res.status,
+            debug: payload.debug ?? null,
+          });
+        }
         setPending(false);
         return;
       }
@@ -55,6 +83,9 @@ export default function LoginForm() {
       router.replace(redirectTo.startsWith("/") ? redirectTo : "/ordenes");
       router.refresh();
     } catch (err) {
+      const serialized = serializeErrorForLog(err);
+      logAuthDebug("login:exception", serialized);
+      setDebugInfo({ phase: "fetch", error: serialized });
       setError(toDisplayError(err));
       setPending(false);
     }
@@ -63,7 +94,7 @@ export default function LoginForm() {
   return (
     <Card title="Iniciar sesión" description="Accede a LogiTrack">
       {registered && (
-        <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <p className="lt-alert-success mb-4">
           Usuario registrado. Inicia sesión con tu correo y contraseña.
         </p>
       )}
@@ -82,18 +113,49 @@ export default function LoginForm() {
           required
           autoComplete="current-password"
         />
-        {error ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
+        {error ? <p className="lt-alert-error">{error}</p> : null}
+        {showDebug && debugInfo ? (
+          <details className="lt-alert-debug">
+            <summary className="cursor-pointer font-medium text-lt-text">
+              Debug auth (solo desarrollo)
+            </summary>
+            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-lt-text-muted">
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+            <p className="mt-2 text-lt-text-muted">
+              Consola F12 · terminal del servidor ·{" "}
+              <Link
+                href="/api/debug/auth-probe"
+                target="_blank"
+                className="font-medium text-lt-primary underline"
+              >
+                /api/debug/auth-probe
+              </Link>
+            </p>
+          </details>
         ) : null}
         <Button type="submit" className="w-full" disabled={pending}>
           {pending ? "Entrando…" : "Entrar"}
         </Button>
       </form>
-      <p className="mt-4 text-center text-sm text-zinc-500">
+      {showDebug && (
+        <p className="mt-3 text-center text-xs text-lt-text-subtle">
+          Logs activos ·{" "}
+          <Link
+            href="/api/debug/auth-probe"
+            target="_blank"
+            className="text-lt-primary underline"
+          >
+            diagnóstico Auth API
+          </Link>
+        </p>
+      )}
+      <p className="mt-4 text-center text-sm text-lt-text-muted">
         ¿Necesitas crear un usuario?{" "}
-        <Link href="/register" className="font-medium text-zinc-900 underline">
+        <Link
+          href="/register"
+          className="font-medium text-lt-primary underline hover:text-lt-primary-hover"
+        >
           Registrar usuario
         </Link>
       </p>

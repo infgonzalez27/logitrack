@@ -36,13 +36,9 @@ export function ActionForm({
   return (
     <form action={formAction} className={className}>
       {children}
-      {state?.error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      )}
+      {state?.error && <p className="lt-alert-error">{state.error}</p>}
       {pending && (
-        <p className="text-sm text-zinc-500">Guardando…</p>
+        <p className="text-sm text-lt-text-muted">Guardando…</p>
       )}
     </form>
   );

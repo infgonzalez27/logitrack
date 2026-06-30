@@ -63,7 +63,7 @@ export default async function OrdenesPage() {
               acciones: (
                 <Link
                   href={`/ordenes/${o.id}`}
-                  className="text-sm font-medium text-zinc-900 underline"
+                  className="text-sm font-medium text-lt-primary underline hover:text-lt-primary-hover"
                 >
                   Ver
                 </Link>

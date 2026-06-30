@@ -11,16 +11,19 @@ export function Input({ label, error, className = "", id, ...props }: InputProps
   return (
     <div className="space-y-1.5">
       {label && (
-        <label htmlFor={inputId} className="block text-sm font-medium text-zinc-700">
+        <label
+          htmlFor={inputId}
+          className="block text-sm font-medium text-lt-text"
+        >
           {label}
         </label>
       )}
       <input
         id={inputId}
-        className={`w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-900 focus:ring-2 ${className}`}
+        className={`lt-input w-full rounded-xl border border-lt-border bg-lt-surface px-3.5 py-2.5 text-sm text-lt-text transition-colors duration-200 placeholder:text-lt-text-subtle outline-none focus:border-lt-primary focus:ring-2 focus:ring-lt-primary/25 ${className}`}
         {...props}
       />
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-lt-danger-text">{error}</p>}
     </div>
   );
 }

@@ -27,7 +27,7 @@ export default async function UsuariosPage() {
       />
 
       {error && (
-        <p className="text-sm text-red-600">{error.message}</p>
+        <p className="text-sm text-lt-danger-text">{error.message}</p>
       )}
 
       <Card>
@@ -55,7 +55,7 @@ export default async function UsuariosPage() {
         />
       </Card>
 
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-lt-text-muted">
         También puedes registrar desde{" "}
         <Link href="/register" className="underline">
           /register

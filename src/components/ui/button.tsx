@@ -2,14 +2,16 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 const base =
-  "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
+  "lt-btn inline-flex cursor-pointer items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lt-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
 
 const variants = {
-  primary: "bg-zinc-900 text-white hover:bg-zinc-800",
+  primary: "lt-btn-primary bg-lt-primary text-white shadow-sm hover:bg-lt-primary-hover active:bg-lt-primary-active",
   secondary:
-    "border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50",
-  danger: "bg-red-600 text-white hover:bg-red-700",
-  ghost: "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
+    "border border-lt-border bg-lt-surface text-lt-text hover:border-lt-primary-pastel hover:bg-lt-surface-muted",
+  danger:
+    "bg-lt-danger-text text-white shadow-sm hover:opacity-90 active:opacity-95",
+  ghost:
+    "text-lt-text-muted hover:bg-lt-primary-muted hover:text-lt-text",
 };
 
 type ButtonProps = {

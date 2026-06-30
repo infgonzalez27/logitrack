@@ -11,32 +11,38 @@ export function DataTable({
 }) {
   if (!rows.length) {
     return (
-      <p className="rounded-lg border border-dashed border-zinc-200 px-4 py-8 text-center text-sm text-zinc-500">
+      <p className="rounded-xl border border-dashed border-lt-border px-4 py-10 text-center text-sm text-lt-text-muted">
         {emptyMessage}
       </p>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-200">
-      <table className="min-w-full divide-y divide-zinc-200 text-sm">
-        <thead className="bg-zinc-50">
+    <div className="overflow-x-auto rounded-xl border border-lt-border-light bg-lt-surface">
+      <table className="min-w-full divide-y divide-lt-border-light text-sm">
+        <thead className="bg-lt-surface-muted">
           <tr>
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left font-medium text-zinc-600 ${col.className ?? ""}`}
+                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-lt-text-muted ${col.className ?? ""}`}
               >
                 {col.label}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-100 bg-white">
+        <tbody className="divide-y divide-lt-border-light bg-lt-surface">
           {rows.map((row) => (
-            <tr key={row.id} className="hover:bg-zinc-50">
+            <tr
+              key={row.id}
+              className="transition-colors duration-200 hover:bg-lt-primary-muted/40"
+            >
               {columns.map((col) => (
-                <td key={col.key} className={`px-4 py-3 ${col.className ?? ""}`}>
+                <td
+                  key={col.key}
+                  className={`px-4 py-3 text-lt-text ${col.className ?? ""}`}
+                >
                   {row.cells[col.key]}
                 </td>
               ))}

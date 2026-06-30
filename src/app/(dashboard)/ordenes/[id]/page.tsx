@@ -68,15 +68,15 @@ export default async function OrdenDetallePage({
           </Badge>
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Creada</dt>
+              <dt className="text-lt-text-muted">Creada</dt>
               <dd>{formatDate(orden.created_at)}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Despacho</dt>
+              <dt className="text-lt-text-muted">Despacho</dt>
               <dd>{formatDate(orden.fecha_despacho)}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">Peso total</dt>
+              <dt className="text-lt-text-muted">Peso total</dt>
               <dd>{formatNumber(orden.peso_total_calculado)} kg</dd>
             </div>
           </dl>
@@ -84,20 +84,20 @@ export default async function OrdenDetallePage({
 
         <Card title="Cliente">
           <p className="font-medium">{cliente?.razon_social}</p>
-          <p className="text-sm text-zinc-500">{cliente?.rif_nit}</p>
+          <p className="text-sm text-lt-text-muted">{cliente?.rif_nit}</p>
           <p className="mt-2 text-sm">{cliente?.direccion_fiscal}</p>
         </Card>
 
         <Card title="Logística">
           <dl className="space-y-2 text-sm">
             <div>
-              <dt className="text-zinc-500">Camión</dt>
+              <dt className="text-lt-text-muted">Camión</dt>
               <dd className="font-medium">
                 {camion?.placa} — {camion?.modelo}
               </dd>
             </div>
             <div>
-              <dt className="text-zinc-500">Chofer</dt>
+              <dt className="text-lt-text-muted">Chofer</dt>
               <dd className="font-medium">
                 {perfilChofer?.nombre_completo ?? "—"}
               </dd>

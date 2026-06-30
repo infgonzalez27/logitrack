@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { registerUser } from "@/lib/auth/register-user";
 import { createClient } from "@/lib/supabase/server";
 import { toDisplayError } from "@/lib/errors";
 
@@ -45,33 +45,18 @@ export async function registerUserAction(
   _prev: AuthFormState,
   formData: FormData,
 ): Promise<AuthFormState> {
-  const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-  const nombre = String(formData.get("nombre_completo") ?? "").trim();
-  const telefono = String(formData.get("telefono") ?? "").trim();
-  const rol = String(formData.get("rol_nombre") ?? "").trim();
+  const result = await registerUser({
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    nombre_completo: String(formData.get("nombre_completo") ?? ""),
+    telefono: String(formData.get("telefono") ?? ""),
+    rol_nombre: String(formData.get("rol_nombre") ?? ""),
+  });
 
-  if (!email || !password || !nombre || !rol) {
-    return { error: "Completa los campos obligatorios." };
+  if (!result.ok) {
+    return { error: result.error };
   }
 
-  try {
-    const supabaseAdmin = createAdminClient();
-    const { data, error } = await supabaseAdmin.rpc("registra_nuevo_usuario", {
-      p_email: email,
-      p_password: password,
-      p_nombre_completo: nombre,
-      p_telefono: telefono,
-      p_rol_nombre: rol,
-    });
-
-    if (error) {
-      return { error: toDisplayError(error) };
-    }
-
-    revalidatePath("/usuarios");
-    return { success: true, userId: typeof data === "string" ? data : undefined };
-  } catch (err) {
-    return { error: toDisplayError(err) };
-  }
+  revalidatePath("/usuarios");
+  return { success: true, userId: result.userId };
 }

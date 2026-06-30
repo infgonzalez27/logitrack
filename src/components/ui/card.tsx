@@ -12,13 +12,17 @@ export function Card({
   action?: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white shadow-sm">
+    <section className="lt-card rounded-2xl border border-lt-border-light bg-lt-surface shadow-[var(--lt-shadow-card)]">
       {(title || action) && (
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-lt-border-light px-6 py-4">
           <div>
-            {title && <h2 className="text-lg font-semibold">{title}</h2>}
+            {title && (
+              <h2 className="font-display text-lg font-semibold text-lt-text">
+                {title}
+              </h2>
+            )}
             {description && (
-              <p className="mt-1 text-sm text-zinc-500">{description}</p>
+              <p className="mt-1 text-sm text-lt-text-muted">{description}</p>
             )}
           </div>
           {action}
