@@ -44,7 +44,7 @@ export default async function ChoferesPage() {
               },
             };
           })}
-          emptyMessage="No hay choferes. Registra un usuario con rol chofer_cobrador."
+          emptyMessage="No hay choferes. Registra un usuario con rol chofer."
         />
       </Card>
     </div>

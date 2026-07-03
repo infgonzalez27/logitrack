@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
+import type { NavSection } from "@/lib/constants";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 
 export function DashboardShell({
   userName,
+  navSections,
   children,
 }: {
   userName: string;
+  navSections: NavSection[];
   children: React.ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -50,7 +53,7 @@ export function DashboardShell({
             />
           </svg>
         </button>
-        <Logo href="/ordenes" size="sm" showWordmark />
+        <Logo href="/" size="sm" showWordmark />
         <p className="ml-auto max-w-[40%] truncate text-right text-xs font-medium text-lt-text-muted">
           {userName}
         </p>
@@ -70,6 +73,7 @@ export function DashboardShell({
           >
             <SidebarNav
               userName={userName}
+              navSections={navSections}
               onNavigate={() => setMenuOpen(false)}
               showClose
               onClose={() => setMenuOpen(false)}
@@ -83,7 +87,7 @@ export function DashboardShell({
           className="hidden w-64 shrink-0 flex-col border-r border-lt-border-light bg-lt-surface lg:flex"
           style={{ boxShadow: "var(--lt-shadow-sidebar)" }}
         >
-          <SidebarNav userName={userName} />
+          <SidebarNav userName={userName} navSections={navSections} />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>

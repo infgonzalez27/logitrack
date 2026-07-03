@@ -16,29 +16,24 @@ type Linea = {
   producto_id: string;
   cantidad_solicitada: number;
   valor_unitario_recaudar: number;
-  secuencia_entrega: number;
 };
 
 export function NuevaOrdenForm({
-  clientes,
-  camiones,
   choferes,
   productos,
 }: {
-  clientes: Option[];
-  camiones: Option[];
   choferes: Option[];
   productos: ProductoOption[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [choferId, setChoferId] = useState("");
   const [lineas, setLineas] = useState<Linea[]>([
     {
       producto_id: "",
       cantidad_solicitada: 1,
       valor_unitario_recaudar: 0,
-      secuencia_entrega: 1,
     },
   ]);
 
@@ -55,7 +50,6 @@ export function NuevaOrdenForm({
         producto_id: "",
         cantidad_solicitada: 1,
         valor_unitario_recaudar: 0,
-        secuencia_entrega: prev.length + 1,
       },
     ]);
   }
@@ -69,12 +63,8 @@ export function NuevaOrdenForm({
     setPending(true);
     setError(null);
 
-    const form = new FormData(e.currentTarget);
     const result = await createOrdenAction({
-      cliente_id: String(form.get("cliente_id")),
-      camion_id: String(form.get("camion_id")),
-      chofer_id: String(form.get("chofer_id")),
-      factura_origen_numero: String(form.get("factura_origen_numero")).trim(),
+      chofer_id: choferId,
       lineas: lineas.filter((l) => l.producto_id),
     });
 
@@ -99,39 +89,20 @@ export function NuevaOrdenForm({
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Nueva orden de distribución"
-        description="Estado inicial: borrador"
+        description="Solicitud al despacho — estado inicial: borrador"
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card title="Cabecera">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select
-              label="Cliente"
-              name="cliente_id"
-              required
-              placeholder="Selecciona cliente"
-              options={clientes}
-            />
-            <Input
-              label="Nº factura origen"
-              name="factura_origen_numero"
-              required
-            />
-            <Select
-              label="Camión"
-              name="camion_id"
-              required
-              placeholder="Selecciona camión"
-              options={camiones}
-            />
-            <Select
-              label="Chofer"
-              name="chofer_id"
-              required
-              placeholder="Selecciona chofer"
-              options={choferes}
-            />
-          </div>
+        <Card title="Asignación">
+          <Select
+            label="Chofer"
+            name="chofer_id"
+            required
+            placeholder="Selecciona chofer"
+            options={choferes}
+            value={choferId}
+            onChange={(e) => setChoferId(e.target.value)}
+          />
         </Card>
 
         <Card
@@ -146,7 +117,7 @@ export function NuevaOrdenForm({
             {lineas.map((linea, index) => (
               <div
                 key={index}
-                className="grid gap-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/50 p-4 sm:grid-cols-5"
+                className="grid gap-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/50 p-4 sm:grid-cols-4"
               >
                 <Select
                   label="Producto"
@@ -171,7 +142,7 @@ export function NuevaOrdenForm({
                   }
                 />
                 <Input
-                  label="Valor unit. recaudar"
+                  label="Precio unitario"
                   type="number"
                   min="0"
                   step="0.01"
@@ -179,17 +150,6 @@ export function NuevaOrdenForm({
                   onChange={(e) =>
                     updateLinea(index, {
                       valor_unitario_recaudar: Number(e.target.value),
-                    })
-                  }
-                />
-                <Input
-                  label="Secuencia"
-                  type="number"
-                  min="1"
-                  value={linea.secuencia_entrega}
-                  onChange={(e) =>
-                    updateLinea(index, {
-                      secuencia_entrega: Number(e.target.value),
                     })
                   }
                 />
@@ -223,15 +183,11 @@ export function NuevaOrdenForm({
           </div>
         </Card>
 
-        {error && (
-          <p className="lt-alert-error">
-            {error}
-          </p>
-        )}
+        {error && <p className="lt-alert-error">{error}</p>}
 
         <div className="flex gap-3">
           <Button type="submit" disabled={pending}>
-            {pending ? "Guardando…" : "Crear orden"}
+            {pending ? "Guardando…" : "Solicitar orden"}
           </Button>
           <Button
             type="button"

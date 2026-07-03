@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { getCurrentProfile } from "@/lib/auth";
+import { canCreateOrden } from "@/lib/auth/orden-permissions";
+import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado } from "@/lib/constants";
@@ -11,6 +14,10 @@ import { Card } from "@/components/ui/card";
 
 export default async function OrdenesPage() {
   const supabase = await createClient();
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  const puedeCrear = canCreateOrden(rol);
+
   const { data: ordenes } = await supabase
     .from("ordenes_distribucion")
     .select(
@@ -28,7 +35,11 @@ export default async function OrdenesPage() {
       <PageHeader
         title="Órdenes de distribución"
         description="Módulo 3 — Despacho maestro-detalle"
-        action={<Button href="/ordenes/nuevo">Nueva orden</Button>}
+        action={
+          puedeCrear ? (
+            <Button href="/ordenes/nuevo">Nueva orden</Button>
+          ) : undefined
+        }
       />
       <Card>
         <DataTable

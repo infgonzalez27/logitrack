@@ -1,0 +1,21 @@
+//Si estás usando el SDK de Supabase (@supabase/supabase-js) en un Server Action o un Route Handler (API), el objeto con los parámetros se debe mapear con los mismos nombres que definimos en el PL/pgSQL:
+
+// Llamada RPC desde el backend de Next.js
+const { data, error } = await supabaseAdmin.rpc('registra_nuevo_usuario', {
+  p_email: 'juan.vendedor@logitrack.com',
+  p_password: 'PasswordSeguro99_',
+  p_nombre_completo: 'Juan Carlos Mendoza',
+  p_telefono: '+584249998877',
+  p_rol_nombre: 'vendedor' // <--- Aquí pasas el rol exacto de tu catálogo
+});
+
+if (error) {
+  console.error('Error al invocar la función:', error.message);
+} else {
+  // 'data' recibirá el JSONB estructurado de éxito o error que armó Postgres
+  console.log('Resultado del registro:', data); 
+  // Ej: { success: true, message: 'Usuario registrado exitosamente...', user_id: '...' }
+}
+
+Recordatorio importante:
+//Para realizar esta operación desde el backend debes usar el cliente de Supabase configurado con la SERVICE_ROLE_KEY (nunca la ANON_KEY), ya que la creación de usuarios en la tabla interna auth.users requiere privilegios de súper administrador (bypass de políticas de seguridad RLS).

@@ -103,7 +103,7 @@ export function mapAuthTokenError(body: {
     body.error_code === "unexpected_failure" &&
     body.msg?.toLowerCase().includes("database error")
   ) {
-    return "La cuenta existe pero está dañada en Supabase Auth (error de base de datos al validar el usuario). Un administrador debe eliminarla en Authentication → Users y volver a registrarla.";
+    return "La cuenta existe pero está dañada en Supabase Auth. Un administrador o el DB admin debe eliminarla en Supabase y corregir el SP registra_nuevo_usuario.";
   }
 
   if (body.msg?.trim()) {

@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
-import { NAV_SECTIONS } from "@/lib/constants";
+import type { NavSection } from "@/lib/constants";
 import { logoutAction } from "@/lib/actions/auth";
 
 export function SidebarNav({
   userName,
+  navSections,
   onNavigate,
   showClose,
   onClose,
 }: {
   userName: string;
+  navSections: NavSection[];
   onNavigate?: () => void;
   showClose?: boolean;
   onClose?: () => void;
@@ -24,7 +26,7 @@ export function SidebarNav({
       <div className="border-b border-lt-border-light px-4 py-4 sm:px-5 sm:py-5">
         <div className="flex items-start justify-between gap-3">
           <Logo
-            href="/ordenes"
+            href="/"
             size="md"
             subtitle="Distribución"
             onNavigate={onNavigate}
@@ -58,7 +60,7 @@ export function SidebarNav({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {NAV_SECTIONS.map((section) => (
+        {navSections.map((section) => (
           <div key={section.title} className="mb-5">
             <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-lt-text-subtle">
               {section.title}

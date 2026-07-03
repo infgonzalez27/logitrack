@@ -3,9 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 /** Roles definidos en el esquema (fallback si no hay service role key). */
 export const ROLES_FALLBACK = [
   { value: "admin", label: "admin" },
-  { value: "despachador", label: "despachador" },
-  { value: "chofer_cobrador", label: "chofer_cobrador" },
   { value: "gerente", label: "gerente" },
+  { value: "despachador", label: "despachador" },
+  { value: "vendedor", label: "vendedor" },
+  { value: "chofer", label: "chofer" },
+  { value: "cobrador", label: "cobrador" },
 ] as const;
 
 export async function getRolesOptions() {

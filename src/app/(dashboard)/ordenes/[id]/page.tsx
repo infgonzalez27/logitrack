@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { getCurrentProfile, getSessionUser } from "@/lib/auth";
+import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado, labelEstadoEntrega } from "@/lib/constants";
@@ -17,6 +19,11 @@ export default async function OrdenDetallePage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const [user, profile] = await Promise.all([
+    getSessionUser(),
+    getCurrentProfile(),
+  ]);
+  const rol = getRoleNameFromProfile(profile);
 
   const { data: orden } = await supabase
     .from("ordenes_distribucion")
@@ -57,6 +64,8 @@ export default async function OrdenDetallePage({
           <OrdenEstadoActions
             ordenId={orden.id}
             estadoActual={orden.estado as OrdenEstado}
+            rol={rol}
+            esCreador={!!user && orden.creado_por === user.id}
           />
         }
       />

@@ -1,0 +1,25 @@
+-- =============================================================================
+-- INCIDENCIA: registra_nuevo_usuario crea usuarios no autenticables
+-- =============================================================================
+--
+-- Síntoma en la app:
+--   POST /api/auth/register → 200, success: true, user_id: ...
+--   POST /api/auth/login    → 500, "Database error querying schema"
+--
+-- Causa probable:
+--   El SP hace INSERT directo en auth.users sin los campos que GoTrue exige
+--   (confirmation_token, recovery_token, instance_id, aud, role, etc.).
+--
+-- Evidencia en logs (vendedor@gmail.com):
+--   - Registro devolvió user_id 4cca217a-... y luego 34697aa6-... (duplicados)
+--   - Login siempre falla con unexpected_failure / Database error querying schema
+--
+-- Lo que debe hacer el DB admin en registra_nuevo_usuario:
+--   1. NO insertar a mano en auth.users sin el formato completo de GoTrue, O
+--   2. Usar la API interna de Supabase Auth (recomendado), O
+--   3. Copiar el patrón exacto de un usuario creado desde el panel Authentication
+--      (SELECT * FROM auth.users WHERE email = 'usuario-bueno@...') y replicar columnas.
+--
+-- Mientras tanto: limpiar usuarios dañados vía SQL Editor en Supabase (auth.users / auth.identities)
+-- y diagnosticar con diagnostico-auth-users.sql
+-- =============================================================================

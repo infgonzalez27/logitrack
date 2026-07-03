@@ -265,6 +265,12 @@ type TableDef<T> = {
   Relationships: [];
 };
 
+export type ProductoOrdenRpc = {
+  producto_id: string;
+  cantidad: number;
+  precio_unitario: number;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -293,7 +299,40 @@ export interface Database {
           p_telefono: string;
           p_rol_nombre: string;
         };
-        Returns: string;
+        Returns: {
+          success: boolean;
+          message?: string;
+          user_id?: string;
+        };
+      };
+      solicita_crear_orden_distribucion: {
+        Args: {
+          p_vendedor_id: string;
+          p_chofer_id: string;
+          p_productos_json: ProductoOrdenRpc[];
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          orden_id?: string;
+        };
+      };
+      actualizar_estado_orden_distribucion: {
+        Args: {
+          p_orden_id: string;
+          p_estado: string;
+        };
+        Returns: undefined;
+      };
+      cargar_datos_demo_dashboard: {
+        Args: Record<string, never>;
+        Returns: {
+          ordenes: number;
+          rendiciones: number;
+          camiones: number;
+          facturas: number;
+          choferId: string | null;
+        };
       };
     };
     Enums: Record<string, never>;
