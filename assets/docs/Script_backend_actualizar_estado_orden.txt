@@ -1,0 +1,16 @@
+// RPC: actualizar_estado_orden_distribucion(p_orden_id UUID, p_estado TEXT)
+//
+// Transiciones permitidas:
+//   borrador          -> lista_para_carga | anulada
+//   lista_para_carga  -> en_transito | borrador | anulada
+//   en_transito       -> liquidada | anulada
+//   liquidada         -> (ninguna)
+//   anulada           -> (ninguna)
+//
+// Lógica de negocio (inventario, camión, chofer) la ejecuta el SP en PostgreSQL.
+// El backend solo valida parámetros, rol y transición antes de llamar:
+//
+// await supabase.rpc('actualizar_estado_orden_distribucion', {
+//   p_orden_id: ordenId,
+//   p_estado: estado,
+// });

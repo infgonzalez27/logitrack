@@ -271,6 +271,14 @@ export type ProductoOrdenRpc = {
   precio_unitario: number;
 };
 
+export type ProductoListaRpc = {
+  id: string;
+  nombre: string;
+  codigo_barras: string | null;
+  precio: number;
+  stock_disponible: number;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -305,10 +313,12 @@ export interface Database {
           user_id?: string;
         };
       };
-      solicita_crear_orden_distribucion: {
+      crear_orden_distribucion: {
         Args: {
           p_vendedor_id: string;
           p_chofer_id: string;
+          p_cliente_id: string;
+          p_camion_id: string;
           p_productos_json: ProductoOrdenRpc[];
         };
         Returns: {
@@ -322,7 +332,10 @@ export interface Database {
           p_orden_id: string;
           p_estado: string;
         };
-        Returns: undefined;
+        Returns: {
+          success: boolean;
+          message?: string;
+        };
       };
       cargar_datos_demo_dashboard: {
         Args: Record<string, never>;
@@ -333,6 +346,12 @@ export interface Database {
           facturas: number;
           choferId: string | null;
         };
+      };
+      retorna_lista_productos_segun_parametros: {
+        Args: {
+          p_parametro: string;
+        };
+        Returns: ProductoListaRpc[];
       };
     };
     Enums: Record<string, never>;

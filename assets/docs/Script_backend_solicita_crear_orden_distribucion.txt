@@ -1,5 +1,7 @@
-const { data, error } = await supabaseAdmin.rpc('solicita_crear_orden_distribucion', {
-  p_vendedor_id: uuid_vendedor, 
+const { data, error } = await supabase.rpc('crear_orden_distribucion', {
+  p_vendedor_id: uuid_vendedor,
   p_chofer_id: uuid_chofer,
-  p_productos_json: lista_productos_array // Arreglo de objetos con llaves: producto_id, cantidad, precio_unitario
+  p_cliente_id: uuid_cliente,
+  p_camion_id: uuid_camion,
+  p_productos_json: lista_productos_array // producto_id, cantidad, precio_unitario
 });

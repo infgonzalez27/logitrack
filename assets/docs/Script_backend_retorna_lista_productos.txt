@@ -1,0 +1,6 @@
+// RPC: retorna_lista_productos_segun_parametros(p_parametro TEXT)
+// Retorna: id, nombre, codigo_barras, precio, stock_disponible
+//
+// await supabase.rpc('retorna_lista_productos_segun_parametros', {
+//   p_parametro: 'arroz',
+// });
