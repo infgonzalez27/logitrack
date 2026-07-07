@@ -245,7 +245,7 @@ export function NuevaOrdenForm({
                     </p>
                   ) : null}
 
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <Select
                       label="Producto"
                       name={`producto_${index}`}
@@ -260,6 +260,18 @@ export function NuevaOrdenForm({
                       onChange={(e) =>
                         seleccionarProducto(index, e.target.value)
                       }
+                    />
+                    <Input
+                      label="Código de producto"
+                      readOnly
+                      tabIndex={-1}
+                      placeholder="—"
+                      value={
+                        linea.producto_id && catalogo[linea.producto_id]
+                          ? catalogo[linea.producto_id].codigo_barras ?? "—"
+                          : ""
+                      }
+                      className="bg-lt-surface-muted text-lt-text-muted"
                     />
                     <Input
                       label="Cantidad"
