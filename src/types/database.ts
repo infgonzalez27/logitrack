@@ -279,6 +279,12 @@ export type ProductoListaRpc = {
   stock_disponible: number;
 };
 
+export type UsuarioListaRpc = {
+  id: string;
+  nombre_completo: string;
+  rol_nombre: string | null;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -352,6 +358,12 @@ export interface Database {
           p_parametro: string;
         };
         Returns: ProductoListaRpc[];
+      };
+      retorna_lista_usuarios_segun_parametro: {
+        Args: {
+          p_parametro: string;
+        };
+        Returns: UsuarioListaRpc[];
       };
     };
     Enums: Record<string, never>;

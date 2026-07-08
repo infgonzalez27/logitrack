@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ActionForm } from "@/components/forms/action-form";
+import { ProductoFields } from "./producto-fields";
 
 export default async function NuevoInventarioMovilPage() {
   const supabase = await createClient();
   const [{ data: camiones }, { data: productos }] = await Promise.all([
     supabase.from("camiones").select("id, placa").order("placa"),
-    supabase.from("productos").select("id, nombre").order("nombre"),
+    supabase.from("productos").select("id, nombre, codigo_barras").order("nombre"),
   ]);
 
   return (
@@ -29,16 +30,7 @@ export default async function NuevoInventarioMovilPage() {
               label: c.placa,
             }))}
           />
-          <Select
-            label="Producto"
-            name="producto_id"
-            required
-            placeholder="Selecciona producto"
-            options={(productos ?? []).map((p) => ({
-              value: p.id,
-              label: p.nombre,
-            }))}
-          />
+          <ProductoFields productos={productos ?? []} />
           <Input
             label="Cantidad cargada"
             name="cantidad_cargada"
