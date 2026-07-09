@@ -14,14 +14,11 @@ export default async function UsuariosPage({
 }) {
   const { q = "", rol = "" } = await searchParams;
   const [result, roles] = await Promise.all([
-    listarUsuariosAction(q),
+    listarUsuariosAction({ nombre: q, rol }),
     getRolesOptions(),
   ]);
 
   const usuarios = result.ok ? result.usuarios : [];
-  const usuariosFiltrados = rol
-    ? usuarios.filter((u) => u.rol_nombre === rol)
-    : usuarios;
 
   return (
     <div className="space-y-6">
@@ -47,7 +44,7 @@ export default async function UsuariosPage({
             { key: "nombre", label: "Nombre del perfil" },
             { key: "rol", label: "Rol" },
           ]}
-          rows={usuariosFiltrados.map((u) => ({
+          rows={usuarios.map((u) => ({
             id: u.id,
             cells: {
               nombre: u.nombre_completo,

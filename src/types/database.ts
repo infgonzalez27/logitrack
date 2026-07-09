@@ -282,7 +282,25 @@ export type ProductoListaRpc = {
 export type UsuarioListaRpc = {
   id: string;
   nombre_completo: string;
-  rol_nombre: string | null;
+  rol_nombre?: string | null;
+};
+
+export type ActualizarProductoRpcInput = {
+  id: string;
+  codigo_producto: string;
+  nombre: string;
+  codigo_barras: string;
+  precio_lista1: number;
+  precio_lista2: number;
+  precio_lista3: number;
+};
+
+export type ActualizarPerfilUsuarioRpcInput = {
+  id: string;
+  rol_id: string;
+  nombre_completo: string;
+  telefono: string;
+  activo: boolean;
 };
 
 export interface Database {
@@ -359,11 +377,34 @@ export interface Database {
         };
         Returns: ProductoListaRpc[];
       };
-      retorna_lista_usuarios_segun_parametro: {
+      retorna_lista_usuarios_segun_parametros: {
         Args: {
-          p_parametro: string;
+          p_nombre: string;
+          p_rol: string;
         };
         Returns: UsuarioListaRpc[];
+      };
+      actualizar_registro_perfil_usuarios_segun_id: {
+        Args: {
+          p_id: string;
+          p_rol_id: string;
+          p_nombre_completo: string;
+          p_telefono: string;
+          p_activo: boolean;
+        };
+        Returns: boolean;
+      };
+      actualizar_registro_productos_segun_id: {
+        Args: {
+          p_id: string;
+          p_codigo_producto: string;
+          p_nombre: string;
+          p_codigo_barras: string;
+          p_precio_lista1: number;
+          p_precio_lista2: number;
+          p_precio_lista3: number;
+        };
+        Returns: boolean;
       };
     };
     Enums: Record<string, never>;
