@@ -46,6 +46,61 @@ export async function buscarProductosOrdenAction(
   return { ok: true, productos: (data ?? []) as ProductoListaRpc[] };
 }
 
+export async function listarProductosAction(
+  parametro?: string,
+): Promise<
+  | { ok: true; productos: ProductoListaRpc[] }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(
+    "retorna_lista_productos_segun_parametros",
+    { p_parametro: parametro?.trim() ?? "" },
+  );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true, productos: (data ?? []) as ProductoListaRpc[] };
+}
+
+export async function obtenerProductoParaEditarAction(
+  id: string,
+): Promise<
+  | { ok: true; producto: ActualizarProductoRpcInput & { stock_disponible?: number } }
+  | { ok: false; error: string }
+> {
+  const productoId = id?.trim();
+  if (!productoId || !isUuid(productoId)) {
+    return { ok: false, error: "ID de producto inválido." };
+  }
+
+  const listado = await listarProductosAction("");
+  if (!listado.ok) {
+    return { ok: false, error: listado.error };
+  }
+
+  const item = listado.productos.find((p) => p.id === productoId);
+  if (!item) {
+    return { ok: false, error: "Producto no encontrado." };
+  }
+
+  return {
+    ok: true,
+    producto: {
+      id: item.id,
+      codigo_producto: item.codigo_producto ?? "",
+      nombre: item.nombre,
+      codigo_barras: item.codigo_barras ?? "",
+      precio_lista1: item.precio_lista1 ?? item.precio ?? 0,
+      precio_lista2: item.precio_lista2 ?? 0,
+      precio_lista3: item.precio_lista3 ?? 0,
+      stock_disponible: item.stock_disponible,
+    },
+  };
+}
+
 function validateActualizarProductoInput(
   input: ActualizarProductoRpcInput,
 ): string | null {
@@ -106,5 +161,6 @@ export async function actualizarProductoAction(
   }
 
   revalidatePath("/productos");
+  revalidatePath(`/productos/${input.id.trim()}`);
   return { ok: true };
 }

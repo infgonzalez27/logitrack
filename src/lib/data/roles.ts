@@ -32,3 +32,27 @@ export async function getRolesOptions() {
     return [...ROLES_FALLBACK];
   }
 }
+
+export async function getRolesWithIds() {
+  try {
+    const supabaseAdmin = createAdminClient();
+    const { data, error } = await supabaseAdmin
+      .from("roles")
+      .select("id, nombre, descripcion")
+      .order("nombre");
+
+    if (error || !data?.length) {
+      return [];
+    }
+
+    return data.map((rol) => ({
+      id: rol.id,
+      nombre: rol.nombre,
+      label: rol.descripcion
+        ? `${rol.nombre} — ${rol.descripcion}`
+        : rol.nombre,
+    }));
+  } catch {
+    return [];
+  }
+}

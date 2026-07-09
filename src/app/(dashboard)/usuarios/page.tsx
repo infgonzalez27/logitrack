@@ -43,12 +43,21 @@ export default async function UsuariosPage({
           columns={[
             { key: "nombre", label: "Nombre del perfil" },
             { key: "rol", label: "Rol" },
+            { key: "acciones", label: "" },
           ]}
           rows={usuarios.map((u) => ({
             id: u.id,
             cells: {
               nombre: u.nombre_completo,
               rol: u.rol_nombre ?? "—",
+              acciones: (
+                <Link
+                  href={`/usuarios/${u.id}`}
+                  className="text-sm font-medium text-lt-primary hover:underline"
+                >
+                  Editar
+                </Link>
+              ),
             },
           }))}
           emptyMessage={

@@ -1,9 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { joinOne } from "@/lib/supabase/join";
 import type {
   ActualizarPerfilUsuarioRpcInput,
+  PerfilUsuarioEditar,
   UsuarioListaRpc,
 } from "@/types/database";
 
@@ -34,7 +37,74 @@ export async function listarUsuariosAction(params?: {
     return { ok: false, error: error.message };
   }
 
-  return { ok: true, usuarios: (data ?? []) as UsuarioListaRpc[] };
+  const usuarios = (data ?? []) as UsuarioListaRpc[];
+  const ids = usuarios.map((u) => u.id);
+
+  if (!ids.length) {
+    return { ok: true, usuarios: [] };
+  }
+
+  const { data: perfiles, error: perfilesError } = await createAdminClient()
+    .from("perfiles_usuario")
+    .select("id, roles(nombre)")
+    .in("id", ids);
+
+  if (perfilesError) {
+    return { ok: false, error: perfilesError.message };
+  }
+
+  const rolPorId = new Map(
+    (perfiles ?? []).map((p) => [p.id, joinOne(p.roles)?.nombre ?? null]),
+  );
+
+  return {
+    ok: true,
+    usuarios: usuarios.map((u) => ({
+      ...u,
+      rol_nombre: u.rol_nombre ?? rolPorId.get(u.id) ?? null,
+    })),
+  };
+}
+
+export async function obtenerPerfilUsuarioAction(
+  id: string,
+): Promise<
+  | { ok: true; perfil: PerfilUsuarioEditar }
+  | { ok: false; error: string }
+> {
+  const perfilId = id?.trim();
+  if (!perfilId || !isUuid(perfilId)) {
+    return { ok: false, error: "ID de perfil inválido." };
+  }
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("perfiles_usuario")
+    .select("id, nombre_completo, telefono, activo, rol_id, roles(nombre)")
+    .eq("id", perfilId)
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: "Perfil de usuario no encontrado." };
+  }
+
+  const rol = joinOne(data.roles);
+
+  if (!data.rol_id) {
+    return { ok: false, error: "El perfil no tiene un rol asignado." };
+  }
+
+  return {
+    ok: true,
+    perfil: {
+      id: data.id,
+      nombre_completo: data.nombre_completo,
+      telefono: data.telefono ?? "",
+      activo: data.activo,
+      rol_id: data.rol_id,
+      rol_nombre: rol?.nombre ?? null,
+    },
+  };
 }
 
 function validateActualizarPerfilInput(
@@ -87,5 +157,6 @@ export async function actualizarPerfilUsuarioAction(
   }
 
   revalidatePath("/usuarios");
+  revalidatePath(`/usuarios/${input.id.trim()}`);
   return { ok: true };
 }

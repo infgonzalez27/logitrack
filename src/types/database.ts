@@ -274,9 +274,22 @@ export type ProductoOrdenRpc = {
 export type ProductoListaRpc = {
   id: string;
   nombre: string;
+  codigo_producto?: string | null;
   codigo_barras: string | null;
   precio: number;
+  precio_lista1?: number;
+  precio_lista2?: number;
+  precio_lista3?: number;
   stock_disponible: number;
+};
+
+export type PerfilUsuarioEditar = {
+  id: string;
+  nombre_completo: string;
+  telefono: string;
+  activo: boolean;
+  rol_id: string;
+  rol_nombre: string | null;
 };
 
 export type UsuarioListaRpc = {
