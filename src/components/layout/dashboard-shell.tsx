@@ -31,7 +31,7 @@ export function DashboardShell({
 
   return (
     <div className="min-h-screen bg-lt-bg">
-      <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-lt-border-light bg-lt-surface/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm lg:hidden">
+      <header className="lt-no-print sticky top-0 z-40 flex items-center gap-3 border-b border-lt-border-light bg-lt-surface/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm lg:hidden">
         <button
           type="button"
           onClick={() => setMenuOpen(true)}
@@ -60,7 +60,7 @@ export function DashboardShell({
       </header>
 
       {menuOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="lt-no-print fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
             aria-label="Cerrar menú"
@@ -84,7 +84,7 @@ export function DashboardShell({
 
       <div className="flex min-h-[calc(100dvh-3.5rem)] lg:min-h-screen">
         <aside
-          className="hidden w-64 shrink-0 flex-col border-r border-lt-border-light bg-lt-surface lg:flex"
+          className="lt-no-print hidden w-64 shrink-0 flex-col border-r border-lt-border-light bg-lt-surface lg:flex"
           style={{ boxShadow: "var(--lt-shadow-sidebar)" }}
         >
           <SidebarNav userName={userName} navSections={navSections} />

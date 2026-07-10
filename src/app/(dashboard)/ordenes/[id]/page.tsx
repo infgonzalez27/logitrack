@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { getNombresPerfilByIds } from "@/lib/data/perfiles";
 import { createClient } from "@/lib/supabase/server";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado, labelEstadoEntrega } from "@/lib/constants";
@@ -9,6 +10,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge, ordenEstadoTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { PrintButton } from "@/components/print/print-button";
+import { PrintDocumentHeader } from "@/components/print/print-document-header";
 import { OrdenEstadoActions } from "./orden-estado-actions";
 import type { OrdenEstado } from "@/types/database";
 
@@ -33,7 +36,7 @@ export default async function OrdenDetallePage({
       clientes(razon_social, rif_nit, direccion_fiscal),
       camiones(placa, modelo),
       choferes(perfil_id, cedula_licencia, perfiles_usuario(nombre_completo)),
-      detalle_distribucion(*, productos(nombre, unidad_medida))
+      detalle_distribucion(*, productos(nombre, unidad_medida, codigo_producto))
     `,
     )
     .eq("id", id)
@@ -45,6 +48,14 @@ export default async function OrdenDetallePage({
   const camion = joinOne(orden.camiones);
   const chofer = joinOne(orden.choferes);
   const perfilChofer = joinOne(chofer?.perfiles_usuario);
+  const nombresPerfil = orden.chofer_id
+    ? await getNombresPerfilByIds([orden.chofer_id])
+    : {};
+  const choferNombre =
+    perfilChofer?.nombre_completo ??
+    (orden.chofer_id ? nombresPerfil[orden.chofer_id] : null) ??
+    chofer?.cedula_licencia ??
+    null;
 
   const detalle = [...(orden.detalle_distribucion ?? [])].sort(
     (a, b) => (a.secuencia_entrega ?? 0) - (b.secuencia_entrega ?? 0),
@@ -56,22 +67,33 @@ export default async function OrdenDetallePage({
   );
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Orden #${orden.correlativo}`}
-        description={`Factura origen: ${orden.factura_origen_numero}`}
-        action={
-          <OrdenEstadoActions
-            ordenId={orden.id}
-            estadoActual={orden.estado as OrdenEstado}
-            rol={rol}
-            esCreador={!!user && orden.creado_por === user.id}
-          />
-        }
+    <div className="lt-print-document space-y-6">
+      <PrintDocumentHeader
+        title={`Orden de distribución #${orden.correlativo}`}
+        subtitle={`Factura origen: ${orden.factura_origen_numero}`}
+        meta={`Estado: ${labelOrdenEstado(orden.estado as OrdenEstado)}`}
       />
 
+      <div className="lt-no-print">
+        <PageHeader
+          title={`Orden #${orden.correlativo}`}
+          description={`Factura origen: ${orden.factura_origen_numero}`}
+          action={
+            <div className="flex flex-wrap gap-2">
+              <PrintButton />
+              <OrdenEstadoActions
+                ordenId={orden.id}
+                estadoActual={orden.estado as OrdenEstado}
+                rol={rol}
+                esCreador={!!user && orden.creado_por === user.id}
+              />
+            </div>
+          }
+        />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Estado">
+        <Card title="Estado" className="lt-print-keep-together">
           <Badge tone={ordenEstadoTone(orden.estado)}>
             {labelOrdenEstado(orden.estado as OrdenEstado)}
           </Badge>
@@ -91,13 +113,13 @@ export default async function OrdenDetallePage({
           </dl>
         </Card>
 
-        <Card title="Cliente">
+        <Card title="Cliente" className="lt-print-keep-together">
           <p className="font-medium">{cliente?.razon_social}</p>
           <p className="text-sm text-lt-text-muted">{cliente?.rif_nit}</p>
           <p className="mt-2 text-sm">{cliente?.direccion_fiscal}</p>
         </Card>
 
-        <Card title="Logística">
+        <Card title="Logística" className="lt-print-keep-together">
           <dl className="space-y-2 text-sm">
             <div>
               <dt className="text-lt-text-muted">Camión</dt>
@@ -107,18 +129,17 @@ export default async function OrdenDetallePage({
             </div>
             <div>
               <dt className="text-lt-text-muted">Chofer</dt>
-              <dd className="font-medium">
-                {perfilChofer?.nombre_completo ?? "—"}
-              </dd>
+              <dd className="font-medium">{choferNombre ?? "—"}</dd>
             </div>
           </dl>
         </Card>
       </div>
 
-      <Card title="Detalle de distribución">
+      <Card title="Detalle de distribución" className="lt-print-allow-break">
         <DataTable
           columns={[
             { key: "sec", label: "Sec." },
+            { key: "codigo", label: "Código" },
             { key: "producto", label: "Producto" },
             { key: "solicitada", label: "Solicitada" },
             { key: "despachada", label: "Despachada" },
@@ -126,18 +147,22 @@ export default async function OrdenDetallePage({
             { key: "subtotal", label: "Subtotal" },
             { key: "entrega", label: "Estado entrega" },
           ]}
-          rows={detalle.map((linea) => ({
-            id: linea.id,
-            cells: {
-              sec: linea.secuencia_entrega ?? "—",
-              producto: joinOne(linea.productos)?.nombre ?? "—",
-              solicitada: formatNumber(linea.cantidad_solicitada),
-              despachada: formatNumber(linea.cantidad_despachada),
-              unitario: formatCurrency(linea.valor_unitario_recaudar),
-              subtotal: formatCurrency(linea.subtotal_recaudar),
-              entrega: labelEstadoEntrega(linea.estado_entrega),
-            },
-          }))}
+          rows={detalle.map((linea) => {
+            const producto = joinOne(linea.productos);
+            return {
+              id: linea.id,
+              cells: {
+                sec: linea.secuencia_entrega ?? "—",
+                codigo: producto?.codigo_producto ?? "—",
+                producto: producto?.nombre ?? "—",
+                solicitada: formatNumber(linea.cantidad_solicitada),
+                despachada: formatNumber(linea.cantidad_despachada),
+                unitario: formatCurrency(linea.valor_unitario_recaudar),
+                subtotal: formatCurrency(linea.subtotal_recaudar),
+                entrega: labelEstadoEntrega(linea.estado_entrega),
+              },
+            };
+          })}
         />
         <p className="mt-4 text-right text-sm font-medium">
           Total a recaudar: {formatCurrency(totalRecaudar)}

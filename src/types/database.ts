@@ -285,6 +285,7 @@ export type ProductoListaRpc = {
 
 export type PerfilUsuarioEditar = {
   id: string;
+  email: string | null;
   nombre_completo: string;
   telefono: string;
   activo: boolean;

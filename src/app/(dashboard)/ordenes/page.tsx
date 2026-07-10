@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { canCreateOrden } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { getNombresPerfilByIds } from "@/lib/data/perfiles";
 import { createClient } from "@/lib/supabase/server";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado } from "@/lib/constants";
@@ -29,6 +30,10 @@ export default async function OrdenesPage() {
     `,
     )
     .order("correlativo", { ascending: false });
+
+  const nombresChofer = await getNombresPerfilByIds(
+    (ordenes ?? []).map((o) => o.chofer_id).filter(Boolean),
+  );
 
   return (
     <div className="space-y-6">
@@ -63,7 +68,11 @@ export default async function OrdenesPage() {
               chofer: (() => {
                 const chofer = joinOne(o.choferes);
                 const perfil = joinOne(chofer?.perfiles_usuario);
-                return perfil?.nombre_completo ?? "—";
+                return (
+                  perfil?.nombre_completo ??
+                  (o.chofer_id ? nombresChofer[o.chofer_id] : null) ??
+                  "—"
+                );
               })(),
               estado: (
                 <Badge tone={ordenEstadoTone(o.estado)}>

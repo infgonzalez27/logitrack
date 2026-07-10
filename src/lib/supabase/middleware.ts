@@ -1,7 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/login", "/register", "/~offline"];
+const PUBLIC_ROUTES = [
+  "/login",
+  "/register",
+  "/recuperar-clave",
+  "/actualizar-clave",
+  "/~offline",
+];
+
+const GUEST_ONLY_ROUTES = ["/login", "/register"];
 
 function isPublicAssetPath(pathname: string) {
   return (
@@ -53,7 +61,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublic) {
+  if (user && GUEST_ONLY_ROUTES.some((route) => pathname.startsWith(route))) {
     const url = request.nextUrl.clone();
     url.pathname = "/ordenes";
     return NextResponse.redirect(url);

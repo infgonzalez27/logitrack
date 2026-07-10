@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { buscarProductosOrdenAction } from "@/lib/actions/productos";
 import { createOrdenAction } from "@/lib/actions/ordenes";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { LineaProductoRow } from "./linea-producto-row";
 import type { ProductoListaRpc } from "@/types/database";
 
 type Option = { value: string; label: string };
@@ -19,19 +18,22 @@ type Linea = {
   valor_unitario_recaudar: number;
 };
 
-function labelProducto(p: ProductoListaRpc): string {
-  const codigo = p.codigo_barras ? ` · ${p.codigo_barras}` : "";
-  return `${p.nombre}${codigo} (stock: ${p.stock_disponible})`;
-}
-
 export function NuevaOrdenForm({
   clientes,
   camiones,
   choferes,
+  choferesError = null,
+  choferesAviso = null,
+  productos,
+  productosError = null,
 }: {
   clientes: Option[];
   camiones: Option[];
   choferes: Option[];
+  choferesError?: string | null;
+  choferesAviso?: string | null;
+  productos: ProductoListaRpc[];
+  productosError?: string | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -39,19 +41,15 @@ export function NuevaOrdenForm({
   const [clienteId, setClienteId] = useState("");
   const [camionId, setCamionId] = useState("");
   const [choferId, setChoferId] = useState("");
-  const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>({});
+  const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(() =>
+    Object.fromEntries(productos.map((p) => [p.id, p])),
+  );
   const [lineas, setLineas] = useState<Linea[]>([
     {
       producto_id: "",
       cantidad_solicitada: 1,
       valor_unitario_recaudar: 0,
     },
-  ]);
-  const [busquedas, setBusquedas] = useState<string[]>([""]);
-  const [opcionesLinea, setOpcionesLinea] = useState<ProductoListaRpc[][]>([[]]);
-  const [buscandoLinea, setBuscandoLinea] = useState<number | null>(null);
-  const [busquedaErrores, setBusquedaErrores] = useState<(string | null)[]>([
-    null,
   ]);
 
   function updateLinea(index: number, patch: Partial<Linea>) {
@@ -69,64 +67,14 @@ export function NuevaOrdenForm({
         valor_unitario_recaudar: 0,
       },
     ]);
-    setBusquedas((prev) => [...prev, ""]);
-    setOpcionesLinea((prev) => [...prev, []]);
-    setBusquedaErrores((prev) => [...prev, null]);
   }
 
   function removeLinea(index: number) {
     setLineas((prev) => prev.filter((_, i) => i !== index));
-    setBusquedas((prev) => prev.filter((_, i) => i !== index));
-    setOpcionesLinea((prev) => prev.filter((_, i) => i !== index));
-    setBusquedaErrores((prev) => prev.filter((_, i) => i !== index));
   }
 
-  async function buscarProductos(index: number) {
-    const termino = busquedas[index] ?? "";
-    setBuscandoLinea(index);
-    setBusquedaErrores((prev) =>
-      prev.map((e, i) => (i === index ? null : e)),
-    );
-
-    const result = await buscarProductosOrdenAction(termino);
-
-    setBuscandoLinea(null);
-
-    if (!result.ok) {
-      setBusquedaErrores((prev) =>
-        prev.map((e, i) => (i === index ? result.error : e)),
-      );
-      setOpcionesLinea((prev) =>
-        prev.map((opts, i) => (i === index ? [] : opts)),
-      );
-      return;
-    }
-
-    setOpcionesLinea((prev) =>
-      prev.map((opts, i) => (i === index ? result.productos : opts)),
-    );
-    setCatalogo((prev) => {
-      const next = { ...prev };
-      for (const p of result.productos) {
-        next[p.id] = p;
-      }
-      return next;
-    });
-  }
-
-  function seleccionarProducto(index: number, productoId: string) {
-    const producto =
-      opcionesLinea[index]?.find((p) => p.id === productoId) ??
-      catalogo[productoId];
-
-    updateLinea(index, {
-      producto_id: productoId,
-      valor_unitario_recaudar: producto?.precio ?? 0,
-    });
-
-    if (producto) {
-      setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
-    }
+  function registrarProducto(producto: ProductoListaRpc) {
+    setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -191,6 +139,12 @@ export function NuevaOrdenForm({
               onChange={(e) => setChoferId(e.target.value)}
             />
           </div>
+          {choferesError ? (
+            <p className="mt-2 text-sm text-lt-danger-text">{choferesError}</p>
+          ) : null}
+          {choferesAviso ? (
+            <p className="mt-2 text-sm text-amber-700">{choferesAviso}</p>
+          ) : null}
         </Card>
 
         <Card
@@ -201,126 +155,26 @@ export function NuevaOrdenForm({
             </Button>
           }
         >
+          {productosError ? (
+            <p className="mb-4 text-sm text-lt-danger-text">{productosError}</p>
+          ) : null}
           <div className="space-y-4">
-            {lineas.map((linea, index) => {
-              const opciones = opcionesLinea[index] ?? [];
-              const selectOptions = opciones.map((p) => ({
-                value: p.id,
-                label: labelProducto(p),
-              }));
-
-              return (
-                <div
-                  key={index}
-                  className="space-y-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/50 p-4"
-                >
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="min-w-[200px] flex-1">
-                      <Input
-                        label="Buscar producto"
-                        placeholder="Nombre o código de barras"
-                        value={busquedas[index] ?? ""}
-                        onChange={(e) =>
-                          setBusquedas((prev) =>
-                            prev.map((b, i) =>
-                              i === index ? e.target.value : b,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={buscandoLinea === index}
-                      onClick={() => buscarProductos(index)}
-                    >
-                      {buscandoLinea === index ? "Buscando…" : "Buscar"}
-                    </Button>
-                  </div>
-
-                  {busquedaErrores[index] ? (
-                    <p className="text-xs text-lt-danger-text">
-                      {busquedaErrores[index]}
-                    </p>
-                  ) : null}
-
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Select
-                      label="Producto"
-                      name={`producto_${index}`}
-                      required
-                      placeholder={
-                        selectOptions.length
-                          ? "Selecciona producto"
-                          : "Busca primero un producto"
-                      }
-                      options={selectOptions}
-                      value={linea.producto_id}
-                      onChange={(e) =>
-                        seleccionarProducto(index, e.target.value)
-                      }
-                    />
-                    <Input
-                      label="Código de producto"
-                      readOnly
-                      tabIndex={-1}
-                      placeholder="—"
-                      value={
-                        linea.producto_id && catalogo[linea.producto_id]
-                          ? catalogo[linea.producto_id].codigo_barras ?? "—"
-                          : ""
-                      }
-                      className="bg-lt-surface-muted text-lt-text-muted"
-                    />
-                    <Input
-                      label="Cantidad"
-                      type="number"
-                      min="1"
-                      required
-                      value={linea.cantidad_solicitada}
-                      onChange={(e) =>
-                        updateLinea(index, {
-                          cantidad_solicitada: Number(e.target.value),
-                        })
-                      }
-                    />
-                    <Input
-                      label="Precio unitario"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      required
-                      value={linea.valor_unitario_recaudar}
-                      onChange={(e) =>
-                        updateLinea(index, {
-                          valor_unitario_recaudar: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-
-                  {linea.producto_id && catalogo[linea.producto_id] ? (
-                    <p className="text-xs text-lt-text-muted">
-                      Stock disponible:{" "}
-                      {catalogo[linea.producto_id].stock_disponible} · Precio
-                      lista: ${Number(catalogo[linea.producto_id].precio).toFixed(2)}
-                    </p>
-                  ) : null}
-
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => removeLinea(index)}
-                      disabled={lineas.length === 1}
-                    >
-                      Quitar línea
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+            {lineas.map((linea, index) => (
+              <LineaProductoRow
+                key={index}
+                linea={linea}
+                catalogo={productos}
+                producto={
+                  linea.producto_id
+                    ? catalogo[linea.producto_id]
+                    : undefined
+                }
+                onLineaChange={(patch) => updateLinea(index, patch)}
+                onProductoCatalogo={registrarProducto}
+                onRemove={() => removeLinea(index)}
+                canRemove={lineas.length > 1}
+              />
+            ))}
           </div>
 
           <p className="mt-4 text-sm text-lt-text-muted">

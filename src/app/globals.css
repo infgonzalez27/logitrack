@@ -280,3 +280,86 @@ h4 {
 .lt-dashboard .recharts-tooltip-item {
   color: var(--lt-text-muted) !important;
 }
+
+/* Impresión — órdenes, listados, reportes */
+@media print {
+  @page {
+    margin: 1.25cm;
+    size: A4;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #1e3a5f !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .lt-no-print,
+  .lt-no-print * {
+    display: none !important;
+  }
+
+  .lt-print-only {
+    display: block !important;
+  }
+
+  .lt-print-hide {
+    display: none !important;
+  }
+
+  .lt-print-table-wrap {
+    display: block !important;
+    overflow: visible !important;
+    border: 1px solid #c8ddf0 !important;
+    box-shadow: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .min-h-screen,
+  [class*="min-h-"] {
+    min-height: 0 !important;
+  }
+
+  .lt-card,
+  [class*="rounded-xl"][class*="border"] {
+    box-shadow: none !important;
+  }
+
+  .lt-print-keep-together {
+    break-inside: avoid;
+  }
+
+  .lt-print-allow-break,
+  .lt-print-allow-break .lt-card {
+    break-inside: auto !important;
+  }
+
+  .lt-print-table-wrap,
+  .lt-print-table-wrap table,
+  .lt-print-table-wrap tr {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .lt-print-table-wrap thead {
+    display: table-header-group;
+  }
+
+  .lt-print-document {
+    max-width: none !important;
+  }
+
+  .lt-print-only {
+    margin-bottom: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  a[href]::after {
+    content: none !important;
+  }
+}

@@ -24,7 +24,7 @@ export function DataTable({
 
   return (
     <>
-      <div className="space-y-3 md:hidden">
+      <div className="lt-print-hide space-y-3 md:hidden">
         {rows.map((row) => (
           <article
             key={row.id}
@@ -54,7 +54,7 @@ export function DataTable({
         ))}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-xl border border-lt-border-light bg-lt-surface md:block">
+      <div className="lt-print-table-wrap hidden overflow-x-auto rounded-xl border border-lt-border-light bg-lt-surface md:block">
         <table className="min-w-full divide-y divide-lt-border-light text-sm">
           <thead className="bg-lt-surface-muted">
             <tr>

@@ -151,6 +151,14 @@ export default function LoginForm() {
         </p>
       )}
       <p className="mt-4 text-center text-sm text-lt-text-muted">
+        <Link
+          href="/recuperar-clave"
+          className="font-medium text-lt-primary underline hover:text-lt-primary-hover"
+        >
+          Olvidé mi contraseña
+        </Link>
+      </p>
+      <p className="mt-2 text-center text-sm text-lt-text-muted">
         ¿Necesitas crear un usuario?{" "}
         <Link
           href="/register"
