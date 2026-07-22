@@ -220,3 +220,20 @@ EXCEPTION
         );
 END;
 $$;
+
+---
+
+## 5. Lógica de Negocio Especial: Doble Inventario y Recaudaciones
+
+Para alinearse con las especificaciones de LogiTrack, los Stored Procedures y triggers deben regirse por las siguientes dos lógicas:
+
+### 5.1. Doble Inventario de Contenedores Retornables
+*   **Balance Acumulado:** El saldo de contenedores por cliente se incrementa cuando el cliente recibe productos (que vienen en contenedores) y disminuye cuando el cliente devuelve contenedores al chofer.
+*   **Control Físico:** En la entrega (`registrar_entrega_detalle`), se debe registrar tanto la mercancía entregada como los contenedores entregados y retirados físicamente.
+*   **Actualización del Saldo:** El saldo final del cliente en `saldo_contenedores_clientes` no debe incrementarse directamente en ruta, sino que el procedimiento de liquidación de la orden (`liquidar_orden_distribucion`) o el proceso de aprobación de rendición por parte del gerente consolidará los movimientos y neteará el saldo del cliente.
+
+### 5.2. Recaudación y Cierre Financiero (Liquidación)
+*   **Relación Recaudación ↔ Orden:** Una recaudación (`rendiciones_cuentas`) agrupa múltiples órdenes mediante la tabla intermedia `detalle_rendicion_ordenes`.
+*   **Transición a "Liquidada":** Una orden de distribución no cambia su estado a `liquidada` de manera automática en ruta. Pasa primero a `en_transito` y luego el chofer entrega la mercancía.
+*   **Aprobación del Gerente:** La orden pasa a `liquidada` únicamente cuando el Gerente aprueba la recaudación correspondiente (`rendiciones_cuentas.estado = 'aprobada'`) confirmando que la cobranza está completa. Si la recaudación es parcial o sigue en revisión, la orden debe mantener su estado indicando saldo pendiente.
+

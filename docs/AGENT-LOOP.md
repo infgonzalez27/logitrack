@@ -40,47 +40,48 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
 - `[ ]` **Tarea DB-001: Crear Orden de Distribución con Detalles (`crear_orden_distribucion`)**
   - **Función:** Inserta de forma atómica una orden (`ordenes_distribucion`) y su detalle correspondiente (`detalle_distribucion`).
   - **Inputs:** `p_cliente_id UUID`, `p_camion_id UUID`, `p_chofer_id UUID`, `p_factura_origen_numero VARCHAR`, `p_creado_por UUID`, `p_detalles JSONB` (Lista de items con `producto_id`, `cantidad`, `valor_unitario`).
-  - **Comportamiento:** Valida que el cliente, camión y chofer estén registrados y activos. Calcula el peso total de la orden multiplicando la cantidad de productos por su peso en la tabla `productos`. Inserta la cabecera, autogenerando el correlativo, e inserta las líneas de detalles en secuencia.
+  - **Comportamiento:** Valida que el cliente, camión y chofer estén registrados y activos. Calcula el peso total de la orden multiplicando la cantidad de productos por su peso en la tabla `productos`. Inserta la cabecera con estado inicial `borrador`, autogenerando el correlativo, e inserta las líneas de detalles en secuencia.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, correlativo: INT, peso_total_calculado: NUMERIC }, error: object }`.
 
-- `[ ]` **Tarea DB-002: Reserva de Stock en Almacén (`reservar_stock_orden`)**
-  - **Función:** Transiciona una orden al estado `lista_para_carga` y compromete el stock físico en el almacén principal.
+- `[ ]` **Tarea DB-002: Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)**
+  - **Función:** Transiciona una orden al estado `aprobada` (Gerente aprueba) y compromete el stock físico en el almacén principal.
   - **Inputs:** `p_orden_id UUID`.
   - **Comportamiento:** Valida que el estado actual sea `borrador`. Para cada línea de detalle, verifica si hay suficiente `stock_disponible` en `inventario_almacen`. Si la verificación es exitosa:
     1. Resta la cantidad solicitada de `stock_disponible`.
     2. Suma la cantidad solicitada a `stock_comprometido`.
-    3. Cambia el estado de la orden a `lista_para_carga`.
-  - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "lista_para_carga" }, error: object }`.
+    3. Cambia el estado de la orden a `aprobada`.
+  - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "aprobada" }, error: object }`.
 
 - `[ ]` **Tarea DB-003: Carga a Inventario Móvil (`cargar_inventario_movil`)**
   - **Función:** Transiciona una orden al estado `en_transito` y traspasa los productos del almacén principal al camión.
   - **Inputs:** `p_orden_id UUID`.
-  - **Comportamiento:** Valida que la orden esté en `lista_para_carga`. Para cada producto del detalle:
-    1. Resta la cantidad de `stock_comprometido` en `inventario_almacen` (ya que sale físicamente del almacén).
-    2. Inserta o actualiza un registro en `inventario_movil` para el `camion_id` asociado a la orden, sumando la cantidad despachada al campo `cantidad_cargada`.
+  - **Comportamiento:** Valida que la orden esté en `aprobada`. Para cada producto del detalle:
+    1. Resta la cantidad de `stock_comprometido` en `inventario_almacen` (sale físicamente del almacén).
+    2. Inserta o actualiza un registro en `inventario_movil` para el `camion_id` (por ID de camión) asociado a la orden, sumando la cantidad despachada al campo `cantidad_cargada`.
     3. Actualiza el estado de la orden a `en_transito`.
     4. Cambia el estado del camión y del chofer asignado a `en_ruta`.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "en_transito" }, error: object }`.
 
-- `[ ]` **Tarea DB-004: Registro de Entregas y Devoluciones en Ruta (`registrar_entrega_detalle`)**
-  - **Función:** Registra el resultado del despacho de una línea específica durante la ruta del chofer.
-  - **Inputs:** `p_detalle_id UUID` (ID de la línea), `p_cantidad_despachada INT` (entregada), `p_estado_entrega TEXT` ('entregado', 'entregado_parcial', 'rechazado'), `p_motivo_rechazo TEXT`.
-  - **Comportamiento:** Valida que la orden asociada al detalle esté en estado `en_transito`.
-    1. Actualiza `cantidad_despachada`, `estado_entrega` y `motivo_rechazo` en `detalle_distribucion`.
+- `[ ]` **Tarea DB-004: Registro de Entregas, Devoluciones y Contenedores (`registrar_entrega_detalle`)**
+  - **Función:** Registra el resultado del despacho de una línea específica en ruta, incluyendo el flujo de contenedores retornables.
+  - **Inputs:** `p_detalle_id UUID`, `p_cantidad_despachada INT` (entregada), `p_estado_entrega TEXT`, `p_motivo_rechazo TEXT`, `p_contenedores_entregados INT`, `p_contenedores_devueltos INT`.
+  - **Comportamiento:** Valida que la orden asociada esté en estado `en_transito`.
+    1. Actualiza `cantidad_despachada`, `estado_entrega`, `motivo_rechazo`, `contenedores_entregados` y `contenedores_devueltos` en `detalle_distribucion`.
     2. Actualiza `inventario_movil` para el camión de la orden:
        - Suma `p_cantidad_despachada` a `cantidad_entregada`.
        - Calcula la diferencia (`cantidad_solicitada - p_cantidad_despachada`) y la suma a `cantidad_devolucion`.
   - **Output:** JSON `{ success: boolean, data: { detalle_id: UUID, estado_entrega: TEXT }, error: object }`.
 
-- `[ ]` **Tarea DB-005: Liquidación de Despacho (`liquidar_orden_distribucion`)**
-  - **Función:** Cierra la orden de distribución una vez que el chofer regresa y devuelve el stock rechazado/no entregado al almacén principal.
+- `[ ]` **Tarea DB-005: Aprobación de Recaudación y Liquidación (`liquidar_orden_distribucion`)**
+  - **Función:** Cierra la orden financieramente y consolida el saldo de contenedores cuando el gerente aprueba la recaudación.
   - **Inputs:** `p_orden_id UUID`.
-  - **Comportamiento:** Valida que la orden esté en `en_transito` y que todas sus líneas estén en un estado final de entrega (distinto de 'pendiente').
-    1. Por cada línea de detalle de la orden con devoluciones:
-       - Suma la cantidad rechazada (`cantidad_solicitada - cantidad_despachada`) al `stock_disponible` en `inventario_almacen`.
-       - En `inventario_movil` del camión, resta la cantidad cargada correspondiente a este despacho para liberar espacio lógico del camión.
-    2. Cambia el estado de la orden a `liquidada`.
-    3. Cambia el estado del camión y del chofer a `disponible`.
+  - **Comportamiento:**
+    1. Valida que la orden esté en `en_transito` y que todas sus líneas estén en un estado final de entrega.
+    2. Valida que exista una recaudación aprobada (`rendiciones_cuentas.estado = 'aprobada'`) vinculada a esta orden en `detalle_rendicion_ordenes` y que el monto recaudado cubra la cobranza requerida. Si no, lanza error `COBRANZA_PENDIENTE`.
+    3. Por cada línea de detalle:
+       - Suma la cantidad devuelta/rechazada a `stock_disponible` en `inventario_almacen` y la resta de `inventario_movil` del camión.
+       - Actualiza `saldo_contenedores_clientes` del cliente sumando `contenedores_entregados` y restando `contenedores_devueltos`.
+    4. Cambia el estado de la orden a `liquidada` y libera camión/chofer a `disponible`.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "liquidada" }, error: object }`.
 
 - `[ ]` **Tarea DB-006: Anulación de Orden (`anular_orden_distribucion`)**
@@ -88,8 +89,8 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Inputs:** `p_orden_id UUID`.
   - **Comportamiento:**
     - Si la orden está en `borrador`: cambia el estado directamente a `anulada`.
-    - Si la orden está en `lista_para_carga`: reversa las reservas de inventario (resta de `stock_comprometido` y suma a `stock_disponible` en `inventario_almacen` para cada producto del detalle) y cambia a `anulada`.
-    - Si está en `en_transito` o `liquidada`: bloquea la acción (no se puede anular una orden cargada al camión o ya liquidada sin un procedimiento de devolución formal).
+    - Si la orden está en `aprobada`: reversa las reservas de inventario (resta de `stock_comprometido` y suma a `stock_disponible` en `inventario_almacen` para cada producto del detalle) y cambia a `anulada`.
+    - Si está en `en_transito` o `liquidada`: bloquea la acción.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "anulada" }, error: object }`.
 
 ### Módulo de Seguridad y Auditoría (Prioridad Media)
