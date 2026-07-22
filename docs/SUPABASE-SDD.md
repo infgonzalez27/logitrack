@@ -234,6 +234,6 @@ Para alinearse con las especificaciones de LogiTrack, los Stored Procedures y tr
 
 ### 5.2. Recaudación y Cierre Financiero (Liquidación)
 *   **Relación Recaudación ↔ Orden:** Una recaudación (`rendiciones_cuentas`) agrupa múltiples órdenes mediante la tabla intermedia `detalle_rendicion_ordenes`.
-*   **Transición a "Liquidada":** Una orden de distribución no cambia su estado a `liquidada` de manera automática en ruta. Pasa primero a `en_transito` y luego el chofer entrega la mercancía.
-*   **Aprobación del Gerente:** La orden pasa a `liquidada` únicamente cuando el Gerente aprueba la recaudación correspondiente (`rendiciones_cuentas.estado = 'aprobada'`) confirmando que la cobranza está completa. Si la recaudación es parcial o sigue en revisión, la orden debe mantener su estado indicando saldo pendiente.
+*   **Transición a "Por Liquidar":** Al terminar la entrega física en ruta por parte del chofer, la orden cambia su estado a `por_liquidar`. Esto indica que ya fue entregada pero que aún no se ha consolidado el cobro.
+*   **Aprobación del Gerente (Cierre Financiero):** La orden pasa de `por_liquidar` a `liquidada` únicamente cuando el Gerente aprueba la recaudación correspondiente (`rendiciones_cuentas.estado = 'aprobada'`), confirmando que la cobranza está completa. Si la recaudación es parcial o sigue en revisión, la orden debe mantener su estado indicando saldo pendiente.
 

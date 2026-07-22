@@ -65,7 +65,8 @@ CREATE TABLE movimientos_contenedores (
 Ajustar la restricción del campo `estado` para reflejar el ciclo exacto:
 *   `borrador` (creado por el vendedor)
 *   `aprobada` (aprobada por el gerente, stock comprometido)
-*   `en_transito` (cargado al camión)
+*   `en_transito` (cargado al camión y en ruta)
+*   `por_liquidar` (mercancía entregada y pendiente de conciliar recaudación)
 *   `liquidada` (recaudación aprobada por el gerente)
 *   `anulada`
 
@@ -74,7 +75,7 @@ Ajustar la restricción del campo `estado` para reflejar el ciclo exacto:
 ALTER TABLE ordenes_distribucion DROP CONSTRAINT IF EXISTS ordenes_distribucion_estado_check;
 ALTER TABLE ordenes_distribucion 
 ADD CONSTRAINT ordenes_distribucion_estado_check 
-CHECK (estado IN ('borrador', 'aprobada', 'en_transito', 'liquidada', 'anulada'));
+CHECK (estado IN ('borrador', 'aprobada', 'en_transito', 'por_liquidar', 'liquidada', 'anulada'));
 ```
 
 ---

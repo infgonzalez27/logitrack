@@ -46,7 +46,8 @@ sequenceDiagram
     Note over Despachador: La orden pasa a estado "En Tránsito"
     
     Despachador->>Cliente: Entrega productos y recoge contenedores
-    Despachador->>Despachador: Registra entregas, devoluciones y contenedores retirados en Radar
+    Despachador->>Despachador: Registra entregas, devoluciones y contenedores en Radar
+    Note over Despachador: La orden pasa a estado "Por Liquidar" (entregada)
     
     Despachador->>Gerente: Retorna a base con devoluciones y contenedores
     Gerente->>Gerente: Registra devoluciones físicas (Stock Móvil -> Almacén)
@@ -57,7 +58,9 @@ sequenceDiagram
 1.  **Pendiente:** Creada por el vendedor, a la espera de la aprobación del gerente.
 2.  **Aprobada:** Validada por el gerente, lista para ser cargada en el camión por el despachador.
 3.  **En Tránsito:** El camión ha sido cargado con la mercancía y está en ruta de entrega.
-4.  **Liquidada:** Se alcanza este estado **únicamente** cuando se confirma que las recaudaciones (cobranzas) asociadas cubren la totalidad de los subtotales a recaudar y el gerente aprueba la rendición.
+4.  **Por Liquidar:** La mercancía ha sido entregada (total, parcial o rechazada) por el chofer y la orden está lista para el proceso de cobranza y rendición.
+5.  **Liquidada:** Se alcanza este estado **únicamente** desde `por_liquidar` cuando se confirma que las recaudaciones (cobranzas) asociadas cubren la totalidad de la cobranza requerida y el gerente aprueba la rendición.
+6.  **Anulada:** Cancelación total.
 
 ---
 

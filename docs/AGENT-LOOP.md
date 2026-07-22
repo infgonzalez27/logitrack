@@ -70,7 +70,8 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     2. Actualiza `inventario_movil` para el camión de la orden:
        - Suma `p_cantidad_despachada` a `cantidad_entregada`.
        - Calcula la diferencia (`cantidad_solicitada - p_cantidad_despachada`) y la suma a `cantidad_devolucion`.
-  - **Output:** JSON `{ success: boolean, data: { detalle_id: UUID, estado_entrega: TEXT }, error: object }`.
+    3. Si todas las líneas de detalle de la orden han sido procesadas (tienen un estado diferente a 'pendiente'), cambia el estado de la orden a `por_liquidar`.
+  - **Output:** JSON `{ success: boolean, data: { detalle_id: UUID, estado_entrega: TEXT, orden_estado: TEXT }, error: object }`.
 
 - `[ ]` **Tarea DB-004b: Registrar Movimiento de Contenedores en Ruta (`registrar_movimiento_contenedores`)**
   - **Función:** Registra las entregas y retiros físicos de envases/contenedores retornables realizados por el despachador para un cliente y orden.
@@ -82,7 +83,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Función:** Cierra la orden financieramente y consolida el saldo de contenedores cuando el gerente aprueba la recaudación.
   - **Inputs:** `p_orden_id UUID`.
   - **Comportamiento:**
-    1. Valida que la orden esté en `en_transito` y que todas sus líneas estén en un estado final de entrega.
+    1. Valida que la orden esté en `por_liquidar`.
     2. Valida que exista una recaudación aprobada (`rendiciones_cuentas.estado = 'aprobada'`) vinculada a esta orden en `detalle_rendicion_ordenes` y que el monto recaudado cubra la cobranza requerida. Si no, lanza error `COBRANZA_PENDIENTE`.
     3. Por cada línea de detalle:
        - Suma la cantidad devuelta/rechazada a `stock_disponible` en `inventario_almacen` y la resta de `inventario_movil` del camión.
