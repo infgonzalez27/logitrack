@@ -37,6 +37,15 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
 
 ### Módulo de Distribución y Flujo de Inventario (Prioridad Alta)
 
+- `[ ]` **Tarea DB-000: Aplicar Cambios Estructurales en la Base de Datos (Migraciones)**
+  - **Función:** Aplicar el esquema DDL aprobado en [docs/PROPOSICION-CAMBIOS-DB.md](file:///d:/ProyectosWeb/LogiTrack/docs/PROPOSICION-CAMBIOS-DB.md) para habilitar el doble inventario de contenedores y los nuevos estados de la orden.
+  - **Comportamiento:**
+    1. Crear la tabla maestra `tipos_contenedores` y el saldo por cliente `saldo_contenedores_clientes`.
+    2. Modificar la tabla `productos` para relacionarla a contenedores.
+    3. Crear la tabla de transacciones `movimientos_contenedores`.
+    4. Actualizar la restricción CHECK del estado en `ordenes_distribucion` para añadir `por_liquidar`.
+  - **Output:** Estructura de base de datos de Supabase actualizada con éxito.
+
 - `[ ]` **Tarea DB-002: Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)**
   - **Función:** Transiciona una orden al estado `aprobada` (Gerente aprueba) y compromete el stock físico en el almacén principal.
   - **Inputs:** `p_orden_id UUID`.
