@@ -111,3 +111,12 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Detalle:**
     1. Crear función trigger `audit_changes_trigger()` que inserte registros en `logs_auditoria` con valores anteriores y nuevos al hacer INSERT/UPDATE/DELETE.
     2. Crear políticas RLS en `ordenes_distribucion` para que un chofer (`chofer_cobrador`) solo pueda leer las órdenes asignadas a su `chofer_id` (que mapea a su ID de usuario en auth).
+
+### Módulo de Rendición de Cuentas y Crédito (Prioridad Alta)
+
+- `[x]` **Tarea DB-008: Registro de Rendición de Cuentas (`registrar_rendicion_cuentas`)**
+  - **Función:** Registra de forma atómica la recaudación asociando múltiples órdenes y formas de pago, gestionando automáticamente el saldo a favor del cliente y el trigger de liquidación de órdenes.
+  - **Inputs:** `p_cliente_id UUID`, `p_observaciones TEXT`, `p_creado_por UUID`, `p_ordenes JSONB`, `p_pagos JSONB`.
+  - **Comportamiento:** Registra la cabecera en `rendiciones_cuentas` y los detalles en `detalle_rendicion_ordenes` y `detalle_rendicion_fpagos`. Si la suma de los pagos supera lo recaudado de las órdenes, calcula y abona la diferencia como crédito en `saldo_favor` del cliente.
+  - **Output:** JSON `{ success: boolean, data: { rendicion_id: UUID, total_ordenes: NUMERIC, total_pagos: NUMERIC, saldo_favor_generado: NUMERIC }, error: object }`.
+

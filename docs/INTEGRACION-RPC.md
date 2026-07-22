@@ -258,6 +258,38 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
+### 2.8. Registrar Rendición de Cuentas (`registrar_rendicion_cuentas`)
+- **Firma SQL:** `registrar_rendicion_cuentas(p_cliente_id UUID, p_observaciones TEXT, p_creado_por UUID, p_ordenes JSONB, p_pagos JSONB)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_rendicion_cuentas', {
+    p_cliente_id: 'UUID_DEL_CLIENTE',
+    p_observaciones: 'Rendición de la cobranza de la tarde',
+    p_creado_por: 'UUID_DEL_VENDEDOR',
+    p_ordenes: [
+      { orden_id: 'UUID_DE_LA_ORDEN_1', monto_recaudado: 120.00 },
+      { orden_id: 'UUID_DE_LA_ORDEN_2', monto_recaudado: 80.00 }
+    ],
+    p_pagos: [
+      { metodo_pago: 'pago_movil', monto: 150.00, referencia_bancaria: 'REF1234', cuenta_bancaria: '0102-XXXX', capture_url: 'storage-url' },
+      { metodo_pago: 'efectivo_usd', monto: 100.00, referencia_bancaria: null, cuenta_bancaria: null, capture_url: null }
+    ]
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "rendicion_id": "UUID_DE_LA_NUEVA_RENDICION",
+      "total_ordenes": 200.00,
+      "total_pagos": 250.00,
+      "saldo_favor_generado": 50.00
+    },
+    "error": null
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
