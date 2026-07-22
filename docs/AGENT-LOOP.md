@@ -95,7 +95,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     5. Cambia el estado de la orden a `liquidada` y libera camión/chofer a `disponible`.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "liquidada" }, error: object }`.
 
-- `[ ]` **Tarea DB-006: Anulación de Orden (`anular_orden_distribucion`)**
+- `[x]` **Tarea DB-006: Anulación de Orden (`anular_orden_distribucion`)**
   - **Función:** Cancela la orden y revierte cualquier asignación de inventario realizada.
   - **Inputs:** `p_orden_id UUID`.
   - **Comportamiento:**
