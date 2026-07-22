@@ -130,11 +130,11 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.2. Reserva de Stock en Almacén (`reservar_stock_orden`)
-- **Firma SQL:** `reservar_stock_orden(p_orden_id UUID)`
+### 2.2. Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)
+- **Firma SQL:** `aprobar_orden_distribucion(p_orden_id UUID)`
 - **Uso en Frontend (RPC):**
   ```typescript
-  const { data, error } = await supabase.rpc('reservar_stock_orden', {
+  const { data, error } = await supabase.rpc('aprobar_orden_distribucion', {
     p_orden_id: 'UUID_DE_LA_ORDEN'
   });
   ```
@@ -144,7 +144,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     "success": true,
     "data": {
       "orden_id": "UUID_DE_LA_ORDEN",
-      "nuevo_estado": "lista_para_carga"
+      "nuevo_estado": "aprobada"
     },
     "error": null
   }

@@ -46,7 +46,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     4. Actualizar la restricción CHECK del estado en `ordenes_distribucion` para añadir `por_liquidar`.
   - **Output:** Estructura de base de datos de Supabase actualizada con éxito.
 
-- `[ ]` **Tarea DB-002: Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)**
+- `[x]` **Tarea DB-002: Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)**
   - **Función:** Transiciona una orden al estado `aprobada` (Gerente aprueba) y compromete el stock físico en el almacén principal.
   - **Inputs:** `p_orden_id UUID`.
   - **Comportamiento:** Valida que el estado actual sea `borrador`. Para cada línea de detalle, verifica si hay suficiente `stock_disponible` en `inventario_almacen`. Si la verificación es exitosa:
