@@ -37,7 +37,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
 
 ### Módulo de Distribución y Flujo de Inventario (Prioridad Alta)
 
-- `[ ]` **Tarea DB-000: Aplicar Cambios Estructurales en la Base de Datos (Migraciones)**
+- `[x]` **Tarea DB-000: Aplicar Cambios Estructurales en la Base de Datos (Migraciones)**
   - **Función:** Aplicar el esquema DDL aprobado en [docs/PROPOSICION-CAMBIOS-DB.md](file:///d:/ProyectosWeb/LogiTrack/docs/PROPOSICION-CAMBIOS-DB.md) para habilitar el doble inventario de contenedores y los nuevos estados de la orden.
   - **Comportamiento:**
     1. Crear la tabla maestra `tipos_contenedores` y el saldo por cliente `saldo_contenedores_clientes`.
