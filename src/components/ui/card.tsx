@@ -5,14 +5,18 @@ export function Card({
   description,
   children,
   action,
+  className = "",
 }: {
   title?: string;
   description?: string;
   children: ReactNode;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="lt-card rounded-2xl border border-lt-border-light bg-lt-surface shadow-[var(--lt-shadow-card)]">
+    <section
+      className={`lt-card rounded-2xl border border-lt-border-light bg-lt-surface shadow-[var(--lt-shadow-card)] ${className}`}
+    >
       {(title || action) && (
         <div className="flex flex-col gap-3 border-b border-lt-border-light px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div className="min-w-0">

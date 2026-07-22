@@ -1,39 +1,36 @@
-import { createClient } from "@/lib/supabase/server";
+import { listarProductosAction } from "@/lib/actions/productos";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/ui/data-table";
-import { Card } from "@/components/ui/card";
-import { formatNumber } from "@/lib/format";
+import { PrintButton } from "@/components/print/print-button";
+import { ProductosListaClient } from "./productos-lista-client";
 
-export default async function ProductosPage() {
-  const supabase = await createClient();
-  const { data } = await supabase.from("productos").select("*").order("nombre");
+export default async function ProductosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q = "" } = await searchParams;
+  const result = await listarProductosAction(q);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Productos"
-        action={<Button href="/productos/nuevo">Nuevo producto</Button>}
-      />
-      <Card>
-        <DataTable
-          columns={[
-            { key: "codigo", label: "Código" },
-            { key: "nombre", label: "Nombre" },
-            { key: "unidad", label: "Unidad" },
-            { key: "peso", label: "Peso unit. (kg)" },
-          ]}
-          rows={(data ?? []).map((p) => ({
-            id: p.id,
-            cells: {
-              codigo: p.codigo_barras ?? "—",
-              nombre: p.nombre,
-              unidad: p.unidad_medida,
-              peso: formatNumber(p.peso_unitario_kg),
-            },
-          }))}
+    <div className="lt-print-document space-y-4">
+      <div className="lt-no-print">
+        <PageHeader
+          title="Productos"
+          action={
+            <div className="flex flex-wrap gap-2">
+              <PrintButton label="Imprimir listado" />
+              <Button href="/productos/nuevo">Nuevo producto</Button>
+            </div>
+          }
         />
-      </Card>
+      </div>
+
+      <ProductosListaClient
+        initialProductos={result.ok ? result.productos : []}
+        initialQuery={q}
+        initialError={result.ok ? null : result.error}
+      />
     </div>
   );
 }

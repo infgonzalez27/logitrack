@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { createOrdenAction } from "@/lib/actions/ordenes";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { LineaProductoRow } from "./linea-producto-row";
+import type { ProductoListaRpc } from "@/types/database";
 
 type Option = { value: string; label: string };
-type ProductoOption = Option & { peso: number };
 
 type Linea = {
   producto_id: string;
@@ -19,16 +19,31 @@ type Linea = {
 };
 
 export function NuevaOrdenForm({
+  clientes,
+  camiones,
   choferes,
+  choferesError = null,
+  choferesAviso = null,
   productos,
+  productosError = null,
 }: {
+  clientes: Option[];
+  camiones: Option[];
   choferes: Option[];
-  productos: ProductoOption[];
+  choferesError?: string | null;
+  choferesAviso?: string | null;
+  productos: ProductoListaRpc[];
+  productosError?: string | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [clienteId, setClienteId] = useState("");
+  const [camionId, setCamionId] = useState("");
   const [choferId, setChoferId] = useState("");
+  const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(() =>
+    Object.fromEntries(productos.map((p) => [p.id, p])),
+  );
   const [lineas, setLineas] = useState<Linea[]>([
     {
       producto_id: "",
@@ -58,12 +73,18 @@ export function NuevaOrdenForm({
     setLineas((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function registrarProducto(producto: ProductoListaRpc) {
+    setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPending(true);
     setError(null);
 
     const result = await createOrdenAction({
+      cliente_id: clienteId,
+      camion_id: camionId,
       chofer_id: choferId,
       lineas: lineas.filter((l) => l.producto_id),
     });
@@ -73,11 +94,6 @@ export function NuevaOrdenForm({
       setPending(false);
     }
   }
-
-  const pesoEstimado = lineas.reduce((total, linea) => {
-    const producto = productos.find((p) => p.value === linea.producto_id);
-    return total + (producto?.peso ?? 0) * linea.cantidad_solicitada;
-  }, 0);
 
   const totalRecaudar = lineas.reduce(
     (total, linea) =>
@@ -89,20 +105,46 @@ export function NuevaOrdenForm({
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Nueva orden de distribución"
-        description="Solicitud al despacho — estado inicial: borrador"
+        description="Estado inicial: borrador"
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card title="Asignación">
-          <Select
-            label="Chofer"
-            name="chofer_id"
-            required
-            placeholder="Selecciona chofer"
-            options={choferes}
-            value={choferId}
-            onChange={(e) => setChoferId(e.target.value)}
-          />
+        <Card title="Cabecera">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select
+              label="Cliente"
+              name="cliente_id"
+              required
+              placeholder="Selecciona cliente"
+              options={clientes}
+              value={clienteId}
+              onChange={(e) => setClienteId(e.target.value)}
+            />
+            <Select
+              label="Camión"
+              name="camion_id"
+              required
+              placeholder="Selecciona camión"
+              options={camiones}
+              value={camionId}
+              onChange={(e) => setCamionId(e.target.value)}
+            />
+            <Select
+              label="Chofer"
+              name="chofer_id"
+              required
+              placeholder="Selecciona chofer"
+              options={choferes}
+              value={choferId}
+              onChange={(e) => setChoferId(e.target.value)}
+            />
+          </div>
+          {choferesError ? (
+            <p className="mt-2 text-sm text-lt-danger-text">{choferesError}</p>
+          ) : null}
+          {choferesAviso ? (
+            <p className="mt-2 text-sm text-amber-700">{choferesAviso}</p>
+          ) : null}
         </Card>
 
         <Card
@@ -113,81 +155,41 @@ export function NuevaOrdenForm({
             </Button>
           }
         >
+          {productosError ? (
+            <p className="mb-4 text-sm text-lt-danger-text">{productosError}</p>
+          ) : null}
           <div className="space-y-4">
             {lineas.map((linea, index) => (
-              <div
+              <LineaProductoRow
                 key={index}
-                className="grid gap-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/50 p-4 sm:grid-cols-4"
-              >
-                <Select
-                  label="Producto"
-                  name={`producto_${index}`}
-                  required
-                  placeholder="Producto"
-                  options={productos}
-                  value={linea.producto_id}
-                  onChange={(e) =>
-                    updateLinea(index, { producto_id: e.target.value })
-                  }
-                />
-                <Input
-                  label="Cantidad"
-                  type="number"
-                  min="1"
-                  value={linea.cantidad_solicitada}
-                  onChange={(e) =>
-                    updateLinea(index, {
-                      cantidad_solicitada: Number(e.target.value),
-                    })
-                  }
-                />
-                <Input
-                  label="Precio unitario"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={linea.valor_unitario_recaudar}
-                  onChange={(e) =>
-                    updateLinea(index, {
-                      valor_unitario_recaudar: Number(e.target.value),
-                    })
-                  }
-                />
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => removeLinea(index)}
-                    disabled={lineas.length === 1}
-                  >
-                    Quitar
-                  </Button>
-                </div>
-              </div>
+                linea={linea}
+                catalogo={productos}
+                producto={
+                  linea.producto_id
+                    ? catalogo[linea.producto_id]
+                    : undefined
+                }
+                onLineaChange={(patch) => updateLinea(index, patch)}
+                onProductoCatalogo={registrarProducto}
+                onRemove={() => removeLinea(index)}
+                canRemove={lineas.length > 1}
+              />
             ))}
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-6 text-sm text-lt-text-muted">
-            <p>
-              Peso estimado:{" "}
-              <span className="font-medium text-lt-text">
-                {pesoEstimado.toFixed(2)} kg
-              </span>
-            </p>
-            <p>
-              Total a recaudar:{" "}
-              <span className="font-medium text-lt-text">
-                ${totalRecaudar.toFixed(2)}
-              </span>
-            </p>
-          </div>
+          <p className="mt-4 text-sm text-lt-text-muted">
+            Total a recaudar:{" "}
+            <span className="font-medium text-lt-text">
+              ${totalRecaudar.toFixed(2)}
+            </span>
+          </p>
         </Card>
 
         {error && <p className="lt-alert-error">{error}</p>}
 
         <div className="flex gap-3">
           <Button type="submit" disabled={pending}>
-            {pending ? "Guardando…" : "Solicitar orden"}
+            {pending ? "Guardando…" : "Crear orden"}
           </Button>
           <Button
             type="button"

@@ -1,18 +1,24 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { joinOne } from "@/lib/supabase/join";
+import { listarUsuariosAction } from "@/lib/actions/usuarios";
+import { getRolesOptions } from "@/lib/data/roles";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { UsuariosBusqueda } from "./usuarios-busqueda";
 
-export default async function UsuariosPage() {
-  const supabase = await createClient();
-  const { data: usuarios, error } = await supabase
-    .from("perfiles_usuario")
-    .select("*, roles(nombre)")
-    .order("nombre_completo");
+export default async function UsuariosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; rol?: string }>;
+}) {
+  const { q = "", rol = "" } = await searchParams;
+  const [result, roles] = await Promise.all([
+    listarUsuariosAction({ nombre: q, rol }),
+    getRolesOptions(),
+  ]);
+
+  const usuarios = result.ok ? result.usuarios : [];
 
   return (
     <div className="space-y-6">
@@ -26,32 +32,39 @@ export default async function UsuariosPage() {
         }
       />
 
-      {error && (
-        <p className="text-sm text-lt-danger-text">{error.message}</p>
+      <UsuariosBusqueda defaultValue={q} rolValue={rol} roles={roles} />
+
+      {!result.ok && (
+        <p className="text-sm text-lt-danger-text">{result.error}</p>
       )}
 
       <Card>
         <DataTable
           columns={[
-            { key: "nombre", label: "Nombre" },
+            { key: "nombre", label: "Nombre del perfil" },
             { key: "rol", label: "Rol" },
-            { key: "telefono", label: "Teléfono" },
-            { key: "estado", label: "Estado" },
+            { key: "acciones", label: "" },
           ]}
-          rows={(usuarios ?? []).map((u) => ({
+          rows={usuarios.map((u) => ({
             id: u.id,
             cells: {
               nombre: u.nombre_completo,
-              rol: joinOne(u.roles)?.nombre ?? "—",
-              telefono: u.telefono ?? "—",
-              estado: (
-                <Badge tone={u.activo ? "success" : "danger"}>
-                  {u.activo ? "Activo" : "Inactivo"}
-                </Badge>
+              rol: u.rol_nombre ?? "—",
+              acciones: (
+                <Link
+                  href={`/usuarios/${u.id}`}
+                  className="text-sm font-medium text-lt-primary hover:underline"
+                >
+                  Editar
+                </Link>
               ),
             },
           }))}
-          emptyMessage="No hay usuarios registrados."
+          emptyMessage={
+            q || rol
+              ? "No se encontraron usuarios con ese criterio."
+              : "No hay usuarios registrados."
+          }
         />
       </Card>
 

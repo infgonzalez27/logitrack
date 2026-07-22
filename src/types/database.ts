@@ -271,6 +271,52 @@ export type ProductoOrdenRpc = {
   precio_unitario: number;
 };
 
+export type ProductoListaRpc = {
+  id: string;
+  nombre: string;
+  codigo_producto?: string | null;
+  codigo_barras: string | null;
+  precio: number;
+  precio_lista1?: number;
+  precio_lista2?: number;
+  precio_lista3?: number;
+  stock_disponible: number;
+};
+
+export type PerfilUsuarioEditar = {
+  id: string;
+  email: string | null;
+  nombre_completo: string;
+  telefono: string;
+  activo: boolean;
+  rol_id: string;
+  rol_nombre: string | null;
+};
+
+export type UsuarioListaRpc = {
+  id: string;
+  nombre_completo: string;
+  rol_nombre?: string | null;
+};
+
+export type ActualizarProductoRpcInput = {
+  id: string;
+  codigo_producto: string;
+  nombre: string;
+  codigo_barras: string;
+  precio_lista1: number;
+  precio_lista2: number;
+  precio_lista3: number;
+};
+
+export type ActualizarPerfilUsuarioRpcInput = {
+  id: string;
+  rol_id: string;
+  nombre_completo: string;
+  telefono: string;
+  activo: boolean;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -305,10 +351,12 @@ export interface Database {
           user_id?: string;
         };
       };
-      solicita_crear_orden_distribucion: {
+      crear_orden_distribucion: {
         Args: {
           p_vendedor_id: string;
           p_chofer_id: string;
+          p_cliente_id: string;
+          p_camion_id: string;
           p_productos_json: ProductoOrdenRpc[];
         };
         Returns: {
@@ -322,7 +370,10 @@ export interface Database {
           p_orden_id: string;
           p_estado: string;
         };
-        Returns: undefined;
+        Returns: {
+          success: boolean;
+          message?: string;
+        };
       };
       cargar_datos_demo_dashboard: {
         Args: Record<string, never>;
@@ -333,6 +384,41 @@ export interface Database {
           facturas: number;
           choferId: string | null;
         };
+      };
+      retorna_lista_productos_segun_parametros: {
+        Args: {
+          p_parametro: string;
+        };
+        Returns: ProductoListaRpc[];
+      };
+      retorna_lista_usuarios_segun_parametros: {
+        Args: {
+          p_nombre: string;
+          p_rol: string;
+        };
+        Returns: UsuarioListaRpc[];
+      };
+      actualizar_registro_perfil_usuarios_segun_id: {
+        Args: {
+          p_id: string;
+          p_rol_id: string;
+          p_nombre_completo: string;
+          p_telefono: string;
+          p_activo: boolean;
+        };
+        Returns: boolean;
+      };
+      actualizar_registro_productos_segun_id: {
+        Args: {
+          p_id: string;
+          p_codigo_producto: string;
+          p_nombre: string;
+          p_codigo_barras: string;
+          p_precio_lista1: number;
+          p_precio_lista2: number;
+          p_precio_lista3: number;
+        };
+        Returns: boolean;
       };
     };
     Enums: Record<string, never>;
