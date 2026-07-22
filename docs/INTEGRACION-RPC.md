@@ -234,6 +234,30 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
+### 2.7. Registrar Movimiento de Contenedores (`registrar_movimiento_contenedores`)
+- **Firma SQL:** `registrar_movimiento_contenedores(p_cliente_id UUID, p_orden_id UUID, p_contenedor_id UUID, p_cantidad_entregada INT, p_cantidad_retirada INT, p_creado_por UUID)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_movimiento_contenedores', {
+    p_cliente_id: 'UUID_DEL_CLIENTE',
+    p_orden_id: 'UUID_DE_LA_ORDEN',
+    p_contenedor_id: 'UUID_DEL_CONTENEDOR',
+    p_cantidad_entregada: 5,
+    p_cantidad_retirada: 3,
+    p_creado_por: 'UUID_DEL_DESPACHADOR'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "movimiento_id": "UUID_DEL_REGISTRO_MOVIMIENTO"
+    },
+    "error": null
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
