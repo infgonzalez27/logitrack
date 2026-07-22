@@ -37,12 +37,6 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
 
 ### Módulo de Distribución y Flujo de Inventario (Prioridad Alta)
 
-- `[ ]` **Tarea DB-001: Crear Orden de Distribución con Detalles (`crear_orden_distribucion`)**
-  - **Función:** Inserta de forma atómica una orden (`ordenes_distribucion`) y su detalle correspondiente (`detalle_distribucion`).
-  - **Inputs:** `p_cliente_id UUID`, `p_camion_id UUID`, `p_chofer_id UUID`, `p_factura_origen_numero VARCHAR`, `p_creado_por UUID`, `p_detalles JSONB` (Lista de items con `producto_id`, `cantidad`, `valor_unitario`).
-  - **Comportamiento:** Valida que el cliente, camión y chofer estén registrados y activos. Calcula el peso total de la orden multiplicando la cantidad de productos por su peso en la tabla `productos`. Inserta la cabecera con estado inicial `borrador`, autogenerando el correlativo, e inserta las líneas de detalles en secuencia.
-  - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, correlativo: INT, peso_total_calculado: NUMERIC }, error: object }`.
-
 - `[ ]` **Tarea DB-002: Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)**
   - **Función:** Transiciona una orden al estado `aprobada` (Gerente aprueba) y compromete el stock físico en el almacén principal.
   - **Inputs:** `p_orden_id UUID`.
