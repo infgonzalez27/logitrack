@@ -106,7 +106,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
 
 ### Módulo de Seguridad y Auditoría (Prioridad Media)
 
-- `[ ]` **Tarea DB-007: Configuración de RLS y Funciones de Seguridad**
+- `[x]` **Tarea DB-007: Configuración de RLS y Funciones de Seguridad**
   - **Función:** Crear triggers de auditoría automática en tablas críticas e implementar funciones auxiliares para validar el rol del usuario autenticado actual desde el cliente de Supabase.
   - **Detalle:**
     1. Crear función trigger `audit_changes_trigger()` que inserte registros en `logs_auditoria` con valores anteriores y nuevos al hacer INSERT/UPDATE/DELETE.
