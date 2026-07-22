@@ -55,7 +55,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     3. Cambia el estado de la orden a `aprobada`.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "aprobada" }, error: object }`.
 
-- `[ ]` **Tarea DB-003: Carga a Inventario Móvil (`cargar_inventario_movil`)**
+- `[x]` **Tarea DB-003: Carga a Inventario Móvil (`cargar_inventario_movil`)**
   - **Función:** Transiciona una orden al estado `en_transito` y traspasa los productos del almacén principal al camión.
   - **Inputs:** `p_orden_id UUID`.
   - **Comportamiento:** Valida que la orden esté en `aprobada`. Para cada producto del detalle:
