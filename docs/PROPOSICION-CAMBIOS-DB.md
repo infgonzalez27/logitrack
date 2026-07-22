@@ -42,14 +42,23 @@ ADD COLUMN unidades_por_contenedor NUMERIC(5,0) DEFAULT 1;
 
 ---
 
-## 2. Modificaciones a las Tablas Existentes
+## 2. Modificaciones a las Tablas Existentes y Registro de Movimientos
 
-### 2.1. Tabla `detalle_distribucion`
-Necesitamos registrar cuántos contenedores se entregaron y cuántos se retiraron por cada línea de despacho de la orden.
+### 2.1. Registro Independiente de Envases (`movimientos_contenedores`)
+Dado que el retiro y entrega de contenedores es responsabilidad del despachador en ruta (reportado a través del Radar) y no del vendedor que crea la orden, los movimientos de envases no deben mezclarse en la tabla `detalle_distribucion`. 
+
+Proponemos una tabla de transacciones dedicada para auditar las entregas y retiros de envases por cada viaje/orden:
 ```sql
-ALTER TABLE detalle_distribucion
-ADD COLUMN contenedores_entregados INT DEFAULT 0 CHECK (contenedores_entregados >= 0),
-ADD COLUMN contenedores_devueltos INT DEFAULT 0 CHECK (contenedores_devueltos >= 0);
+CREATE TABLE movimientos_contenedores (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    cliente_id UUID REFERENCES clientes(id) ON DELETE RESTRICT,
+    orden_id UUID REFERENCES ordenes_distribucion(id) ON DELETE CASCADE,
+    contenedor_id UUID REFERENCES tipos_contenedores(id) ON DELETE RESTRICT,
+    cantidad_entregada INT NOT NULL DEFAULT 0 CHECK (cantidad_entregada >= 0),
+    cantidad_retirada INT NOT NULL DEFAULT 0 CHECK (cantidad_retirada >= 0),
+    creado_por UUID REFERENCES auth.users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
 
 ### 2.2. Tabla `ordenes_distribucion` (Alineación de Estados)

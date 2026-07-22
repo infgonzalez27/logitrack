@@ -62,15 +62,21 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     4. Cambia el estado del camión y del chofer asignado a `en_ruta`.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "en_transito" }, error: object }`.
 
-- `[ ]` **Tarea DB-004: Registro de Entregas, Devoluciones y Contenedores (`registrar_entrega_detalle`)**
-  - **Función:** Registra el resultado del despacho de una línea específica en ruta, incluyendo el flujo de contenedores retornables.
-  - **Inputs:** `p_detalle_id UUID`, `p_cantidad_despachada INT` (entregada), `p_estado_entrega TEXT`, `p_motivo_rechazo TEXT`, `p_contenedores_entregados INT`, `p_contenedores_devueltos INT`.
+- `[ ]` **Tarea DB-004: Registro de Entregas y Devoluciones (`registrar_entrega_detalle`)**
+  - **Función:** Registra el resultado del despacho de una línea de producto específica en ruta por parte del chofer (Radar).
+  - **Inputs:** `p_detalle_id UUID`, `p_cantidad_despachada INT` (entregada), `p_estado_entrega TEXT`, `p_motivo_rechazo TEXT`.
   - **Comportamiento:** Valida que la orden asociada esté en estado `en_transito`.
-    1. Actualiza `cantidad_despachada`, `estado_entrega`, `motivo_rechazo`, `contenedores_entregados` y `contenedores_devueltos` en `detalle_distribucion`.
+    1. Actualiza `cantidad_despachada`, `estado_entrega` y `motivo_rechazo` en `detalle_distribucion`.
     2. Actualiza `inventario_movil` para el camión de la orden:
        - Suma `p_cantidad_despachada` a `cantidad_entregada`.
        - Calcula la diferencia (`cantidad_solicitada - p_cantidad_despachada`) y la suma a `cantidad_devolucion`.
   - **Output:** JSON `{ success: boolean, data: { detalle_id: UUID, estado_entrega: TEXT }, error: object }`.
+
+- `[ ]` **Tarea DB-004b: Registrar Movimiento de Contenedores en Ruta (`registrar_movimiento_contenedores`)**
+  - **Función:** Registra las entregas y retiros físicos de envases/contenedores retornables realizados por el despachador para un cliente y orden.
+  - **Inputs:** `p_cliente_id UUID`, `p_orden_id UUID`, `p_contenedor_id UUID`, `p_cantidad_entregada INT`, `p_cantidad_retirada INT`, `p_creado_por UUID`.
+  - **Comportamiento:** Registra la transacción en `movimientos_contenedores`.
+  - **Output:** JSON `{ success: boolean, data: { movimiento_id: UUID }, error: object }`.
 
 - `[ ]` **Tarea DB-005: Aprobación de Recaudación y Liquidación (`liquidar_orden_distribucion`)**
   - **Función:** Cierra la orden financieramente y consolida el saldo de contenedores cuando el gerente aprueba la recaudación.
@@ -80,8 +86,9 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     2. Valida que exista una recaudación aprobada (`rendiciones_cuentas.estado = 'aprobada'`) vinculada a esta orden en `detalle_rendicion_ordenes` y que el monto recaudado cubra la cobranza requerida. Si no, lanza error `COBRANZA_PENDIENTE`.
     3. Por cada línea de detalle:
        - Suma la cantidad devuelta/rechazada a `stock_disponible` en `inventario_almacen` y la resta de `inventario_movil` del camión.
-       - Actualiza `saldo_contenedores_clientes` del cliente sumando `contenedores_entregados` y restando `contenedores_devueltos`.
-    4. Cambia el estado de la orden a `liquidada` y libera camión/chofer a `disponible`.
+    4. Por cada movimiento registrado en `movimientos_contenedores` para esta orden:
+       - Actualiza `saldo_contenedores_clientes` del cliente sumando `cantidad_entregada` y restando `cantidad_retirada`.
+    5. Cambia el estado de la orden a `liquidada` y libera camión/chofer a `disponible`.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "liquidada" }, error: object }`.
 
 - `[ ]` **Tarea DB-006: Anulación de Orden (`anular_orden_distribucion`)**
