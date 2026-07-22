@@ -65,7 +65,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     4. Cambia el estado del camión y del chofer asignado a `en_ruta`.
   - **Output:** JSON `{ success: boolean, data: { orden_id: UUID, nuevo_estado: "en_transito" }, error: object }`.
 
-- `[ ]` **Tarea DB-004: Registro de Entregas y Devoluciones (`registrar_entrega_detalle`)**
+- `[x]` **Tarea DB-004: Registro de Entregas y Devoluciones (`registrar_entrega_detalle`)**
   - **Función:** Registra el resultado del despacho de una línea de producto específica en ruta por parte del chofer (Radar).
   - **Inputs:** `p_detalle_id UUID`, `p_cantidad_despachada INT` (entregada), `p_estado_entrega TEXT`, `p_motivo_rechazo TEXT`.
   - **Comportamiento:** Valida que la orden asociada esté en estado `en_transito`.

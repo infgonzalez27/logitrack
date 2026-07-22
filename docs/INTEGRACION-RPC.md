@@ -187,7 +187,8 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     "success": true,
     "data": {
       "detalle_id": "UUID_DEL_DETALLE_LINEA",
-      "estado_entrega": "entregado_parcial"
+      "estado_entrega": "entregado_parcial",
+      "orden_estado": "por_liquidar" // o "en_transito" si aún hay líneas pendientes
     },
     "error": null
   }
