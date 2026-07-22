@@ -82,7 +82,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Comportamiento:** Registra la transacción en `movimientos_contenedores`.
   - **Output:** JSON `{ success: boolean, data: { movimiento_id: UUID }, error: object }`.
 
-- `[ ]` **Tarea DB-005: Aprobación de Recaudación y Liquidación (`liquidar_orden_distribucion`)**
+- `[x]` **Tarea DB-005: Aprobación de Recaudación y Liquidación (`liquidar_orden_distribucion`)**
   - **Función:** Cierra la orden financieramente y consolida el saldo de contenedores cuando el gerente aprueba la recaudación.
   - **Inputs:** `p_orden_id UUID`.
   - **Comportamiento:**
