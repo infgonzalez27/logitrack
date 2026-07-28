@@ -16,7 +16,10 @@ export default async function NuevoInventarioAlmacenPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <PageHeader title="Registrar stock en almacén" />
+      <PageHeader
+        title="Registrar stock en almacén"
+        description="Si el producto ya tiene inventario, se actualiza el stock y la ubicación."
+      />
       <Card>
         <ActionForm action={createInventarioAlmacenAction} redirectTo="/inventario-almacen">
           <Select

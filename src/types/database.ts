@@ -71,8 +71,11 @@ export interface Cliente {
   correo_e: string | null;
   cond_liq: number | null;
   max_liq: number | null;
+  /** Perfil con rol vendedor asignado a la cartera del cliente. */
+  vendedor_id?: string | null;
   activo: boolean;
   created_at: string;
+  perfiles_usuario?: PerfilUsuario | null;
 }
 
 export interface Proveedor {
@@ -99,6 +102,12 @@ export interface Camion {
   created_at: string;
 }
 
+/** Fila de `retorna_lista_camiones` (emisión de órdenes / listados). */
+export type CamionListaRpc = Pick<
+  Camion,
+  "id" | "placa" | "modelo" | "capacidad_kg" | "volumen_m3" | "estado" | "created_at"
+>;
+
 export interface Chofer {
   perfil_id: string;
   cedula_licencia: string;
@@ -112,6 +121,7 @@ export interface Chofer {
 
 export interface Producto {
   id: string;
+  codigo_producto?: string | null;
   codigo_barras: string | null;
   nombre: string;
   descripcion: string | null;
@@ -384,6 +394,10 @@ export interface Database {
           facturas: number;
           choferId: string | null;
         };
+      };
+      retorna_lista_camiones: {
+        Args: Record<string, never>;
+        Returns: CamionListaRpc[];
       };
       retorna_lista_productos_segun_parametros: {
         Args: {

@@ -81,7 +81,10 @@ export type NavSection = {
 export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Distribución",
-    items: [{ href: "/ordenes", label: "Órdenes de distribución" }],
+    items: [
+      { href: "/ordenes", label: "Órdenes de distribución" },
+      { href: "/prueba-impresion", label: "Prueba de impresión" },
+    ],
   },
   {
     title: "Maestros",

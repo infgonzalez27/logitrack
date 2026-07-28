@@ -66,6 +66,8 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/ordenes",
 
+    "/prueba-impresion",
+
     "/clientes",
 
     "/proveedores",
@@ -96,6 +98,8 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/ordenes",
 
+    "/prueba-impresion",
+
     "/clientes",
 
     "/camiones",
@@ -110,9 +114,9 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
   ],
 
-  vendedor: ["/", "/ordenes", "/clientes"],
+  vendedor: ["/", "/ordenes", "/prueba-impresion", "/clientes"],
 
-  chofer: ["/ordenes", "/inventario-movil"],
+  chofer: ["/ordenes", "/prueba-impresion", "/inventario-movil"],
 
   cobrador: ["/rendiciones"],
 

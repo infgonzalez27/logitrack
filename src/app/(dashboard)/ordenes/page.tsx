@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { canCreateOrden } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { listarOrdenesDistribucion } from "@/lib/data/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
-import { createClient } from "@/lib/supabase/server";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -14,25 +14,20 @@ import { Badge, ordenEstadoTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 
 export default async function OrdenesPage() {
-  const supabase = await createClient();
-  const profile = await getCurrentProfile();
+  const [user, profile] = await Promise.all([
+    getSessionUser(),
+    getCurrentProfile(),
+  ]);
   const rol = getRoleNameFromProfile(profile);
   const puedeCrear = canCreateOrden(rol);
 
-  const { data: ordenes } = await supabase
-    .from("ordenes_distribucion")
-    .select(
-      `
-      *,
-      clientes(razon_social),
-      camiones(placa),
-      choferes(perfil_id, perfiles_usuario(nombre_completo))
-    `,
-    )
-    .order("correlativo", { ascending: false });
+  const ordenes = await listarOrdenesDistribucion({
+    userId: user?.id,
+    rol,
+  });
 
   const nombresChofer = await getNombresPerfilByIds(
-    (ordenes ?? []).map((o) => o.chofer_id).filter(Boolean),
+    ordenes.map((o) => o.chofer_id).filter(Boolean),
   );
 
   return (
@@ -58,7 +53,7 @@ export default async function OrdenesPage() {
             { key: "fecha", label: "Despacho" },
             { key: "acciones", label: "" },
           ]}
-          rows={(ordenes ?? []).map((o) => ({
+          rows={ordenes.map((o) => ({
             id: o.id,
             cells: {
               correlativo: `#${o.correlativo}`,
@@ -81,12 +76,20 @@ export default async function OrdenesPage() {
               ),
               fecha: formatDate(o.fecha_despacho),
               acciones: (
-                <Link
-                  href={`/ordenes/${o.id}`}
-                  className="text-sm font-medium text-lt-primary underline hover:text-lt-primary-hover"
-                >
-                  Ver
-                </Link>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href={`/ordenes/${o.id}`}
+                    className="text-sm font-medium text-lt-primary underline hover:text-lt-primary-hover"
+                  >
+                    Ver
+                  </Link>
+                  <Link
+                    href={`/ordenes/${o.id}/imprimir`}
+                    className="lt-no-print text-sm font-medium text-lt-primary underline hover:text-lt-primary-hover"
+                  >
+                    Imprimir ticket
+                  </Link>
+                </div>
               ),
             },
           }))}

@@ -21,6 +21,7 @@ type Linea = {
 export function NuevaOrdenForm({
   clientes,
   camiones,
+  camionesError = null,
   choferes,
   choferesError = null,
   choferesAviso = null,
@@ -29,6 +30,7 @@ export function NuevaOrdenForm({
 }: {
   clientes: Option[];
   camiones: Option[];
+  camionesError?: string | null;
   choferes: Option[];
   choferesError?: string | null;
   choferesAviso?: string | null;
@@ -139,6 +141,9 @@ export function NuevaOrdenForm({
               onChange={(e) => setChoferId(e.target.value)}
             />
           </div>
+          {camionesError ? (
+            <p className="mt-2 text-sm text-lt-danger-text">{camionesError}</p>
+          ) : null}
           {choferesError ? (
             <p className="mt-2 text-sm text-lt-danger-text">{choferesError}</p>
           ) : null}

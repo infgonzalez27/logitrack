@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { getOrdenDistribucionDetalle } from "@/lib/data/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
-import { createClient } from "@/lib/supabase/server";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado, labelEstadoEntrega } from "@/lib/constants";
 import { formatDate, formatCurrency, formatNumber } from "@/lib/format";
@@ -21,26 +21,16 @@ export default async function OrdenDetallePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
   const [user, profile] = await Promise.all([
     getSessionUser(),
     getCurrentProfile(),
   ]);
   const rol = getRoleNameFromProfile(profile);
 
-  const { data: orden } = await supabase
-    .from("ordenes_distribucion")
-    .select(
-      `
-      *,
-      clientes(razon_social, rif_nit, direccion_fiscal),
-      camiones(placa, modelo),
-      choferes(perfil_id, cedula_licencia, perfiles_usuario(nombre_completo)),
-      detalle_distribucion(*, productos(nombre, unidad_medida, codigo_producto))
-    `,
-    )
-    .eq("id", id)
-    .single();
+  const orden = await getOrdenDistribucionDetalle(id, {
+    userId: user?.id,
+    rol,
+  });
 
   if (!orden) notFound();
 
@@ -80,7 +70,11 @@ export default async function OrdenDetallePage({
           description={`Factura origen: ${orden.factura_origen_numero}`}
           action={
             <div className="flex flex-wrap gap-2">
-              <PrintButton />
+              <PrintButton label="Imprimir orden" />
+              <PrintButton
+                label="Ticket"
+                href={`/ordenes/${orden.id}/imprimir`}
+              />
               <OrdenEstadoActions
                 ordenId={orden.id}
                 estadoActual={orden.estado as OrdenEstado}

@@ -281,16 +281,124 @@ h4 {
   color: var(--lt-text-muted) !important;
 }
 
+/* Ticket térmico (SAT AF330 ~72 mm / rollo 58–76 mm) */
+.lt-ticket-page {
+  width: 100%;
+}
+
+.lt-ticket {
+  width: 100%;
+  max-width: 80mm;
+  margin: 0 auto;
+  padding: 0.5rem 0.35rem;
+  background: #fff;
+  color: #111;
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas,
+    monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  border: 1px dashed #c8ddf0;
+  border-radius: 0.5rem;
+}
+
+.lt-ticket__header {
+  text-align: center;
+}
+
+.lt-ticket__brand {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lt-ticket__title {
+  margin-top: 0.35rem;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.lt-ticket__big {
+  margin-top: 0.25rem;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.lt-ticket__muted {
+  color: #444;
+  font-size: 10px;
+}
+
+.lt-ticket__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lt-ticket__strong {
+  font-weight: 700;
+}
+
+.lt-ticket__wrap {
+  word-break: break-word;
+}
+
+.lt-ticket__block {
+  margin: 0.4rem 0;
+}
+
+.lt-ticket__item {
+  margin: 0.45rem 0;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px dotted #bbb;
+}
+
+.lt-ticket__item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.lt-ticket__row,
+.lt-ticket__total {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.lt-ticket__total {
+  margin: 0.35rem 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lt-ticket__rule {
+  border: 0;
+  border-top: 1px dashed #333;
+  margin: 0.45rem 0;
+}
+
+.lt-ticket__rule--double {
+  border-top-style: double;
+  border-top-width: 3px;
+}
+
+.lt-ticket__footer {
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
 /* Impresión — órdenes, listados, reportes */
 @media print {
   @page {
-    margin: 1.25cm;
-    size: A4;
+    margin: 2mm;
+    size: auto;
   }
 
   body {
     background: #ffffff !important;
-    color: #1e3a5f !important;
+    color: #111111 !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
@@ -313,6 +421,11 @@ h4 {
     overflow: visible !important;
     border: 1px solid #c8ddf0 !important;
     box-shadow: none !important;
+  }
+
+  /* Forzar tabla visible aunque Tailwind tenga `hidden` en móvil */
+  .lt-print-table-wrap.hidden {
+    display: block !important;
   }
 
   main {
@@ -361,5 +474,26 @@ h4 {
 
   a[href]::after {
     content: none !important;
+  }
+
+  /* Ticket: ocultar chrome del dashboard al imprimir */
+  .lt-ticket-page {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .lt-ticket {
+    max-width: 72mm !important;
+    width: 72mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    font-size: 10px !important;
+  }
+
+  .lt-ticket__big {
+    font-size: 16px !important;
   }
 }

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { canCreateOrden } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
 import { listarChoferesParaOrdenAction } from "@/lib/actions/usuarios";
 import { listarProductosAction } from "@/lib/actions/productos";
 import { createClient } from "@/lib/supabase/server";
@@ -16,16 +17,17 @@ export default async function NuevaOrdenPage() {
 
   const [
     { data: clientes },
-    { data: camiones },
+    camionesResult,
     choferesResult,
     productosResult,
   ] = await Promise.all([
     supabase.from("clientes").select("id, razon_social").eq("activo", true).order("razon_social"),
-    supabase.from("camiones").select("id, placa").neq("estado", "inactivo").order("placa"),
+    listarCamionesParaOrdenAction(),
     listarChoferesParaOrdenAction(),
     listarProductosAction(),
   ]);
 
+  const camiones = camionesResult.ok ? camionesResult.camiones : [];
   const choferes = choferesResult.ok ? choferesResult.choferes : [];
   const productos = productosResult.ok ? productosResult.productos : [];
 
@@ -35,10 +37,11 @@ export default async function NuevaOrdenPage() {
         value: c.id,
         label: c.razon_social,
       }))}
-      camiones={(camiones ?? []).map((c) => ({
+      camiones={camiones.map((c) => ({
         value: c.id,
         label: c.placa,
       }))}
+      camionesError={camionesResult.ok ? null : camionesResult.error}
       choferes={choferes.map((c) => ({
         value: c.id,
         label: c.nombre_completo,

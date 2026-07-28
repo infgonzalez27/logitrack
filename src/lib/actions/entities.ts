@@ -1,9 +1,57 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type { CamionListaRpc } from "@/types/database";
 
 type ActionResult = { error?: string; success?: boolean };
+
+export type CamionOrdenOption = {
+  id: string;
+  placa: string;
+};
+
+function mapCamionesParaOrden(
+  rows: Array<{ id: string; placa: string; estado?: string }>,
+): CamionOrdenOption[] {
+  return rows
+    .filter((c) => c.estado !== "inactivo")
+    .map((c) => ({ id: c.id, placa: c.placa }))
+    .sort((a, b) => a.placa.localeCompare(b.placa, "es"));
+}
+
+/** Camiones para emitir órdenes: RPC (evita RLS de SELECT directo en `camiones`). */
+export async function listarCamionesParaOrdenAction(): Promise<
+  | { ok: true; camiones: CamionOrdenOption[] }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("retorna_lista_camiones");
+
+  if (!error) {
+    const camiones = mapCamionesParaOrden((data ?? []) as CamionListaRpc[]);
+    if (camiones.length > 0) {
+      return { ok: true, camiones };
+    }
+  }
+
+  // Fallback: vendedor no tiene SELECT en `camiones`; el listado de emisión sí debe verlos.
+  const { data: rows, error: adminError } = await createAdminClient()
+    .from("camiones")
+    .select("id, placa, estado")
+    .neq("estado", "inactivo")
+    .order("placa");
+
+  if (adminError) {
+    return {
+      ok: false,
+      error: error?.message ?? adminError.message,
+    };
+  }
+
+  return { ok: true, camiones: mapCamionesParaOrden(rows ?? []) };
+}
 
 async function getUserId() {
   const supabase = await createClient();
@@ -18,6 +66,17 @@ export async function createClienteAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase } = await getUserId();
+  const vendedorRaw = String(formData.get("vendedor_id") || "").trim();
+  const vendedorId = vendedorRaw || null;
+
+  if (vendedorId) {
+    const UUID_RE =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(vendedorId)) {
+      return { error: "Vendedor inválido." };
+    }
+  }
+
   const { error } = await supabase.from("clientes").insert({
     rif_nit: String(formData.get("rif_nit")).trim(),
     razon_social: String(formData.get("razon_social")).trim(),
@@ -25,10 +84,19 @@ export async function createClienteAction(
     telefono: String(formData.get("telefono") || "") || null,
     movil1: String(formData.get("movil1") || "") || null,
     correo_e: String(formData.get("correo_e") || "") || null,
+    vendedor_id: vendedorId,
     activo: true,
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (/vendedor_id/i.test(error.message) && /column/i.test(error.message)) {
+      return {
+        error:
+          "Falta la columna vendedor_id en clientes. Ejecuta assets/docs/SQL_clientes_vendedor_id.sql en Supabase.",
+      };
+    }
+    return { error: error.message };
+  }
   revalidatePath("/clientes");
   return { success: true };
 }
@@ -96,12 +164,25 @@ export async function createInventarioAlmacenAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase } = await getUserId();
-  const { error } = await supabase.from("inventario_almacen").insert({
-    producto_id: String(formData.get("producto_id")),
-    stock_disponible: Number(formData.get("stock_disponible") || 0),
-    stock_comprometido: 0,
-    ubicacion_pasillo: String(formData.get("ubicacion_pasillo") || "") || null,
-  });
+  const productoId = String(formData.get("producto_id") || "").trim();
+  const stockDisponible = Number(formData.get("stock_disponible") || 0);
+  const ubicacionPasillo =
+    String(formData.get("ubicacion_pasillo") || "").trim() || null;
+
+  if (!productoId) {
+    return { error: "Selecciona un producto." };
+  }
+
+  // `producto_id` es UNIQUE (1 fila por producto): insert o update.
+  const { error } = await supabase.from("inventario_almacen").upsert(
+    {
+      producto_id: productoId,
+      stock_disponible: stockDisponible,
+      ubicacion_pasillo: ubicacionPasillo,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "producto_id", defaultToNull: false },
+  );
 
   if (error) return { error: error.message };
   revalidatePath("/inventario-almacen");
