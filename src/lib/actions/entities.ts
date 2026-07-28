@@ -66,17 +66,6 @@ export async function createClienteAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase } = await getUserId();
-  const vendedorRaw = String(formData.get("vendedor_id") || "").trim();
-  const vendedorId = vendedorRaw || null;
-
-  if (vendedorId) {
-    const UUID_RE =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_RE.test(vendedorId)) {
-      return { error: "Vendedor inválido." };
-    }
-  }
-
   const { error } = await supabase.from("clientes").insert({
     rif_nit: String(formData.get("rif_nit")).trim(),
     razon_social: String(formData.get("razon_social")).trim(),
@@ -84,19 +73,10 @@ export async function createClienteAction(
     telefono: String(formData.get("telefono") || "") || null,
     movil1: String(formData.get("movil1") || "") || null,
     correo_e: String(formData.get("correo_e") || "") || null,
-    vendedor_id: vendedorId,
     activo: true,
   });
 
-  if (error) {
-    if (/vendedor_id/i.test(error.message) && /column/i.test(error.message)) {
-      return {
-        error:
-          "Falta la columna vendedor_id en clientes. Ejecuta assets/docs/SQL_clientes_vendedor_id.sql en Supabase.",
-      };
-    }
-    return { error: error.message };
-  }
+  if (error) return { error: error.message };
   revalidatePath("/clientes");
   return { success: true };
 }

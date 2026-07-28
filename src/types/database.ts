@@ -71,8 +71,6 @@ export interface Cliente {
   correo_e: string | null;
   cond_liq: number | null;
   max_liq: number | null;
-  /** Perfil con rol vendedor asignado a la cartera del cliente. */
-  vendedor_id?: string | null;
   activo: boolean;
   created_at: string;
   perfiles_usuario?: PerfilUsuario | null;
