@@ -1,3 +1,70 @@
+-- Migration: Módulo de Formas de Pago (DB-009, DB-010, DB-011)
+
+-- 1. Crear tabla fpagos si no existe (DB-009)
+CREATE TABLE IF NOT EXISTS public.fpagos (
+    fpago_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    fpago_concepto TEXT NOT NULL UNIQUE,
+    fpago_info BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Habilitar RLS en fpagos
+ALTER TABLE public.fpagos ENABLE ROW LEVEL SECURITY;
+
+-- Política de lectura pública/autenticada para fpagos
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'fpagos' AND policyname = 'Permitir lectura autenticada de fpagos'
+    ) THEN
+        CREATE POLICY "Permitir lectura autenticada de fpagos" ON public.fpagos
+            FOR SELECT TO authenticated USING (true);
+    END IF;
+END $$;
+
+-- Insertar formas de pago base con UUIDs estáticos
+INSERT INTO public.fpagos (fpago_id, fpago_concepto, fpago_info)
+VALUES 
+    ('1a5b84c8-47bc-4ee0-880c-7833215be11b', 'Pago movil', true),
+    ('2b6c95d9-58cd-4ff1-991d-8944326cf22c', 'Transferencia', true),
+    ('3c7da6ea-69de-4002-aa2e-9a55437d033d', 'Efectivo Bs', false),
+    ('4d8eb7fb-7ade-4113-bb3f-ab66548e144e', 'Efectivo USD', false),
+    ('5e9fc80c-8bef-4224-cc4f-bc77659f255f', 'ZELLE', true),
+    ('6fa0d91d-9c00-4335-dd5f-cd88760a366a', 'BINANCE', true)
+ON CONFLICT (fpago_concepto) DO UPDATE 
+SET fpago_info = EXCLUDED.fpago_info;
+
+-- 2. Modificar tabla detalle_rendicion_fpagos para incluir FK fpago_id (DB-010)
+ALTER TABLE public.detalle_rendicion_fpagos 
+ADD COLUMN IF NOT EXISTS fpago_id UUID REFERENCES public.fpagos(fpago_id) ON DELETE RESTRICT;
+
+-- Mapear registros existentes si la columna metodo_pago existe
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+          AND table_name = 'detalle_rendicion_fpagos' 
+          AND column_name = 'metodo_pago'
+    ) THEN
+        UPDATE public.detalle_rendicion_fpagos d
+        SET fpago_id = f.fpago_id
+        FROM public.fpagos f
+        WHERE d.fpago_id IS NULL AND (
+            (d.metodo_pago IN ('pago_movil', 'Pago movil') AND f.fpago_concepto = 'Pago movil') OR
+            (d.metodo_pago IN ('transferencia', 'Transferencia') AND f.fpago_concepto = 'Transferencia') OR
+            (d.metodo_pago IN ('efectivo_bs', 'Efectivo Bs') AND f.fpago_concepto = 'Efectivo Bs') OR
+            (d.metodo_pago IN ('efectivo_usd', 'Efectivo USD') AND f.fpago_concepto = 'Efectivo USD') OR
+            (d.metodo_pago = 'ZELLE' AND f.fpago_concepto = 'ZELLE') OR
+            (d.metodo_pago = 'BINANCE' AND f.fpago_concepto = 'BINANCE')
+        );
+
+        -- Eliminar la columna antigua metodo_pago
+        ALTER TABLE public.detalle_rendicion_fpagos DROP COLUMN metodo_pago;
+    END IF;
+END $$;
+
+-- 3. Actualizar función registrar_rendicion_cuentas
 CREATE OR REPLACE FUNCTION public.registrar_rendicion_cuentas(
     p_cliente_id UUID,
     p_observaciones TEXT,
@@ -194,6 +261,43 @@ BEGIN
         'error', NULL
     );
 
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'data', NULL,
+            'error', json_build_object(
+                'code', 'SQL_ERROR',
+                'message', SQLERRM,
+                'details', 'SQLSTATE: ' || SQLSTATE
+            )
+        );
+END;
+$$;
+
+-- 4. Crear la función consulta_registros_formas_pago (DB-011)
+CREATE OR REPLACE FUNCTION public.consulta_registros_formas_pago()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_data JSON;
+BEGIN
+    SELECT json_agg(
+        json_build_object(
+            'fpago_id', fpago_id,
+            'fpago_concepto', fpago_concepto,
+            'fpago_info', fpago_info
+        ) ORDER BY fpago_concepto
+    ) INTO v_data
+    FROM public.fpagos;
+
+    RETURN json_build_object(
+        'success', true,
+        'data', COALESCE(v_data, '[]'::json),
+        'error', NULL
+    );
 EXCEPTION
     WHEN OTHERS THEN
         RETURN json_build_object(

@@ -144,9 +144,13 @@ USING (
     OR (public.user_has_role(ARRAY['chofer_cobrador']) AND chofer_id = auth.uid())
 );
 
--- Crear política de modificación para personal administrativo
+-- Crear política de modificación para personal administrativo y vendedores (para sus propias órdenes)
 CREATE POLICY modify_ordenes_distribucion ON public.ordenes_distribucion
 FOR ALL
 USING (
     public.user_has_role(ARRAY['admin', 'gerente', 'despachador'])
+    OR (
+        public.user_has_role(ARRAY['vendedor']) 
+        AND creado_por = auth.uid()
+    )
 );

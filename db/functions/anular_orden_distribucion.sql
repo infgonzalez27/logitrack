@@ -7,6 +7,8 @@ SECURITY DEFINER
 AS $$
 DECLARE
     v_estado_actual TEXT;
+    v_creado_por UUID;
+    v_user_id UUID := auth.uid();
     v_item RECORD;
 BEGIN
     -- 1. Validaciones básicas
@@ -23,12 +25,12 @@ BEGIN
     END IF;
 
     -- Obtener datos de la orden
-    SELECT estado
-    INTO v_estado_actual
+    SELECT estado, creado_por
+    INTO v_estado_actual, v_creado_por
     FROM public.ordenes_distribucion
     WHERE id = p_orden_id;
 
-    IF NOT FOUND THEN
+    IF v_estado_actual IS NULL THEN
         RETURN json_build_object(
             'success', false,
             'data', NULL,
@@ -38,6 +40,21 @@ BEGIN
                 'details', 'ID: ' || p_orden_id
             )
         );
+    END IF;
+
+    -- VALIDACIÓN DE PERMISOS POR ROL Y AUTORÍA (DB-012)
+    IF public.user_has_role(ARRAY['vendedor']) AND NOT public.user_has_role(ARRAY['admin', 'gerente', 'despachador']) THEN
+        IF v_user_id IS NOT NULL AND v_creado_por IS DISTINCT FROM v_user_id THEN
+            RETURN json_build_object(
+                'success', false,
+                'data', NULL,
+                'error', json_build_object(
+                    'code', 'ACCESO_DENEGADO',
+                    'message', 'Un vendedor solo puede anular las órdenes que ha registrado.',
+                    'details', NULL
+                )
+            );
+        END IF;
     END IF;
 
     -- Validar estado para anulación
@@ -88,7 +105,7 @@ BEGIN
             -- Sumar de vuelta a stock_disponible, restar de stock_comprometido
             UPDATE public.inventario_almacen
             SET stock_disponible = stock_disponible + v_item.cantidad_solicitada,
-                stock_comprometido = stock_comprometido - v_item.cantidad_solicitada,
+                stock_comprometido = GREATEST(0, stock_comprometido - v_item.cantidad_solicitada),
                 updated_at = NOW()
             WHERE producto_id = v_item.producto_id;
         END LOOP;

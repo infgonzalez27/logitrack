@@ -10,6 +10,8 @@ DECLARE
     v_estado_actual TEXT;
     v_camion_id UUID;
     v_chofer_id UUID;
+    v_creado_por UUID;
+    v_user_id UUID := auth.uid();
     v_item RECORD;
     v_producto_nombre TEXT;
     v_stock_disponible INT;
@@ -30,13 +32,20 @@ BEGIN
     END IF;
 
     -- Obtener datos de la orden
-    SELECT estado, camion_id, chofer_id 
-    INTO v_estado_actual, v_camion_id, v_chofer_id
+    SELECT estado, camion_id, chofer_id, creado_por 
+    INTO v_estado_actual, v_camion_id, v_chofer_id, v_creado_por
     FROM public.ordenes_distribucion
     WHERE id = p_orden_id;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'La orden de distribución con ID % no existe.', p_orden_id;
+    END IF;
+
+    -- VALIDACIÓN DE PERMISOS POR ROL Y AUTORÍA (DB-012)
+    IF public.user_has_role(ARRAY['vendedor']) AND NOT public.user_has_role(ARRAY['admin', 'gerente', 'despachador']) THEN
+        IF v_user_id IS NOT NULL AND v_creado_por IS DISTINCT FROM v_user_id THEN
+            RAISE EXCEPTION 'ACCESO_DENEGADO: Un vendedor solo puede modificar las órdenes que ha registrado.';
+        END IF;
     END IF;
 
     -- Si ya está en el estado solicitado, no hacer nada

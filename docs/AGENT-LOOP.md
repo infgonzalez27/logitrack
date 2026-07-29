@@ -120,3 +120,32 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Comportamiento:** Registra la cabecera en `rendiciones_cuentas` y los detalles en `detalle_rendicion_ordenes` y `detalle_rendicion_fpagos`. Si la suma de los pagos supera lo recaudado de las órdenes, calcula y abona la diferencia como crédito en `saldo_favor` del cliente.
   - **Output:** JSON `{ success: boolean, data: { rendicion_id: UUID, total_ordenes: NUMERIC, total_pagos: NUMERIC, saldo_favor_generado: NUMERIC }, error: object }`.
 
+  ### Tabla formas de pago 
+
+- `[x]` **Tarea DB-009: Creación de tabla fpagos con las distintas formas de pago**
+  - **Función:** Registros con formas de pago para ser utilizado en el módulo de Rendición de cuentas y pago a proveedores
+  - **Inputs:** `fpago_id UUID PK, fpago_concepto TEXT, fpago_info BOOLEAN`.
+  - **Registros:** Insertar los siguientes registros: `Pago movil`, .T.; `Transferencia`,.T.;`Efectivo Bs`, .F.; `Efectivo USD`, .F.; `ZELLE`, .T.;`BINANCE`,.T.
+  - **Output:** No OUTPUT
+
+  ### Foreign Key 
+
+- `[x]` **Tarea DB-010: Creación de un foreign key en la tabla detalle_rendicion_fpagos**
+  - **Función:** Solo almacenar en la tabla detalle_rendicion_fpagos el fpago_id. Eliminar el campo metodo_pago. (Nota: Se actualizaron `registrar_rendicion_cuentas` y `cargar_datos_demo_dashboard` para usar `fpago_id`).
+  
+### Consulta a la tabla formas de pago
+
+- `[x]` **Tarea DB-011: Crear Function consulta_registros_formas_pago, en Supabase para consultar todos los registros de la tabla fpagos (`Retorna_`)**
+  - **Función:** Retorna todos los campos de todos los registros de la tabla fpagos
+  - **Inputs:** No hay Inputs.
+  - **Output:** JSON (Estructura: `{ "success": true, "data": [{"fpago_id": "...", "fpago_concepto": "...", "fpago_info": ...}], "error": null }`) 
+
+### Control de Acceso y Modificación de Órdenes
+
+- `[x]` **Tarea DB-012: Restricción de Modificación de Órdenes de Distribución (Vendedor vs Gerente)**
+  - **Función:** Un vendedor solo puede modificar o anular las órdenes que él mismo ha registrado (`creado_por = auth.uid()`), mientras que un gerente o admin puede modificar cualquier orden.
+  - **Inputs:** `p_orden_id UUID`, `creado_por UUID`.
+  - **Comportamiento:**
+    1. Modificar políticas RLS en `ordenes_distribucion` para UPDATE/DELETE.
+    2. Modificar `actualizar_estado_orden_distribucion` y `anular_orden_distribucion` para validar autoría cuando el ejecutor es vendedor.
+  - **Output:** JSON o Excepción `ACCESO_DENEGADO`.

@@ -59,6 +59,25 @@ export function vendedorPuedeAnular(estado: OrdenEstado): boolean {
   return estado === "borrador" || estado === "lista_para_carga";
 }
 
+/**
+ * Determina si el usuario puede modificar una orden de distribución.
+ * - Gerentes y Administradores pueden modificar cualquier orden.
+ * - Vendedores solo pueden modificar órdenes que ellos mismos registraron (creado_por === usuarioId).
+ */
+export function puedeEditarOrden(
+  rol: RolNombre | null,
+  creadoPor?: string | null,
+  usuarioId?: string | null,
+): boolean {
+  if (isOrdenStaff(rol)) {
+    return true;
+  }
+  if (rol === "vendedor") {
+    return Boolean(creadoPor && usuarioId && creadoPor === usuarioId);
+  }
+  return false;
+}
+
 export function puedeCambiarEstadoOrden(
   rol: RolNombre | null,
   estadoActual: OrdenEstado,

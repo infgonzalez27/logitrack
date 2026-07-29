@@ -261,8 +261,8 @@ BEGIN
         INSERT INTO public.detalle_rendicion_ordenes (rendicion_id, orden_distribucion_id, recaudado)
         VALUES (v_rendicion_1_id, v_orden_1_id, 240.00);
         
-        INSERT INTO public.detalle_rendicion_pagos (rendicion_id, metodo_pago, monto, referencia_bancaria, cuenta_bancaria)
-        VALUES (v_rendicion_1_id, 'efectivo_usd', 240.00, NULL, NULL);
+        INSERT INTO public.detalle_rendicion_fpagos (rendicion_id, fpago_id, monto, referencia_bancaria, cuenta_bancaria)
+        VALUES (v_rendicion_1_id, '4d8eb7fb-7ade-4113-bb3f-ab66548e144e'::UUID, 240.00, NULL, NULL);
     END IF;
 
     -- Calcular conteos finales para retornar

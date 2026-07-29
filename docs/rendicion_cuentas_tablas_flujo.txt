@@ -1,0 +1,20 @@
+    Vendedor->>Cliente: Visita y cobra órdenes anteriores (recaudación parcial/total)
+    Cliente->>Vendedor: Envía capture de Pago Móvil/Transferencia
+    Vendedor->>Vendedor: Registra Recaudación (asocia N órdenes) -> Estado: Pendiente
+	
+Como se puede observar, la rendición de cuentas la registra como pendiente de aprobación el vendedor y el gerente lo aprueba	
+
+El registro de datos para la rendición de cuentas se hace en tres tablas
+La tabla padre: rendicion_cuentas, 
+una tabla hija: detalle_rendicion_ordenes, para el registro de las ordenes de distribución que entran en esa rendición de cuentas y 
+otra tabla hija: detalle_rendicion_fpagos, para el registro de las formas de pago del total a recaudar,
+Ya que en una rendicion de cuentas se pueden recaudar mas de una orden con mas de una forma de pago.
+
+Las tablas ya existen, necesitamos una funcion para el registro con las siguientes reglas:
+Ningún registro en las tablas hijas puede quedar huerfano
+Por cada tabla hija, por lo menos debe existir un registro relacionado con el Id de la tabla padre
+
+El total de la forma de pago puede exceder el total recaudado de las ordenes de distribucion
+
+Si el lo recaudado es mayor al total de las ordenes de distribucion se crea un crédito a favor del cliente el cual se rebaja dándole la diferencia o se toma en cuenta como otra rendición de cuentas para una futura orden de distribucion.
+Allí si te autorizo a que me asesores como manejar eso.

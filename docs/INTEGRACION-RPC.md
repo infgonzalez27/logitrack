@@ -271,8 +271,8 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
       { orden_id: 'UUID_DE_LA_ORDEN_2', monto_recaudado: 80.00 }
     ],
     p_pagos: [
-      { metodo_pago: 'pago_movil', monto: 150.00, referencia_bancaria: 'REF1234', cuenta_bancaria: '0102-XXXX', capture_url: 'storage-url' },
-      { metodo_pago: 'efectivo_usd', monto: 100.00, referencia_bancaria: null, cuenta_bancaria: null, capture_url: null }
+      { fpago_id: '1a5b84c8-47bc-4ee0-880c-7833215be11b', monto: 150.00, referencia_bancaria: 'REF1234', cuenta_bancaria: '0102-XXXX', capture_url: 'storage-url' },
+      { fpago_id: '4d8eb7fb-7ade-4113-bb3f-ab66548e144e', monto: 100.00, referencia_bancaria: null, cuenta_bancaria: null, capture_url: null }
     ]
   });
   ```
@@ -286,6 +286,28 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
       "total_pagos": 250.00,
       "saldo_favor_generado": 50.00
     },
+    "error": null
+  }
+  ```
+
+### 2.9. Consulta de Registros de Formas de Pago (`consulta_registros_formas_pago`)
+- **Firma SQL:** `consulta_registros_formas_pago()`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('consulta_registros_formas_pago');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      { "fpago_id": "6fa0d91d-9c00-4335-dd5f-cd88760a366a", "fpago_concepto": "BINANCE", "fpago_info": true },
+      { "fpago_id": "3c7da6ea-69de-4002-aa2e-9a55437d033d", "fpago_concepto": "Efectivo Bs", "fpago_info": false },
+      { "fpago_id": "4d8eb7fb-7ade-4113-bb3f-ab66548e144e", "fpago_concepto": "Efectivo USD", "fpago_info": false },
+      { "fpago_id": "1a5b84c8-47bc-4ee0-880c-7833215be11b", "fpago_concepto": "Pago movil", "fpago_info": true },
+      { "fpago_id": "2b6c95d9-58cd-4ff1-991d-8944326cf22c", "fpago_concepto": "Transferencia", "fpago_info": true },
+      { "fpago_id": "5e9fc80c-8bef-4224-cc4f-bc77659f255f", "fpago_concepto": "ZELLE", "fpago_info": true }
+    ],
     "error": null
   }
   ```

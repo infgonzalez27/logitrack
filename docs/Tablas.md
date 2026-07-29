@@ -173,6 +173,58 @@
 | `estado_entrega` | `text` |  Nullable |
 | `motivo_rechazo` | `text` |  Nullable |
 
+## Table `rendiciones_cuentas`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `cliente_id` | `uuid` |  Nullable |
+| `fecha_rendicion` | `timestamptz` |  Nullable |
+| `total_efectivo_recaudado` | `numeric` |  Nullable |
+| `total_transferencias_recaudado` | `numeric` |  Nullable |
+| `total_devoluciones_valoradas` | `numeric` |  Nullable |
+| `estado` | `text` |  Nullable |
+| `observaciones` | `text` |  Nullable |
+| `auditado_por` | `uuid` |  Nullable |
+
+## Table `fpagos`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `fpago_id` | `uuid` | Primary |
+| `fpago_concepto` | `text` | Unique |
+| `fpago_info` | `bool` |  |
+
+## Table `detalle_rendicion_fpagos`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `rendicion_id` | `uuid` |  Nullable |
+| `fpago_id` | `uuid` | Foreign Key (fpagos.fpago_id) |
+| `monto` | `numeric` |  |
+| `referencia_bancaria` | `text` |  Nullable |
+| `cuenta_bancaria` | `text` |  Nullable |
+| `capture_url` | `text` |  Nullable |
+
+## Table `detalle_rendicion_ordenes`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `rendicion_id` | `uuid` |  Nullable |
+| `orden_distribucion_id` | `uuid` |  Nullable Unique |
+| `recaudado` | `numeric` |  Nullable |
+
+
 ## Table `clientes`
 
 ### Columns
