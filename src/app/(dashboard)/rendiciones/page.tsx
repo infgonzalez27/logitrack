@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
+import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { joinOne } from "@/lib/supabase/join";
 import { RENDICION_ESTADOS } from "@/lib/constants";
 import { formatDate, formatCurrency } from "@/lib/format";
@@ -7,8 +9,18 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { AprobarRendicionButton } from "./aprobar-rendicion-button";
 
-export default async function RendicionesPage() {
+export default async function RendicionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ok?: string }>;
+}) {
+  const { ok } = await searchParams;
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  const canApprove = rol === "admin" || rol === "gerente";
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("rendiciones_cuentas")
@@ -22,6 +34,12 @@ export default async function RendicionesPage() {
         description="Módulo 4 — Cobranzas y devoluciones en ruta"
         action={<Button href="/rendiciones/nuevo">Nueva rendición</Button>}
       />
+      {ok ? (
+        <p className="lt-alert-success">
+          Rendición registrada en revisión. Un gerente debe aprobarla para
+          liquidar las órdenes asociadas.
+        </p>
+      ) : null}
       <Card>
         <DataTable
           columns={[
@@ -30,6 +48,9 @@ export default async function RendicionesPage() {
             { key: "efectivo", label: "Efectivo" },
             { key: "transferencias", label: "Transferencias" },
             { key: "estado", label: "Estado" },
+            ...(canApprove
+              ? [{ key: "acciones", label: "Acciones" as const }]
+              : []),
           ]}
           rows={(data ?? []).map((r) => ({
             id: r.id,
@@ -46,6 +67,16 @@ export default async function RendicionesPage() {
                     r.estado}
                 </Badge>
               ),
+              ...(canApprove
+                ? {
+                    acciones:
+                      r.estado === "revision" ? (
+                        <AprobarRendicionButton rendicionId={r.id} />
+                      ) : (
+                        "—"
+                      ),
+                  }
+                : {}),
             },
           }))}
         />

@@ -54,8 +54,10 @@ const MESES_CORTOS = [
 
 const ESTADOS_VENTA = new Set(["liquidada", "en_transito"]);
 const ESTADOS_CXC = new Set([
+  "aprobada",
   "lista_para_carga",
   "en_transito",
+  "por_liquidar",
   "liquidada",
 ]);
 

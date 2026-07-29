@@ -152,14 +152,7 @@ export function NuevaOrdenForm({
           ) : null}
         </Card>
 
-        <Card
-          title="Detalle de productos"
-          action={
-            <Button type="button" variant="secondary" onClick={addLinea}>
-              Agregar línea
-            </Button>
-          }
-        >
+        <Card title="Detalle de productos">
           {productosError ? (
             <p className="mb-4 text-sm text-lt-danger-text">{productosError}</p>
           ) : null}
@@ -180,6 +173,12 @@ export function NuevaOrdenForm({
                 canRemove={lineas.length > 1}
               />
             ))}
+          </div>
+
+          <div className="mt-4 flex justify-center">
+            <Button type="button" variant="secondary" onClick={addLinea}>
+              Agregar producto
+            </Button>
           </div>
 
           <p className="mt-4 text-sm text-lt-text-muted">

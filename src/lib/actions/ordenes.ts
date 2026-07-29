@@ -5,12 +5,16 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import {
   canCreateOrden,
+  canRegistrarContenedores,
+  canRegistrarEntrega,
   esEstadoOrdenValido,
   puedeCambiarEstadoOrden,
 } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { OrdenEstado, ProductoOrdenRpc } from "@/types/database";
+import type { EstadoEntrega, OrdenEstado, ProductoOrdenRpc } from "@/types/database";
 
 export type LineaOrdenInput = {
   producto_id: string;
@@ -22,11 +26,7 @@ type CrearOrdenRpcResult = {
   success: boolean;
   message?: string;
   orden_id?: string;
-};
-
-type ActualizarEstadoRpcResult = {
-  success: boolean;
-  message?: string;
+  data?: { orden_id?: string };
 };
 
 const UUID_RE =
@@ -42,6 +42,7 @@ function parseOrdenIdFromRpc(data: unknown): string | null {
 
   const result = data as CrearOrdenRpcResult;
   if (result.orden_id) return result.orden_id;
+  if (result.data?.orden_id) return result.data.orden_id;
 
   const record = data as Record<string, unknown>;
   if (typeof record.id === "string") return record.id;
@@ -51,7 +52,10 @@ function parseOrdenIdFromRpc(data: unknown): string | null {
 
 function parseRpcError(data: unknown, fallback: string): string {
   if (data && typeof data === "object") {
-    const result = data as CrearOrdenRpcResult;
+    const result = data as CrearOrdenRpcResult & {
+      error?: { message?: string };
+    };
+    if (result.error?.message) return result.error.message;
     if (result.message) return result.message;
   }
   return fallback;
@@ -149,6 +153,7 @@ export async function createOrdenAction(input: {
     return { error: "Agrega al menos una línea de producto." };
   }
 
+  // Firma actual del SP en BD (db/functions/crear_orden_distribucion.sql)
   const { data, error } = await supabase.rpc("crear_orden_distribucion", {
     p_vendedor_id: user!.id,
     p_chofer_id: input.chofer_id.trim(),
@@ -193,7 +198,7 @@ export async function updateOrdenEstadoAction(
   if (!esEstadoOrdenValido(estado)) {
     return {
       error:
-        "Estado inválido. Valores permitidos: borrador, lista_para_carga, en_transito, liquidada, anulada.",
+        "Estado inválido. Valores permitidos: borrador, aprobada, en_transito, por_liquidar, liquidada, anulada.",
     };
   }
 
@@ -225,19 +230,259 @@ export async function updateOrdenEstadoAction(
     return { error: "Transición de estado no permitida para tu rol." };
   }
 
-  const { data, error } = await supabase.rpc("actualizar_estado_orden_distribucion", {
-    p_orden_id: ordenIdTrim,
-    p_estado: estado,
-  });
+  // DB-002 / DB-003: RPCs dedicados (INTEGRACION-RPC.md)
+  if (estado === "aprobada") {
+    const response = await callDbProcedure<{
+      orden_id: string;
+      nuevo_estado: string;
+    }>("aprobar_orden_distribucion", { p_orden_id: ordenIdTrim });
 
-  if (error) return { error: error.message };
+    if (!response.success) {
+      return {
+        error: rpcErrorMessage(response, "No se pudo aprobar la orden."),
+        code: response.error?.code,
+      };
+    }
+  } else if (estado === "en_transito") {
+    const response = await callDbProcedure<{
+      orden_id: string;
+      nuevo_estado: string;
+    }>("cargar_inventario_movil", { p_orden_id: ordenIdTrim });
 
-  const rpcResult = data as ActualizarEstadoRpcResult | null;
-  if (rpcResult && rpcResult.success === false) {
-    return { error: rpcResult.message ?? "No se pudo actualizar el estado." };
+    if (!response.success) {
+      return {
+        error: rpcErrorMessage(
+          response,
+          "No se pudo cargar el inventario móvil / despachar.",
+        ),
+        code: response.error?.code,
+      };
+    }
+  } else if (estado === "liquidada") {
+    // DB-005: requiere rendición aprobada vinculada a la orden
+    const response = await callDbProcedure<{
+      orden_id: string;
+      nuevo_estado: string;
+    }>("liquidar_orden_distribucion", { p_orden_id: ordenIdTrim });
+
+    if (!response.success) {
+      return {
+        error: rpcErrorMessage(
+          response,
+          "No se pudo liquidar la orden. Verifica que exista una rendición aprobada.",
+        ),
+        code: response.error?.code,
+      };
+    }
+  } else if (estado === "anulada") {
+    // DB-006
+    const response = await callDbProcedure<{
+      orden_id: string;
+      nuevo_estado: string;
+    }>("anular_orden_distribucion", { p_orden_id: ordenIdTrim });
+
+    if (!response.success) {
+      return {
+        error: rpcErrorMessage(response, "No se pudo anular la orden."),
+        code: response.error?.code,
+      };
+    }
+  } else {
+    return {
+      error: "Esta transición no está disponible.",
+    };
   }
 
   revalidatePath("/ordenes");
   revalidatePath(`/ordenes/${ordenIdTrim}`);
   return { success: true };
+}
+
+export async function registrarEntregaDetalleAction(input: {
+  detalle_id: string;
+  cantidad_despachada: number;
+  estado_entrega: EstadoEntrega;
+  motivo_rechazo?: string;
+}) {
+  const detalleId = input.detalle_id?.trim();
+  if (!detalleId || !isUuid(detalleId)) {
+    return { error: "ID de línea inválido." };
+  }
+
+  const estadosValidos: EstadoEntrega[] = [
+    "entregado",
+    "entregado_parcial",
+    "rechazado",
+  ];
+  if (!estadosValidos.includes(input.estado_entrega)) {
+    return {
+      error:
+        "Estado de entrega inválido. Usa entregado, entregado_parcial o rechazado.",
+    };
+  }
+
+  if (
+    !Number.isFinite(input.cantidad_despachada) ||
+    input.cantidad_despachada < 0
+  ) {
+    return { error: "La cantidad despachada no puede ser negativa." };
+  }
+
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (!canRegistrarEntrega(rol)) {
+    return { error: "No tienes permiso para registrar entregas." };
+  }
+
+  const motivo =
+    input.estado_entrega === "entregado"
+      ? null
+      : (input.motivo_rechazo?.trim() || null);
+
+  if (
+    (input.estado_entrega === "rechazado" ||
+      input.estado_entrega === "entregado_parcial") &&
+    !motivo
+  ) {
+    return {
+      error: "Indica el motivo para entregas parciales o rechazadas.",
+    };
+  }
+
+  // DB-004
+  const response = await callDbProcedure<{
+    detalle_id: string;
+    estado_entrega: string;
+    orden_estado: string;
+  }>("registrar_entrega_detalle", {
+    p_detalle_id: detalleId,
+    p_cantidad_despachada: input.cantidad_despachada,
+    p_estado_entrega: input.estado_entrega,
+    p_motivo_rechazo: motivo,
+  });
+
+  if (!response.success) {
+    return {
+      error: rpcErrorMessage(response, "No se pudo registrar la entrega."),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/ordenes");
+  return {
+    success: true,
+    orden_estado: response.data?.orden_estado ?? null,
+  };
+}
+
+export type TipoContenedorOption = {
+  id: string;
+  codigo: string;
+  nombre: string;
+};
+
+export async function listarTiposContenedoresAction(): Promise<
+  | { ok: true; contenedores: TipoContenedorOption[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const { data, error } = await createAdminClient()
+      .from("tipos_contenedores")
+      .select("id, codigo, nombre")
+      .order("nombre");
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    return {
+      ok: true,
+      contenedores: (data ?? []).map((row) => ({
+        id: row.id,
+        codigo: row.codigo,
+        nombre: row.nombre,
+      })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "No se pudieron cargar los tipos de contenedores.",
+    };
+  }
+}
+
+export async function registrarMovimientoContenedoresAction(input: {
+  cliente_id: string;
+  orden_id: string;
+  contenedor_id: string;
+  cantidad_entregada: number;
+  cantidad_retirada: number;
+}) {
+  const clienteId = input.cliente_id?.trim();
+  const ordenId = input.orden_id?.trim();
+  const contenedorId = input.contenedor_id?.trim();
+
+  if (!clienteId || !isUuid(clienteId)) {
+    return { error: "Cliente inválido." };
+  }
+  if (!ordenId || !isUuid(ordenId)) {
+    return { error: "Orden inválida." };
+  }
+  if (!contenedorId || !isUuid(contenedorId)) {
+    return { error: "Selecciona un tipo de contenedor." };
+  }
+  if (
+    !Number.isFinite(input.cantidad_entregada) ||
+    input.cantidad_entregada < 0 ||
+    !Number.isFinite(input.cantidad_retirada) ||
+    input.cantidad_retirada < 0
+  ) {
+    return { error: "Las cantidades deben ser mayores o iguales a 0." };
+  }
+  if (input.cantidad_entregada === 0 && input.cantidad_retirada === 0) {
+    return { error: "Indica al menos una cantidad entregada o retirada." };
+  }
+
+  const user = await getSessionUser();
+  if (!user) {
+    return { error: "No autenticado." };
+  }
+
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (!canRegistrarContenedores(rol)) {
+    return {
+      error: "No tienes permiso para registrar movimientos de contenedores.",
+    };
+  }
+
+  // DB-004b
+  const response = await callDbProcedure<{ movimiento_id: string }>(
+    "registrar_movimiento_contenedores",
+    {
+      p_cliente_id: clienteId,
+      p_orden_id: ordenId,
+      p_contenedor_id: contenedorId,
+      p_cantidad_entregada: input.cantidad_entregada,
+      p_cantidad_retirada: input.cantidad_retirada,
+      p_creado_por: user.id,
+    },
+  );
+
+  if (!response.success) {
+    return {
+      error: rpcErrorMessage(
+        response,
+        "No se pudo registrar el movimiento de contenedores.",
+      ),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/ordenes");
+  revalidatePath(`/ordenes/${ordenId}`);
+  return { success: true, movimiento_id: response.data?.movimiento_id ?? null };
 }

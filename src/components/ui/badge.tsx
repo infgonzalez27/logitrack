@@ -26,10 +26,13 @@ export function ordenEstadoTone(estado: string): keyof typeof tones {
   switch (estado) {
     case "borrador":
       return "default";
+    case "aprobada":
     case "lista_para_carga":
       return "info";
     case "en_transito":
       return "warning";
+    case "por_liquidar":
+      return "info";
     case "liquidada":
       return "success";
     case "anulada":

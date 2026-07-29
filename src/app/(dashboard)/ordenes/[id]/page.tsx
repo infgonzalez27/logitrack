@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { getCurrentProfile, getSessionUser } from "@/lib/auth";
+import {
+  canRegistrarContenedores,
+  canRegistrarEntrega,
+} from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { getOrdenDistribucionDetalle } from "@/lib/data/ordenes";
+import { listarTiposContenedoresAction } from "@/lib/actions/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado, labelEstadoEntrega } from "@/lib/constants";
@@ -13,6 +18,8 @@ import { Card } from "@/components/ui/card";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintDocumentHeader } from "@/components/print/print-document-header";
 import { OrdenEstadoActions } from "./orden-estado-actions";
+import { RegistrarEntregaForm } from "./registrar-entrega-form";
+import { RegistrarContenedoresForm } from "./registrar-contenedores-form";
 import type { OrdenEstado } from "@/types/database";
 
 export default async function OrdenDetallePage({
@@ -21,9 +28,10 @@ export default async function OrdenDetallePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [user, profile] = await Promise.all([
+  const [user, profile, contenedoresResult] = await Promise.all([
     getSessionUser(),
     getCurrentProfile(),
+    listarTiposContenedoresAction(),
   ]);
   const rol = getRoleNameFromProfile(profile);
 
@@ -55,6 +63,18 @@ export default async function OrdenDetallePage({
     (sum, linea) => sum + linea.subtotal_recaudar,
     0,
   );
+
+  const puedeRegistrarEntregas =
+    canRegistrarEntrega(rol) && orden.estado === "en_transito";
+  const lineasPendientes = detalle.filter(
+    (linea) => (linea.estado_entrega ?? "pendiente") === "pendiente",
+  );
+  const puedeRegistrarContenedores =
+    canRegistrarContenedores(rol) &&
+    (orden.estado === "en_transito" || orden.estado === "por_liquidar");
+  const tiposContenedores = contenedoresResult.ok
+    ? contenedoresResult.contenedores
+    : [];
 
   return (
     <div className="lt-print-document space-y-6">
@@ -162,6 +182,64 @@ export default async function OrdenDetallePage({
           Total a recaudar: {formatCurrency(totalRecaudar)}
         </p>
       </Card>
+
+      {puedeRegistrarEntregas && lineasPendientes.length > 0 ? (
+        <Card title="Registrar entregas en ruta" className="lt-no-print">
+          <p className="mb-4 text-sm text-lt-text-muted">
+            RPC <code>registrar_entrega_detalle</code> (DB-004). Cuando todas
+            las líneas queden registradas, la orden pasa a{" "}
+            <strong>por liquidar</strong>.
+          </p>
+          <div className="space-y-4">
+            {lineasPendientes.map((linea) => {
+              const producto = joinOne(linea.productos);
+              return (
+                <RegistrarEntregaForm
+                  key={linea.id}
+                  detalleId={linea.id}
+                  cantidadSolicitada={linea.cantidad_solicitada}
+                  productoNombre={
+                    producto?.nombre ??
+                    producto?.codigo_producto ??
+                    "Producto"
+                  }
+                />
+              );
+            })}
+          </div>
+        </Card>
+      ) : null}
+
+      {puedeRegistrarContenedores ? (
+        <Card title="Movimiento de contenedores" className="lt-no-print">
+          <p className="mb-4 text-sm text-lt-text-muted">
+            RPC <code>registrar_movimiento_contenedores</code> (DB-004b).
+            Entrega/retiro de envases retornables en ruta.
+          </p>
+          {!contenedoresResult.ok ? (
+            <p className="text-sm text-lt-danger-text">
+              {contenedoresResult.error}
+            </p>
+          ) : (
+            <RegistrarContenedoresForm
+              ordenId={orden.id}
+              clienteId={orden.cliente_id}
+              contenedores={tiposContenedores}
+            />
+          )}
+        </Card>
+      ) : null}
+
+      {orden.estado === "por_liquidar" ? (
+        <p className="lt-no-print text-sm text-lt-text-muted">
+          Para liquidar: debe existir una{" "}
+          <a href="/rendiciones" className="text-lt-primary underline">
+            rendición de cuentas
+          </a>{" "}
+          vinculada a esta orden y en estado <strong>aprobada</strong>. Luego
+          usa el botón <strong>Liquidar (recaudación aprobada)</strong>.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -91,9 +91,10 @@ function kpisVendedor(
 
   return Promise.all([
     countOrdenes(supabase, { estado: "en_transito" }, userId),
+    countOrdenes(supabase, { estado: "aprobada" }, userId),
     countOrdenes(supabase, { estado: "lista_para_carga" }, userId),
     countOrdenes(supabase, { estado: "liquidada" }, userId),
-  ]).then(([transito, carga, liquidadas]) => [
+  ]).then(([transito, aprobadas, cargaLegado, liquidadas]) => [
     {
       id: "ventas-mes",
       label: "Mis ventas del mes",
@@ -117,8 +118,8 @@ function kpisVendedor(
     },
     {
       id: "carga",
-      label: "Listas para carga",
-      value: carga,
+      label: "Órdenes aprobadas",
+      value: aprobadas + cargaLegado,
       href: "/ordenes",
       tone: "default",
     },

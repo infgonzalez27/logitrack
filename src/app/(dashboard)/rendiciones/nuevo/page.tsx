@@ -1,39 +1,28 @@
 import { createClient } from "@/lib/supabase/server";
-import { createRendicionAction } from "@/lib/actions/entities";
 import { PageHeader } from "@/components/layout/page-header";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { ActionForm } from "@/components/forms/action-form";
+import { NuevaRendicionForm } from "./nueva-rendicion-form";
 
 export default async function NuevaRendicionPage() {
   const supabase = await createClient();
   const { data: clientes } = await supabase
     .from("clientes")
-    .select("id, razon_social")
+    .select("id, razon_social, rif_nit")
     .eq("activo", true)
     .order("razon_social");
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <PageHeader title="Nueva rendición de cuentas" />
-      <Card>
-        <ActionForm action={createRendicionAction} redirectTo="/rendiciones">
-          <Select
-            label="Cliente"
-            name="cliente_id"
-            required
-            placeholder="Selecciona cliente"
-            options={(clientes ?? []).map((c) => ({
-              value: c.id,
-              label: c.razon_social,
-            }))}
-          />
-          <Input label="Observaciones" name="observaciones" />
-          <Button type="submit">Crear rendición</Button>
-        </ActionForm>
-      </Card>
+      <PageHeader
+        title="Rendición de cuentas"
+        description="Cliente → formas de pago (con captura) → órdenes por liquidar."
+      />
+      <NuevaRendicionForm
+        clientes={(clientes ?? []).map((c) => ({
+          value: c.id,
+          label: c.razon_social,
+          codigo: c.rif_nit ?? "",
+        }))}
+      />
     </div>
   );
 }

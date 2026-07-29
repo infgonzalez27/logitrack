@@ -1,7 +1,9 @@
 export type OrdenEstado =
   | "borrador"
-  | "lista_para_carga"
+  | "aprobada"
+  | "lista_para_carga" // legado pre-migración DB-000
   | "en_transito"
+  | "por_liquidar"
   | "liquidada"
   | "anulada";
 
@@ -372,6 +374,42 @@ export interface Database {
           message?: string;
           orden_id?: string;
         };
+      };
+      aprobar_orden_distribucion: {
+        Args: { p_orden_id: string };
+        Returns: Record<string, unknown>;
+      };
+      cargar_inventario_movil: {
+        Args: { p_orden_id: string };
+        Returns: Record<string, unknown>;
+      };
+      registrar_entrega_detalle: {
+        Args: {
+          p_detalle_id: string;
+          p_cantidad_despachada: number;
+          p_estado_entrega: string;
+          p_motivo_rechazo: string | null;
+        };
+        Returns: Record<string, unknown>;
+      };
+      registrar_movimiento_contenedores: {
+        Args: {
+          p_cliente_id: string;
+          p_orden_id: string;
+          p_contenedor_id: string;
+          p_cantidad_entregada: number;
+          p_cantidad_retirada: number;
+          p_creado_por: string;
+        };
+        Returns: Record<string, unknown>;
+      };
+      liquidar_orden_distribucion: {
+        Args: { p_orden_id: string };
+        Returns: Record<string, unknown>;
+      };
+      anular_orden_distribucion: {
+        Args: { p_orden_id: string };
+        Returns: Record<string, unknown>;
       };
       actualizar_estado_orden_distribucion: {
         Args: {

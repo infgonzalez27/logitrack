@@ -114,7 +114,7 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
   ],
 
-  vendedor: ["/", "/ordenes", "/prueba-impresion", "/clientes"],
+  vendedor: ["/", "/ordenes", "/prueba-impresion", "/clientes", "/rendiciones"],
 
   chofer: ["/ordenes", "/prueba-impresion", "/inventario-movil"],
 
