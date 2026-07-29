@@ -17,7 +17,7 @@ export type RpcResponse<T> = {
 /** Wrapper estándar para supabase.rpc según docs/INTEGRACION-RPC.md */
 export async function callDbProcedure<T>(
   procedureName: string,
-  params: Record<string, unknown>,
+  params: Record<string, unknown> = {},
 ): Promise<RpcResponse<T>> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(procedureName, params);

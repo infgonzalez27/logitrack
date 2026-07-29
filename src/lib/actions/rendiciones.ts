@@ -6,7 +6,7 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { getRoleNameFromProfile, type RolNombre } from "@/lib/auth/roles";
 import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
 import { createClient } from "@/lib/supabase/server";
-import type { MetodoPagoRendicion } from "@/types/database";
+import type { Fpago } from "@/types/database";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,13 +24,6 @@ const ROLES_REGISTRAR: RolNombre[] = [
 
 const ROLES_APROBAR: RolNombre[] = ["admin", "gerente"];
 
-const METODOS_VALIDOS: MetodoPagoRendicion[] = [
-  "efectivo_usd",
-  "efectivo_bs",
-  "transferencia",
-  "pago_movil",
-];
-
 export type OrdenParaRendicion = {
   id: string;
   correlativo: number;
@@ -45,12 +38,34 @@ export type OrdenRendicionInput = {
 };
 
 export type PagoRendicionInput = {
-  metodo_pago: MetodoPagoRendicion;
+  fpago_id: string;
   monto: number;
   referencia_bancaria?: string | null;
   cuenta_bancaria?: string | null;
   capture_url?: string | null;
+  /** Solo para validar en servidor si el front ya conoce fpago_info. */
+  fpago_info?: boolean;
 };
+
+/** DB-011 — catálogo desde tabla `fpagos`. */
+export async function listarFormasPagoAction(): Promise<
+  | { ok: true; formas: Fpago[] }
+  | { ok: false; error: string }
+> {
+  const response = await callDbProcedure<Fpago[]>(
+    "consulta_registros_formas_pago",
+  );
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudieron cargar las formas de pago."),
+    };
+  }
+
+  const formas = Array.isArray(response.data) ? response.data : [];
+  return { ok: true, formas };
+}
 
 export async function listarOrdenesParaRendicionAction(
   clienteId: string,
@@ -193,15 +208,27 @@ export async function registrarRendicionCuentasAction(input: {
 
   for (let i = 0; i < input.pagos.length; i++) {
     const pago = input.pagos[i];
-    if (!METODOS_VALIDOS.includes(pago.metodo_pago)) {
-      return { error: `Pago #${i + 1}: método inválido.` };
+    if (!pago.fpago_id || !isUuid(pago.fpago_id)) {
+      return { error: `Pago #${i + 1}: forma de pago inválida.` };
     }
     if (!Number.isFinite(pago.monto) || pago.monto <= 0) {
       return { error: `Pago #${i + 1}: el monto debe ser mayor a 0.` };
     }
+    if (pago.fpago_info === true) {
+      if (!pago.referencia_bancaria?.trim()) {
+        return {
+          error: `Pago #${i + 1}: la referencia bancaria es obligatoria.`,
+        };
+      }
+      if (!pago.cuenta_bancaria?.trim()) {
+        return {
+          error: `Pago #${i + 1}: la cuenta bancaria es obligatoria.`,
+        };
+      }
+    }
   }
 
-  // DB-008
+  // DB-008 / DB-010 — p_pagos con fpago_id
   const response = await callDbProcedure<{
     rendicion_id: string;
     total_ordenes: number;
@@ -216,10 +243,14 @@ export async function registrarRendicionCuentasAction(input: {
       monto_recaudado: o.monto_recaudado,
     })),
     p_pagos: input.pagos.map((p) => ({
-      metodo_pago: p.metodo_pago,
+      fpago_id: p.fpago_id.trim(),
       monto: p.monto,
-      referencia_bancaria: p.referencia_bancaria?.trim() || null,
-      cuenta_bancaria: p.cuenta_bancaria?.trim() || null,
+      referencia_bancaria: p.fpago_info
+        ? p.referencia_bancaria?.trim() || null
+        : null,
+      cuenta_bancaria: p.fpago_info
+        ? p.cuenta_bancaria?.trim() || null
+        : null,
       capture_url: p.capture_url?.trim() || null,
     })),
   });

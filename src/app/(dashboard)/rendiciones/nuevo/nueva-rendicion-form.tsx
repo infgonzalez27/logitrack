@@ -8,13 +8,12 @@ import {
   uploadCaptureRendicionAction,
   type OrdenParaRendicion,
 } from "@/lib/actions/rendiciones";
-import { METODOS_PAGO_RENDICION } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import type { MetodoPagoRendicion } from "@/types/database";
+import type { Fpago } from "@/types/database";
 
 export type ClienteOption = {
   value: string;
@@ -24,9 +23,12 @@ export type ClienteOption = {
 
 type PagoAgregado = {
   key: string;
-  metodo_pago: MetodoPagoRendicion;
-  codigo: string;
+  fpago_id: string;
+  concepto: string;
+  fpago_info: boolean;
   monto: number;
+  referencia_bancaria: string | null;
+  cuenta_bancaria: string | null;
   capture_url: string | null;
   preview_url: string | null;
 };
@@ -39,27 +41,18 @@ type OrdenAgregada = {
   monto_rendicion: number;
 };
 
-const CODIGO_FORMA: Record<MetodoPagoRendicion, string> = {
-  efectivo_usd: "USD",
-  efectivo_bs: "BS",
-  transferencia: "TRF",
-  pago_movil: "PM",
-};
-
 function newKey() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function labelMetodo(value: MetodoPagoRendicion) {
-  return (
-    METODOS_PAGO_RENDICION.find((m) => m.value === value)?.label ?? value
-  );
-}
-
 export function NuevaRendicionForm({
   clientes,
+  formasPago,
+  formasError,
 }: {
   clientes: ClienteOption[];
+  formasPago: Fpago[];
+  formasError?: string | null;
 }) {
   const router = useRouter();
   const captureInputRef = useRef<HTMLInputElement>(null);
@@ -74,11 +67,10 @@ export function NuevaRendicionForm({
   const [ordenesError, setOrdenesError] = useState<string | null>(null);
   const [cargandoOrdenes, setCargandoOrdenes] = useState(false);
 
-  const [borradorForma, setBorradorForma] = useState<MetodoPagoRendicion | "">(
-    "",
-  );
-  const [borradorCodigoForma, setBorradorCodigoForma] = useState("");
+  const [borradorFpagoId, setBorradorFpagoId] = useState("");
   const [borradorMontoForma, setBorradorMontoForma] = useState("0.00");
+  const [borradorReferencia, setBorradorReferencia] = useState("");
+  const [borradorCuenta, setBorradorCuenta] = useState("");
   const [borradorCaptureUrl, setBorradorCaptureUrl] = useState<string | null>(
     null,
   );
@@ -96,6 +88,10 @@ export function NuevaRendicionForm({
   const [pending, startTransition] = useTransition();
 
   const clienteSeleccionado = clientes.find((c) => c.value === clienteId);
+  const formaSeleccionada = formasPago.find(
+    (f) => f.fpago_id === borradorFpagoId,
+  );
+  const pideInfoBancaria = formaSeleccionada?.fpago_info === true;
 
   const clientesFiltrados = useMemo(() => {
     const q = buscarCliente.trim().toLowerCase();
@@ -163,9 +159,9 @@ export function NuevaRendicionForm({
   const diferencia = totalRendicion - totalOrdenes;
 
   function onFormaChange(value: string) {
-    const metodo = value as MetodoPagoRendicion | "";
-    setBorradorForma(metodo);
-    setBorradorCodigoForma(metodo ? CODIGO_FORMA[metodo] : "");
+    setBorradorFpagoId(value);
+    setBorradorReferencia("");
+    setBorradorCuenta("");
   }
 
   function onOrdenChange(value: string) {
@@ -207,7 +203,7 @@ export function NuevaRendicionForm({
 
   function agregarFormaPago() {
     setError(null);
-    if (!borradorForma) {
+    if (!formaSeleccionada) {
       setError("Selecciona una forma de pago.");
       return;
     }
@@ -216,22 +212,40 @@ export function NuevaRendicionForm({
       setError("El monto de la forma de pago debe ser mayor a 0.");
       return;
     }
+    if (formaSeleccionada.fpago_info) {
+      if (!borradorReferencia.trim()) {
+        setError("Ingresa la referencia bancaria.");
+        return;
+      }
+      if (!borradorCuenta.trim()) {
+        setError("Ingresa la cuenta bancaria.");
+        return;
+      }
+    }
 
     setPagos((prev) => [
       ...prev,
       {
         key: newKey(),
-        metodo_pago: borradorForma,
-        codigo: borradorCodigoForma.trim() || CODIGO_FORMA[borradorForma],
+        fpago_id: formaSeleccionada.fpago_id,
+        concepto: formaSeleccionada.fpago_concepto,
+        fpago_info: formaSeleccionada.fpago_info,
         monto,
+        referencia_bancaria: formaSeleccionada.fpago_info
+          ? borradorReferencia.trim()
+          : null,
+        cuenta_bancaria: formaSeleccionada.fpago_info
+          ? borradorCuenta.trim()
+          : null,
         capture_url: borradorCaptureUrl,
         preview_url: borradorPreview,
       },
     ]);
 
-    setBorradorForma("");
-    setBorradorCodigoForma("");
+    setBorradorFpagoId("");
     setBorradorMontoForma("0.00");
+    setBorradorReferencia("");
+    setBorradorCuenta("");
     setBorradorCaptureUrl(null);
     setBorradorPreview(null);
     if (captureInputRef.current) captureInputRef.current.value = "";
@@ -296,10 +310,11 @@ export function NuevaRendicionForm({
           monto_recaudado: o.monto_rendicion,
         })),
         pagos: pagos.map((p) => ({
-          metodo_pago: p.metodo_pago,
+          fpago_id: p.fpago_id,
           monto: p.monto,
-          referencia_bancaria: p.codigo || null,
-          cuenta_bancaria: null,
+          fpago_info: p.fpago_info,
+          referencia_bancaria: p.referencia_bancaria,
+          cuenta_bancaria: p.cuenta_bancaria,
           capture_url: p.capture_url,
         })),
       });
@@ -351,37 +366,57 @@ export function NuevaRendicionForm({
 
       <Card title="Forma">
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Select
-              label="Forma"
-              name="forma_pago"
-              placeholder="Selecciona forma de pago"
-              options={METODOS_PAGO_RENDICION.map((m) => ({
-                value: m.value,
-                label: m.label,
-              }))}
-              value={borradorForma}
-              onChange={(e) => onFormaChange(e.target.value)}
-            />
-            <Input
-              label="Código"
-              name="codigo_forma"
-              value={borradorCodigoForma}
-              onChange={(e) => setBorradorCodigoForma(e.target.value)}
-              placeholder="Código de la forma de pago"
-            />
-          </div>
+          {formasError ? (
+            <p className="text-sm text-lt-danger-text">{formasError}</p>
+          ) : null}
+          {!formasError && formasPago.length === 0 ? (
+            <p className="text-sm text-lt-text-muted">
+              No hay formas de pago en el catálogo (`fpagos`).
+            </p>
+          ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <Input
-              label="Monto"
-              type="number"
-              min={0}
-              step="0.01"
-              value={borradorMontoForma}
-              onChange={(e) => setBorradorMontoForma(e.target.value)}
-            />
-            <div className="flex items-end gap-3">
+          <Select
+            label="Forma"
+            name="forma_pago"
+            placeholder="Selecciona forma de pago"
+            options={formasPago.map((f) => ({
+              value: f.fpago_id,
+              label: f.fpago_concepto,
+            }))}
+            value={borradorFpagoId}
+            onChange={(e) => onFormaChange(e.target.value)}
+            disabled={formasPago.length === 0}
+          />
+
+          <Input
+            label="Monto"
+            type="number"
+            min={0}
+            step="0.01"
+            value={borradorMontoForma}
+            onChange={(e) => setBorradorMontoForma(e.target.value)}
+          />
+
+          {pideInfoBancaria ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  label="Referencia bancaria"
+                  name="referencia_bancaria"
+                  required
+                  value={borradorReferencia}
+                  onChange={(e) => setBorradorReferencia(e.target.value)}
+                  placeholder="Nº de referencia"
+                />
+                <Input
+                  label="Cuenta bancaria"
+                  name="cuenta_bancaria"
+                  required
+                  value={borradorCuenta}
+                  onChange={(e) => setBorradorCuenta(e.target.value)}
+                  placeholder="Cuenta / banco"
+                />
+              </div>
               <div className="space-y-1.5">
                 <span className="block text-sm font-medium text-lt-text">
                   Capture
@@ -421,10 +456,19 @@ export function NuevaRendicionForm({
                   }
                 />
               </div>
-            </div>
-          </div>
+            </>
+          ) : borradorFpagoId ? (
+            <p className="text-xs text-lt-text-muted">
+              Efectivo: no se solicita referencia ni cuenta bancaria.
+            </p>
+          ) : null}
 
-          <Button type="button" className="w-full" onClick={agregarFormaPago}>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={agregarFormaPago}
+            disabled={formasPago.length === 0}
+          >
             Agregar forma de pago
           </Button>
 
@@ -445,8 +489,10 @@ export function NuevaRendicionForm({
                       />
                     ) : null}
                     <span className="truncate">
-                      {labelMetodo(p.metodo_pago)} · {p.codigo} ·{" "}
-                      {formatCurrency(p.monto)}
+                      {p.concepto} · {formatCurrency(p.monto)}
+                      {p.fpago_info && p.referencia_bancaria
+                        ? ` · ref ${p.referencia_bancaria}`
+                        : ""}
                     </span>
                   </div>
                   <Button

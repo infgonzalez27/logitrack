@@ -206,14 +206,25 @@ export interface DetalleRendicionOrden {
   ordenes_distribucion?: OrdenDistribucion | null;
 }
 
+/** Catálogo de formas de pago (tabla `fpagos`). */
+export interface Fpago {
+  fpago_id: string;
+  fpago_concepto: string;
+  /** true = pide referencia/banco; false = efectivo (sin esos campos). */
+  fpago_info: boolean;
+}
+
 export interface DetalleRendicionPago {
   id: string;
   rendicion_id: string;
-  metodo_pago: MetodoPagoRendicion;
+  fpago_id: string;
+  /** @deprecated Reemplazado por fpago_id (migración DB-010). */
+  metodo_pago?: MetodoPagoRendicion | null;
   monto: number;
   referencia_bancaria: string | null;
   cuenta_bancaria: string | null;
   capture_url: string | null;
+  fpagos?: Fpago | null;
 }
 
 export interface FacturaCompra {
