@@ -6,9 +6,11 @@ import { createOrdenAction } from "@/lib/actions/ordenes";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LineaProductoRow } from "./linea-producto-row";
-import type { ProductoListaRpc } from "@/types/database";
+import { formatDateOnly, formatNumber } from "@/lib/format";
+import type { ProductoListaRpc, TasaCambio } from "@/types/database";
 
 type Option = { value: string; label: string };
 
@@ -27,6 +29,7 @@ export function NuevaOrdenForm({
   choferesAviso = null,
   productos,
   productosError = null,
+  tasaActual = null,
 }: {
   clientes: Option[];
   camiones: Option[];
@@ -36,6 +39,7 @@ export function NuevaOrdenForm({
   choferesAviso?: string | null;
   productos: ProductoListaRpc[];
   productosError?: string | null;
+  tasaActual?: TasaCambio | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +149,25 @@ export function NuevaOrdenForm({
               value={choferId}
               onChange={(e) => setChoferId(e.target.value)}
             />
+            <Input
+              label="Tasa de cambio"
+              readOnly
+              value={
+                tasaActual
+                  ? `${formatNumber(Number(tasaActual.tasa_cambio))} (${formatDateOnly(tasaActual.fecha_tasa)})`
+                  : "Sin tasa registrada"
+              }
+            />
           </div>
+          {!tasaActual ? (
+            <p className="mt-2 text-sm text-amber-700">
+              No hay tasa del día. Regístrala en{" "}
+              <a href="/tasas-cambio" className="underline">
+                Tasas de cambio
+              </a>{" "}
+              antes de crear la orden.
+            </p>
+          ) : null}
           {camionesError ? (
             <p className="mt-2 text-sm text-lt-danger-text">{camionesError}</p>
           ) : null}
@@ -182,7 +204,7 @@ export function NuevaOrdenForm({
 
           <div className="mt-4 flex justify-center">
             <Button type="button" variant="secondary" onClick={addLinea}>
-              Agregar producto
+              Agrega otro producto
             </Button>
           </div>
 

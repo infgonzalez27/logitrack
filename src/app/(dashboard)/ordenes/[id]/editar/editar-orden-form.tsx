@@ -9,7 +9,8 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LineaProductoRow } from "../../nuevo/linea-producto-row";
-import type { ProductoListaRpc } from "@/types/database";
+import { formatDateOnly, formatNumber } from "@/lib/format";
+import type { ProductoListaRpc, TasaCambio } from "@/types/database";
 
 type Option = { value: string; label: string };
 
@@ -27,6 +28,8 @@ export function EditarOrdenForm({
   camiones,
   choferes,
   productos,
+  tasaActual = null,
+  ordenTasa = null,
 }: {
   correlativo: number;
   ordenId: string;
@@ -42,6 +45,8 @@ export function EditarOrdenForm({
   camiones: Option[];
   choferes: Option[];
   productos: ProductoListaRpc[];
+  tasaActual?: TasaCambio | null;
+  ordenTasa?: number | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +100,7 @@ export function EditarOrdenForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       <PageHeader
         title={`Editar orden #${correlativo}`}
-        description="Solo borrador. Requiere tasa BCV del día de despacho."
+        description="Solo se puede editar en borrador. Debe existir tasa del día."
       />
 
       <Card title="Cabecera">
@@ -131,6 +136,17 @@ export function EditarOrdenForm({
             type="datetime-local"
             value={fechaDespacho}
             onChange={(e) => setFechaDespacho(e.target.value)}
+          />
+          <Input
+            label="Tasa de cambio"
+            readOnly
+            value={
+              tasaActual
+                ? `${formatNumber(Number(tasaActual.tasa_cambio))} (${formatDateOnly(tasaActual.fecha_tasa)})`
+                : ordenTasa != null
+                  ? formatNumber(Number(ordenTasa))
+                  : "Sin tasa registrada"
+            }
           />
         </div>
       </Card>
@@ -171,7 +187,7 @@ export function EditarOrdenForm({
               ])
             }
           >
-            Agregar producto
+            Agrega otro producto
           </Button>
         </div>
       </Card>

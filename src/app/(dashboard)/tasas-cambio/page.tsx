@@ -16,7 +16,7 @@ export default async function TasasCambioPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Tasas de cambio"
-        description="Tasa BCV (Bs/USD) por fecha. Obligatoria al crear órdenes de distribución."
+        description="Tasa del día (Bs/USD). Necesaria para emitir órdenes."
       />
       {!ultimaResult.ok ? (
         <p className="lt-alert-error">{ultimaResult.error}</p>

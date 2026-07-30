@@ -228,9 +228,8 @@ export default async function OrdenDetallePage({
       {puedeRegistrarEntregas && lineasPendientes.length > 0 ? (
         <Card title="Registrar entregas en ruta" className="lt-no-print">
           <p className="mb-4 text-sm text-lt-text-muted">
-            RPC <code>registrar_entrega_detalle</code> (DB-004). Cuando todas
-            las líneas queden registradas, la orden pasa a{" "}
-            <strong>por liquidar</strong>.
+            Registra la entrega en ruta. Cuando todas las líneas queden
+            registradas, la orden pasa a <strong>por liquidar</strong>.
           </p>
           <div className="space-y-4">
             {lineasPendientes.map((linea) => {
@@ -255,8 +254,7 @@ export default async function OrdenDetallePage({
       {puedeRegistrarContenedores ? (
         <Card title="Movimiento de contenedores" className="lt-no-print">
           <p className="mb-4 text-sm text-lt-text-muted">
-            RPC <code>registrar_movimiento_contenedores</code> (DB-004b).
-            Entrega/retiro de envases retornables en ruta.
+            Entrega o retiro de envases retornables en ruta.
           </p>
           {!contenedoresResult.ok ? (
             <p className="text-sm text-lt-danger-text">

@@ -18,7 +18,7 @@ export default async function NuevaRendicionPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
         title="Rendición de cuentas"
-        description="Cliente → formas de pago (catálogo fpagos) → órdenes por liquidar."
+        description="Cliente, formas de pago y órdenes por liquidar."
       />
       <NuevaRendicionForm
         clientes={(clientes ?? []).map((c) => ({

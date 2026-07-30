@@ -5,6 +5,7 @@ import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
 import { listarChoferesParaOrdenAction } from "@/lib/actions/usuarios";
 import { listarProductosAction } from "@/lib/actions/productos";
+import { retornaUltimaTasaCambioAction } from "@/lib/actions/tasa-cambio";
 import { createClient } from "@/lib/supabase/server";
 import { NuevaOrdenForm } from "./nueva-orden-form";
 
@@ -34,11 +35,13 @@ export default async function NuevaOrdenPage() {
     camionesResult,
     choferesResult,
     productosResult,
+    tasaResult,
   ] = await Promise.all([
     clientesQuery,
     listarCamionesParaOrdenAction(),
     listarChoferesParaOrdenAction(),
     listarProductosAction(),
+    retornaUltimaTasaCambioAction(),
   ]);
 
   const camiones = camionesResult.ok ? camionesResult.camiones : [];
@@ -64,6 +67,7 @@ export default async function NuevaOrdenPage() {
       choferesAviso={choferesResult.ok ? choferesResult.aviso : null}
       productos={productos}
       productosError={productosResult.ok ? null : productosResult.error}
+      tasaActual={tasaResult.ok ? tasaResult.tasa : null}
     />
   );
 }

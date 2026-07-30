@@ -4,6 +4,7 @@ import { canEditarOrdenBorrador } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
 import { listarChoferesParaOrdenAction } from "@/lib/actions/usuarios";
+import { retornaUltimaTasaCambioAction } from "@/lib/actions/tasa-cambio";
 import { getOrdenDistribucionDetalle } from "@/lib/data/ordenes";
 import { createClient } from "@/lib/supabase/server";
 import { EditarOrdenForm } from "./editar-orden-form";
@@ -48,6 +49,7 @@ export default async function EditarOrdenPage({
     camionesResult,
     choferesResult,
     { data: productosRpc },
+    tasaResult,
   ] = await Promise.all([
     supabase
       .from("clientes")
@@ -57,6 +59,7 @@ export default async function EditarOrdenPage({
     listarCamionesParaOrdenAction(),
     listarChoferesParaOrdenAction(),
     supabase.rpc("retorna_lista_productos"),
+    retornaUltimaTasaCambioAction(),
   ]);
 
   const detalle = [...(orden.detalle_distribucion ?? [])].sort(
@@ -101,6 +104,8 @@ export default async function EditarOrdenPage({
             : []
         }
         productos={(productosRpc ?? []) as ProductoListaRpc[]}
+        tasaActual={tasaResult.ok ? tasaResult.tasa : null}
+        ordenTasa={orden.tasa_cambio ?? null}
       />
     </div>
   );

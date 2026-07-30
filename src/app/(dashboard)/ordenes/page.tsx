@@ -46,7 +46,7 @@ export default async function OrdenesPage({
     <div className="space-y-6">
       <PageHeader
         title="Órdenes de distribución"
-        description="Listado vía RPC retorna_ordenes_distribucion_segun_estado"
+        description="Despacho maestro-detalle"
         action={
           puedeCrear ? (
             <Button href="/ordenes/nuevo">Nueva orden</Button>

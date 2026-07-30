@@ -371,7 +371,7 @@ export function NuevaRendicionForm({
           ) : null}
           {!formasError && formasPago.length === 0 ? (
             <p className="text-sm text-lt-text-muted">
-              No hay formas de pago en el catálogo (`fpagos`).
+              No hay formas de pago disponibles.
             </p>
           ) : null}
 
