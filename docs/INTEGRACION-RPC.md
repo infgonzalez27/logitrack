@@ -312,6 +312,101 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
+### 2.10. Módulo de Mantenimiento de Tasas de Cambio (`tasa_cambio`)
+
+El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales utilizadas en la facturación y cobranza en multimoneda.
+
+#### Comportamiento Esperado del Módulo en Frontend:
+1. **Carga Inicial por Defecto:** Al ingresar al módulo, debe invocar `retorna_ultima_tasa_cambio` para mostrar la tasa más reciente registrada con su fecha.
+2. **Registro de Nueva Tasa:** Permite ingresar una fecha y monto de tasa con `inserta_tasa_cambio`. (No permite fechas duplicadas).
+3. **Eliminación de Tasa:** Permite eliminar la tasa de una fecha con `elimina_tasa_cambio`. (Para actualizar una tasa, se debe eliminar la fecha y registrarla de nuevo).
+4. **Consulta Histórica por Rango:** Permite al usuario consultar el listado de tasas en un rango de fechas con `retorna_tasas_cambio_por_rango`.
+
+---
+
+#### 2.10.1. Consultar Última Tasa Registrada (`retorna_ultima_tasa_cambio`)
+- **Firma SQL:** `retorna_ultima_tasa_cambio()`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_ultima_tasa_cambio');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "fecha_tasa": "2026-07-30",
+      "tasa_cambio": 36.54,
+      "created_at": "2026-07-30T14:00:00Z"
+    },
+    "error": null
+  }
+  ```
+
+#### 2.10.2. Registrar Nueva Tasa (`inserta_tasa_cambio`)
+- **Firma SQL:** `inserta_tasa_cambio(p_fecha_tasa DATE, p_tasa NUMERIC)`
+- **Regla:** No se permiten fechas duplicadas. Si la fecha ya existe, retorna error de restricción `FECHA_TASA_DUPLICADA`.
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('inserta_tasa_cambio', {
+    p_fecha_tasa: '2026-07-30',
+    p_tasa: 36.54
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "fecha_tasa": "2026-07-30",
+      "tasa_cambio": 36.54
+    },
+    "error": null
+  }
+  ```
+
+#### 2.10.3. Eliminar Tasa por Fecha (`elimina_tasa_cambio`)
+- **Firma SQL:** `elimina_tasa_cambio(p_fecha_tasa DATE)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('elimina_tasa_cambio', {
+    p_fecha_tasa: '2026-07-30'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "fecha_tasa": "2026-07-30",
+      "eliminado": true
+    },
+    "error": null
+  }
+  ```
+
+#### 2.10.4. Consultar Tasas por Rango de Fechas (`retorna_tasas_cambio_por_rango`)
+- **Firma SQL:** `retorna_tasas_cambio_por_rango(p_fecha_desde DATE, p_fecha_hasta DATE)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_tasas_cambio_por_rango', {
+    p_fecha_desde: '2026-07-01',
+    p_fecha_hasta: '2026-07-30'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      { "fecha_tasa": "2026-07-30", "tasa_cambio": 36.54 },
+      { "fecha_tasa": "2026-07-29", "tasa_cambio": 36.50 },
+      { "fecha_tasa": "2026-07-28", "tasa_cambio": 36.48 }
+    ],
+    "error": null
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
@@ -323,5 +418,8 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 | `PARAMETRO_INVALIDO` | Algún parámetro requerido viene vacío o nulo. | Mostrar alerta de validación local. |
 | `CLIENTE_INEXISTENTE` | El cliente ingresado no existe o está inactivo. | Bloquear la creación de la orden. |
 | `STOCK_INSUFICIENTE` | Uno o más productos no disponen de stock en almacén. | Mostrar cuáles productos fallaron y sus cantidades. |
-| `ESTADO_INVALIDO` | La orden no está en el estado requerido para la acción (ej: anular una orden liquidada). | Bloquear el botón o refrescar el estado de la pantalla. |
+| `EXCEPCION_TASA_NO_ENCONTRADA` | No existe tasa de cambio registrada para la fecha. | Redirigir o solicitar registro en el Módulo de Mantenimiento de Tasas. |
+| `FECHA_TASA_DUPLICADA` | Se intentó registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
+| `ESTADO_INVALIDO` | La orden no está en el estado requerido para la acción. | Bloquear el botón o refrescar la pantalla. |
 | `SQL_ERROR` | Error interno inesperado en PostgreSQL. | Mostrar error genérico de base de datos e informar al administrador. |
+

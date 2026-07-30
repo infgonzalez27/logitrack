@@ -149,3 +149,71 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     1. Modificar políticas RLS en `ordenes_distribucion` para UPDATE/DELETE.
     2. Modificar `actualizar_estado_orden_distribucion` y `anular_orden_distribucion` para validar autoría cuando el ejecutor es vendedor.
   - **Output:** JSON o Excepción `ACCESO_DENEGADO`.
+
+### Módulo de Tasa de Cambio y Multimoneda (Prioridad Alta)
+
+- `[ ]` **Tarea DB-013: Creación de la Tabla `tasa_cambio` y RPCs de Gestión (`inserta_tasa_cambio`, `elimina_tasa_cambio`, `retorna_ultima_tasa_cambio`, `retorna_tasas_cambio_por_rango`)**
+  - **Función:** Almacena y gestiona las tasas de cambio oficiales (BCV) por fecha.
+  - **Tabla `tasa_cambio`:** `fecha_tasa DATE PRIMARY KEY`, `tasa_cambio NUMERIC NOT NULL`, `created_at TIMESTAMPTZ`.
+  - **RPC `inserta_tasa_cambio`:**
+    - **Inputs:** `p_fecha_tasa DATE` (o `tdfecha_tasa`), `p_tasa NUMERIC` (o `tnTasa`).
+    - **Comportamiento:** Inserta un registro de tasa de cambio. Valida que no existan dos fechas iguales. Si la fecha ya existe, retorna excepción.
+  - **RPC `elimina_tasa_cambio`:**
+    - **Inputs:** `p_fecha_tasa DATE` (o `tdFecha_tasa`).
+    - **Comportamiento:** Elimina el registro correspondiente a la fecha dada. (Para modificar una tasa, se debe eliminar primero la fecha y luego insertarla).
+  - **RPC `retorna_ultima_tasa_cambio`:**
+    - **Inputs:** Ninguno.
+    - **Comportamiento:** Retorna el registro con la fecha de tasa más reciente (`ORDER BY fecha_tasa DESC LIMIT 1`).
+  - **RPC `retorna_tasas_cambio_por_rango`:**
+    - **Inputs:** `p_fecha_desde DATE`, `p_fecha_hasta DATE`.
+    - **Comportamiento:** Retorna el arreglo de tasas de cambio registradas entre las fechas indicadas inclusivas.
+  - **Output:** JSON `{ success: boolean, data: object, error: object }`.
+
+- `[ ]` **Tarea DB-014: Asignación de Vendedor en Ficha de Clientes (`clientes.vendedor_id`)**
+  - **Función:** Vincular un usuario con rol vendedor a cada cliente para control de accesos y asignación automática de órdenes.
+  - **Modificación DDL:** Agregar columna `vendedor_id UUID REFERENCES perfiles_usuario(id)` en la tabla `clientes`.
+  - **Comportamiento:** Permite registrar y consultar el vendedor asignado a cada cliente.
+
+- `[ ]` **Tarea DB-015: Campos Multimoneda en Órdenes y Detalle de Distribución**
+  - **Función:** Adaptar las estructuras de órdenes de distribución y sus detalles para soportar doble moneda (Bs / USD) y corregir la asignación del total a recaudar en Bolívares.
+  - **Modificaciones DDL:**
+    - `ordenes_distribucion`: Agregar `tasa_cambio NUMERIC`, `total_recaudar_bs NUMERIC`, `total_recaudar_usd NUMERIC`.
+    - `detalle_distribucion`: Agregar `valor_unitario_usd NUMERIC`, `subtotal_recaudar_usd NUMERIC`.
+  - **Regla Financiera:** El monto total a recaudar en Bs (`total_recaudar_bs`) debe registrarse como la suma de `subtotal_recaudar` de la tabla `detalle_distribucion`. (Se corrige el uso previo donde se sobreescribía por error `peso_total_calculado`).
+
+- `[ ]` **Tarea DB-016: Reglas de Asignación Automática de Tasa de Cambio y Control por Rol al Crear Órdenes**
+  - **Función:** Validar la tasa de cambio vigente y aplicar la restricción de cartera de clientes según el rol del usuario al crear una orden de distribución.
+  - **Reglas de Negocio:**
+    1. **Tasa de Cambio Obligatoria:** Al crear una orden de distribución se debe asignar automáticamente la `tasa_cambio` registrada en `tasa_cambio` para la fecha de la orden (`fecha_despacho::date` o fecha actual). Si no existe tasa para dicha fecha, arroja una excepción `EXCEPCION_TASA_NO_ENCONTRADA`.
+    2. **Creación por Rol Vendedor:** El usuario con rol `vendedor` solo puede crear órdenes de distribución para los clientes que tiene asignados (`clientes.vendedor_id = auth.uid()`).
+    3. **Creación por Rol Gerente/Admin:** Un usuario con rol `gerente` o `admin` puede crear órdenes a cualquier cliente; el vendedor de la orden será automáticamente el que el cliente tiene configurado en la tabla `clientes`.
+
+- `[ ]` **Tarea DB-017: RPC de Actualización de Orden por Correlativo (`actualiza_orden_distribucion_segun_correlativo`)**
+  - **Función:** Permite modificar una orden de distribución existente y su detalle a partir de su correlativo numérico.
+  - **Inputs:** `p_correlativo INT` (o `tnCorrelativo`), `p_header JSONB`, `p_detalle JSONB`.
+  - **Comportamiento:**
+    - Actualiza en `ordenes_distribucion`: `cliente_id`, `chofer_id`, `camion_id`, `fecha_despacho`, `peso_total_calculado`, `factura_origen_numero`, `tasa_cambio`, `total_recaudar_bs`, `total_recaudar_usd`.
+    - Actualiza en `detalle_distribucion`: `producto_id`, `cantidad_solicitada`, `valor_unitario_recaudar`, `valor_unitario_usd`, `subtotal_recaudar_usd`.
+    - Valida que la tasa de cambio exista para la fecha y verifica permisos según el rol del solicitante.
+  - **Output:** JSON `{ success: boolean, data: { correlativo: INT, orden_id: UUID }, error: object }`.
+
+- `[ ]` **Tarea DB-018: RPC de Consulta de Órdenes por Estado y Rol (`retorna_ordenes_distribucion_segun_estado`)**
+  - **Función:** Retorna el listado de órdenes de distribución según un estado especificado (`p_estado TEXT` / `tcEstado`), filtrando los resultados automáticamente según el rol del usuario autenticado.
+  - **Inputs:** `p_estado TEXT`.
+  - **Comportamiento:**
+    - Si el solicitante es un **Vendedor**, retorna únicamente las órdenes de los clientes asignados a su ID (`clientes.vendedor_id = auth.uid()`).
+    - Si el solicitante es un **Gerente** o **Admin**, retorna las órdenes de todos los clientes.
+  - **Output:** JSON `{ success: boolean, data: ARRAY[ordenes], error: object }`.
+
+### Módulo Backend & Scraping Tasa BCV (Prioridad Media/Alta)
+
+- `[ ]` **Tarea MOD-001: Módulo de Mantenimiento de Tasas de Cambio & Scraping BCV Contingencia**
+  - **Función:** Proporcionar la interfaz UI para mantenimiento de tasas de cambio y automatizar la captura oficial BCV.
+  - **Comportamiento del Módulo de Mantenimiento (UI):**
+    1. **Carga Inicial:** Por defecto debe invocar `retorna_ultima_tasa_cambio` para mostrar la última tasa registrada con su fecha.
+    2. **Registro y Eliminación:** Permitir al usuario registrar una tasa (`inserta_tasa_cambio`) o eliminar una tasa existente (`elimina_tasa_cambio`).
+    3. **Consulta Histórica por Rango:** Permitir filtrar y listar las tasas de cambio dentro de un rango de fechas definido por el usuario (`retorna_tasas_cambio_por_rango`).
+  - **Backend Scraping:**
+    - Servicio backend que consulta https://www.bcv.org.ve/ para obtener la tasa del día e insertarla en `tasa_cambio`.
+
+

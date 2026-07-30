@@ -1,0 +1,37 @@
+Crear una tabla tasa_cambio con los campos fecha_tasa tipo fecha y tasa_cambio tipo numeric
+Crear los siguientes Stores Procedure
+Inserta_tasa_cambio(tdfecha_tasa, tnTasa)
+Elimina_tasa_cambio(tdFecha_tasa)
+
+Reglas: No puede haber dos fechas iguales en la tabla
+Para modificar una tasa, se debe eliminar primero la fecha y luego insertarla
+Al crear una orden de distribución automáticamente se deba asignar la tasa de la fecha, si no existe tasa de la fecha mandar una excepcion
+
+Agregar a la tabla de clientes el campo id de perfiles_usuarios para registrar allí el id de perfiles_usuarios con rol de vendedor con la intención de asignar a los 
+clientes un vendedor
+
+En la tabla ordenes_distribucion
+Agregar campo total_recaudar_bs numeric, total_recaudar_usd numeric, tasa_cambio
+
+En la tabla tabla detalle_distribucion
+Agregar los campos: valor_unitario_usd tipo numeric, subtotal_recaudar_usd tipo numeric
+
+Crear un STORE PROCEDURE actualiza_orden_distribucion_segun_correlativo(tnCorrelativo) 
+Los campos a actualizar son
+de la tabla ordenes_distribucion:
+cliente_id, chofer_id, camion_id, fecha_despacho, peso_total_calculado, factura_origen_numero, tasa_cambio, total_recaudar_bs numeric, total_recaudar_usd numeric
+
+de la tabla detalle_distribucion:
+producto_id, cantidad_solicitada, valor_unitario_recaudar, valor_unitario_usd, subtotal_recaudar_usd
+
+Crea un Store Procedure retorna_ordenes_distribucion_segun_estado(tcEstado)
+Si el que lo solicita es un vendedor que retorne las ordenes de sus clientes.
+El rol de gerente trae las ordenes de todos los clientes
+
+Reglas para la creación de órdenes de distribucion: El usuario con rol vendedor solo puede crear orden de distribución de los clientes que tiene asignado. 
+Un usuario con rol de gerente puede crear ordenes de distribución a todo clientes, y el vendedor es el que tiene asignado en la tabla de clientes
+
+Informar en integracion que en el campo tasa_cambio va la tasa de cambio BCV de la fecha de la orden. Entonces se debe crear en el backend un scrapin a la página web
+https://www.bcv.org.ve/ para traer la tasa de cambio de la fecha actual, y crear un módulo para que el usuario lo pueda registrar manualmente si el scrapin falla
+lo que actualmente se está registrando en el campo peso_total_calculado realmente debe ir en total_recaudar_bs que es la suma del campo
+subtotal_recaudar de la tabla detalle_distribución según el id
