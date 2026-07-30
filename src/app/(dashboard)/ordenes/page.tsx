@@ -4,16 +4,27 @@ import { canCreateOrden } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { listarOrdenesDistribucion } from "@/lib/data/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
-import { joinOne } from "@/lib/supabase/join";
-import { labelOrdenEstado } from "@/lib/constants";
-import { formatDate } from "@/lib/format";
+import { labelOrdenEstado, ORDEN_ESTADOS } from "@/lib/constants";
+import { formatDate, formatNumber } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge, ordenEstadoTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import type { OrdenEstado } from "@/types/database";
 
-export default async function OrdenesPage() {
+export default async function OrdenesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ estado?: string }>;
+}) {
+  const { estado: estadoParam } = await searchParams;
+  const estadoFiltro =
+    estadoParam &&
+    ORDEN_ESTADOS.some((e) => e.value === estadoParam)
+      ? (estadoParam as OrdenEstado)
+      : "todos";
+
   const [user, profile] = await Promise.all([
     getSessionUser(),
     getCurrentProfile(),
@@ -24,32 +35,63 @@ export default async function OrdenesPage() {
   const ordenes = await listarOrdenesDistribucion({
     userId: user?.id,
     rol,
+    estado: estadoFiltro,
   });
 
   const nombresChofer = await getNombresPerfilByIds(
-    ordenes.map((o) => o.chofer_id).filter(Boolean),
+    ordenes.map((o) => o.chofer_id).filter(Boolean) as string[],
   );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Órdenes de distribución"
-        description="Módulo 3 — Despacho maestro-detalle"
+        description="Listado vía RPC retorna_ordenes_distribucion_segun_estado"
         action={
           puedeCrear ? (
             <Button href="/ordenes/nuevo">Nueva orden</Button>
           ) : undefined
         }
       />
+
+      <div className="lt-no-print flex flex-wrap gap-2">
+        <Link
+          href="/ordenes"
+          className={`rounded-xl px-3 py-1.5 text-sm ${
+            estadoFiltro === "todos"
+              ? "bg-lt-primary text-white"
+              : "border border-lt-border bg-lt-surface text-lt-text"
+          }`}
+        >
+          Todas
+        </Link>
+        {ORDEN_ESTADOS.filter((e) => e.value !== "lista_para_carga").map(
+          (e) => (
+            <Link
+              key={e.value}
+              href={`/ordenes?estado=${e.value}`}
+              className={`rounded-xl px-3 py-1.5 text-sm ${
+                estadoFiltro === e.value
+                  ? "bg-lt-primary text-white"
+                  : "border border-lt-border bg-lt-surface text-lt-text"
+              }`}
+            >
+              {e.label}
+            </Link>
+          ),
+        )}
+      </div>
+
       <Card>
         <DataTable
           columns={[
             { key: "correlativo", label: "#" },
             { key: "factura", label: "Factura origen" },
             { key: "cliente", label: "Cliente" },
-            { key: "camion", label: "Camión" },
             { key: "chofer", label: "Chofer" },
             { key: "estado", label: "Estado" },
+            { key: "tasa", label: "Tasa" },
+            { key: "total_bs", label: "Total Bs" },
             { key: "fecha", label: "Despacho" },
             { key: "acciones", label: "" },
           ]}
@@ -58,22 +100,21 @@ export default async function OrdenesPage() {
             cells: {
               correlativo: `#${o.correlativo}`,
               factura: o.factura_origen_numero,
-              cliente: joinOne(o.clientes)?.razon_social ?? "—",
-              camion: joinOne(o.camiones)?.placa ?? "—",
-              chofer: (() => {
-                const chofer = joinOne(o.choferes);
-                const perfil = joinOne(chofer?.perfiles_usuario);
-                return (
-                  perfil?.nombre_completo ??
-                  (o.chofer_id ? nombresChofer[o.chofer_id] : null) ??
-                  "—"
-                );
-              })(),
+              cliente: o.cliente_razon_social ?? "—",
+              chofer: o.chofer_id
+                ? (nombresChofer[o.chofer_id] ?? "—")
+                : "—",
               estado: (
                 <Badge tone={ordenEstadoTone(o.estado)}>
                   {labelOrdenEstado(o.estado)}
                 </Badge>
               ),
+              tasa:
+                o.tasa_cambio != null ? formatNumber(Number(o.tasa_cambio)) : "—",
+              total_bs:
+                o.total_recaudar_bs != null
+                  ? formatNumber(Number(o.total_recaudar_bs))
+                  : "—",
               fecha: formatDate(o.fecha_despacho),
               acciones: (
                 <div className="flex flex-wrap gap-3">
@@ -93,7 +134,7 @@ export default async function OrdenesPage() {
               ),
             },
           }))}
-          emptyMessage="No hay órdenes. Crea la primera orden de distribución."
+          emptyMessage="No hay órdenes para este filtro."
         />
       </Card>
     </div>

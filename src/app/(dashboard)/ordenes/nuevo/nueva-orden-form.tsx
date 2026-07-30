@@ -92,7 +92,12 @@ export function NuevaOrdenForm({
     });
 
     if (result?.error) {
-      setError(result.error);
+      const msg = String(result.error);
+      setError(
+        msg.toLowerCase().includes("tasa")
+          ? `${msg} Regístrala en Tasas de cambio.`
+          : msg,
+      );
       setPending(false);
     }
   }

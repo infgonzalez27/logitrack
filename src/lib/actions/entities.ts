@@ -66,6 +66,7 @@ export async function createClienteAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase } = await getUserId();
+  const vendedorId = String(formData.get("vendedor_id") || "").trim();
   const { error } = await supabase.from("clientes").insert({
     rif_nit: String(formData.get("rif_nit")).trim(),
     razon_social: String(formData.get("razon_social")).trim(),
@@ -73,6 +74,7 @@ export async function createClienteAction(
     telefono: String(formData.get("telefono") || "") || null,
     movil1: String(formData.get("movil1") || "") || null,
     correo_e: String(formData.get("correo_e") || "") || null,
+    vendedor_id: vendedorId || null,
     activo: true,
   });
 

@@ -119,6 +119,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Administración",
     items: [
+      { href: "/tasas-cambio", label: "Tasas de cambio" },
       { href: "/usuarios", label: "Usuarios" },
       { href: "/usuarios/registrar", label: "Registrar usuario" },
     ],

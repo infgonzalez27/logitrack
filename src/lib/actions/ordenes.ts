@@ -486,3 +486,81 @@ export async function registrarMovimientoContenedoresAction(input: {
   revalidatePath(`/ordenes/${ordenId}`);
   return { success: true, movimiento_id: response.data?.movimiento_id ?? null };
 }
+
+export type ActualizaOrdenDetalleInput = {
+  producto_id: string;
+  cantidad_solicitada: number;
+  valor_unitario_recaudar: number;
+  valor_unitario_usd?: number | null;
+};
+
+/** DB-017 — solo órdenes en borrador. */
+export async function actualizaOrdenDistribucionAction(input: {
+  correlativo: number;
+  cliente_id: string;
+  camion_id: string;
+  chofer_id: string;
+  fecha_despacho?: string | null;
+  factura_origen_numero?: string | null;
+  lineas: ActualizaOrdenDetalleInput[];
+}) {
+  const user = await getSessionUser();
+  if (!user) {
+    return { error: "No autenticado." };
+  }
+
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (!canCreateOrden(rol)) {
+    return { error: "No tienes permiso para actualizar órdenes." };
+  }
+
+  if (!Number.isFinite(input.correlativo) || input.correlativo <= 0) {
+    return { error: "Correlativo inválido." };
+  }
+
+  const lineas = input.lineas.filter((l) => l.producto_id?.trim());
+  if (!lineas.length) {
+    return { error: "Agrega al menos una línea de producto." };
+  }
+
+  const response = await callDbProcedure<{
+    correlativo: number;
+    orden_id: string;
+    tasa_cambio: number;
+    total_recaudar_bs: number;
+    total_recaudar_usd: number;
+  }>("actualiza_orden_distribucion_segun_correlativo", {
+    p_correlativo: input.correlativo,
+    p_header: {
+      cliente_id: input.cliente_id.trim(),
+      camion_id: input.camion_id.trim(),
+      chofer_id: input.chofer_id.trim(),
+      fecha_despacho: input.fecha_despacho?.trim() || null,
+      factura_origen_numero: input.factura_origen_numero?.trim() || null,
+    },
+    p_detalle: lineas.map((l) => ({
+      producto_id: l.producto_id.trim(),
+      cantidad_solicitada: l.cantidad_solicitada,
+      valor_unitario_recaudar: l.valor_unitario_recaudar,
+      valor_unitario_usd: l.valor_unitario_usd ?? null,
+    })),
+  });
+
+  if (!response.success) {
+    return {
+      error: rpcErrorMessage(response, "No se pudo actualizar la orden."),
+      code: response.error?.code,
+    };
+  }
+
+  const ordenId = response.data?.orden_id;
+  revalidatePath("/ordenes");
+  if (ordenId) {
+    revalidatePath(`/ordenes/${ordenId}`);
+    redirect(`/ordenes/${ordenId}`);
+  }
+
+  return { success: true, data: response.data };
+}
+

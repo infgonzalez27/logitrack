@@ -85,6 +85,18 @@ export function canCreateOrden(rol: RolNombre | null): boolean {
   return isOrdenStaff(rol) || rol === "vendedor";
 }
 
+/** Editar cabecera/detalle solo en borrador (RPC actualiza_orden_…_correlativo). */
+export function canEditarOrdenBorrador(
+  rol: RolNombre | null,
+  estado: OrdenEstado,
+  opts?: { esCreador?: boolean },
+): boolean {
+  if (estado !== "borrador") return false;
+  if (isOrdenStaff(rol)) return true;
+  if (rol === "vendedor") return !!opts?.esCreador;
+  return false;
+}
+
 export function canRegistrarEntrega(rol: RolNombre | null): boolean {
   return rol !== null && ENTREGA_ROLES.includes(rol);
 }

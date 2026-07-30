@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import {
+  canEditarOrdenBorrador,
   canRegistrarContenedores,
   canRegistrarEntrega,
 } from "@/lib/auth/orden-permissions";
@@ -15,6 +16,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge, ordenEstadoTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintDocumentHeader } from "@/components/print/print-document-header";
 import { OrdenEstadoActions } from "./orden-estado-actions";
@@ -63,7 +65,18 @@ export default async function OrdenDetallePage({
     (sum, linea) => sum + linea.subtotal_recaudar,
     0,
   );
+  const totalBs =
+    orden.total_recaudar_bs != null
+      ? Number(orden.total_recaudar_bs)
+      : totalRecaudar;
+  const totalUsd =
+    orden.total_recaudar_usd != null
+      ? Number(orden.total_recaudar_usd)
+      : null;
 
+  const puedeEditar = canEditarOrdenBorrador(rol, orden.estado, {
+    esCreador: !!user && orden.creado_por === user.id,
+  });
   const puedeRegistrarEntregas =
     canRegistrarEntrega(rol) && orden.estado === "en_transito";
   const lineasPendientes = detalle.filter(
@@ -90,6 +103,11 @@ export default async function OrdenDetallePage({
           description={`Factura origen: ${orden.factura_origen_numero}`}
           action={
             <div className="flex flex-wrap gap-2">
+              {puedeEditar ? (
+                <Button href={`/ordenes/${orden.id}/editar`} variant="secondary">
+                  Editar
+                </Button>
+              ) : null}
               <PrintButton label="Imprimir orden" />
               <PrintButton
                 label="Ticket"
@@ -123,6 +141,24 @@ export default async function OrdenDetallePage({
             <div className="flex justify-between gap-4">
               <dt className="text-lt-text-muted">Peso total</dt>
               <dd>{formatNumber(orden.peso_total_calculado)} kg</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-lt-text-muted">Tasa BCV</dt>
+              <dd>
+                {orden.tasa_cambio != null
+                  ? formatNumber(Number(orden.tasa_cambio))
+                  : "—"}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-lt-text-muted">Total Bs</dt>
+              <dd>{formatNumber(totalBs)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-lt-text-muted">Total USD</dt>
+              <dd>
+                {totalUsd != null ? formatCurrency(totalUsd) : "—"}
+              </dd>
             </div>
           </dl>
         </Card>
@@ -179,7 +215,13 @@ export default async function OrdenDetallePage({
           })}
         />
         <p className="mt-4 text-right text-sm font-medium">
-          Total a recaudar: {formatCurrency(totalRecaudar)}
+          Total a recaudar (Bs): {formatNumber(totalBs)}
+          {totalUsd != null ? (
+            <>
+              {" "}
+              · USD: {formatCurrency(totalUsd)}
+            </>
+          ) : null}
         </p>
       </Card>
 

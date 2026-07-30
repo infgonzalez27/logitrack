@@ -88,6 +88,8 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/pagos-proveedores",
 
+    "/tasas-cambio",
+
     "/usuarios",
 
   ],

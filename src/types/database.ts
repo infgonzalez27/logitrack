@@ -73,9 +73,18 @@ export interface Cliente {
   correo_e: string | null;
   cond_liq: number | null;
   max_liq: number | null;
+  /** Vendedor asignado (DB-014). */
+  vendedor_id?: string | null;
   activo: boolean;
   created_at: string;
   perfiles_usuario?: PerfilUsuario | null;
+}
+
+/** Tasa BCV por fecha (tabla `tasa_cambio`). */
+export interface TasaCambio {
+  fecha_tasa: string;
+  tasa_cambio: number;
+  created_at?: string | null;
 }
 
 export interface Proveedor {
@@ -163,6 +172,9 @@ export interface OrdenDistribucion {
   fecha_despacho: string | null;
   peso_total_calculado: number;
   factura_origen_numero: string;
+  tasa_cambio?: number | null;
+  total_recaudar_bs?: number | null;
+  total_recaudar_usd?: number | null;
   creado_por: string | null;
   created_at: string;
   clientes?: Cliente | null;
@@ -170,6 +182,26 @@ export interface OrdenDistribucion {
   choferes?: Chofer | null;
   detalle_distribucion?: DetalleDistribucion[];
 }
+
+/** Fila de `retorna_ordenes_distribucion_segun_estado`. */
+export type OrdenListaRpc = {
+  id: string;
+  correlativo: number;
+  cliente_id: string;
+  cliente_razon_social: string | null;
+  cliente_vendedor_id: string | null;
+  camion_id: string | null;
+  chofer_id: string | null;
+  estado: OrdenEstado;
+  fecha_despacho: string | null;
+  peso_total_calculado: number | null;
+  factura_origen_numero: string;
+  tasa_cambio: number | null;
+  total_recaudar_bs: number | null;
+  total_recaudar_usd: number | null;
+  creado_por: string | null;
+  created_at: string;
+};
 
 export interface DetalleDistribucion {
   id: string;
@@ -179,6 +211,8 @@ export interface DetalleDistribucion {
   cantidad_despachada: number;
   valor_unitario_recaudar: number;
   subtotal_recaudar: number;
+  valor_unitario_usd?: number | null;
+  subtotal_recaudar_usd?: number | null;
   secuencia_entrega: number | null;
   estado_entrega: EstadoEntrega;
   motivo_rechazo: string | null;
