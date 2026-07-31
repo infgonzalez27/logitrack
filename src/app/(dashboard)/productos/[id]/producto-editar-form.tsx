@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation";
 import { actualizarProductoAction } from "@/lib/actions/productos";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import type { ActualizarProductoRpcInput } from "@/types/database";
 
+type ContenedorOption = { id: string; nombre: string };
+
 export function ProductoEditarForm({
   producto,
+  contenedores,
 }: {
   producto: ActualizarProductoRpcInput & { stock_disponible?: number };
+  contenedores: ContenedorOption[];
 }) {
   const router = useRouter();
   const [codigoProducto, setCodigoProducto] = useState(producto.codigo_producto);
@@ -20,6 +25,12 @@ export function ProductoEditarForm({
   const [precioLista1, setPrecioLista1] = useState(producto.precio_lista1);
   const [precioLista2, setPrecioLista2] = useState(producto.precio_lista2);
   const [precioLista3, setPrecioLista3] = useState(producto.precio_lista3);
+  const [contenedorId, setContenedorId] = useState(
+    producto.contenedor_id ?? "",
+  );
+  const [unidadesPorContenedor, setUnidadesPorContenedor] = useState(
+    producto.unidades_por_contenedor ?? 1,
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -36,6 +47,8 @@ export function ProductoEditarForm({
       precio_lista1: precioLista1,
       precio_lista2: precioLista2,
       precio_lista3: precioLista3,
+      contenedor_id: contenedorId || null,
+      unidades_por_contenedor: contenedorId ? unidadesPorContenedor : null,
     });
 
     if (!result.ok) {
@@ -103,6 +116,34 @@ export function ProductoEditarForm({
             onChange={(e) => setPrecioLista3(Number(e.target.value))}
           />
         </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select
+            label="Empaque / contenedor (opcional)"
+            name="contenedor_id"
+            placeholder="Sin empaque retornable"
+            options={contenedores.map((c) => ({
+              value: c.id,
+              label: c.nombre,
+            }))}
+            value={contenedorId}
+            onChange={(e) => setContenedorId(e.target.value)}
+          />
+          <Input
+            label="Unidades por contenedor"
+            name="unidades_por_contenedor"
+            type="number"
+            min="1"
+            step="1"
+            disabled={!contenedorId}
+            value={unidadesPorContenedor}
+            onChange={(e) => setUnidadesPorContenedor(Number(e.target.value))}
+          />
+        </div>
+        <p className="text-xs text-lt-text-muted">
+          Si el producto usa envase retornable, al despachar se acreditarán
+          vacíos al cliente según cantidad ÷ unidades por contenedor.
+        </p>
 
         {producto.stock_disponible !== undefined ? (
           <p className="text-sm text-lt-text-muted">

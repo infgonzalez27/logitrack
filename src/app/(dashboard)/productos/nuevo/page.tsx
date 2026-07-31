@@ -1,11 +1,18 @@
 import { createProductoAction } from "@/lib/actions/entities";
+import { listarTiposContenedoresAction } from "@/lib/actions/ordenes";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ActionForm } from "@/components/forms/action-form";
 
-export default function NuevoProductoPage() {
+export default async function NuevoProductoPage() {
+  const contenedoresResult = await listarTiposContenedoresAction();
+  const contenedores = contenedoresResult.ok
+    ? contenedoresResult.contenedores
+    : [];
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader title="Nuevo producto" />
@@ -28,6 +35,26 @@ export default function NuevoProductoPage() {
             type="number"
             defaultValue="0"
           />
+          <Select
+            label="Empaque / contenedor (opcional)"
+            name="contenedor_id"
+            placeholder="Sin empaque retornable"
+            options={contenedores.map((c) => ({
+              value: c.id,
+              label: c.nombre,
+            }))}
+          />
+          <Input
+            label="Unidades por contenedor"
+            name="unidades_por_contenedor"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue="1"
+          />
+          <p className="text-xs text-lt-text-muted">
+            Opcional. Solo aplica si el producto usa envase retornable.
+          </p>
           <Button type="submit">Guardar producto</Button>
         </ActionForm>
       </Card>

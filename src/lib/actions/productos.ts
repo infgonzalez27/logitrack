@@ -23,6 +23,8 @@ type ProductoTablaRow = {
   precio_lista1: number | null;
   precio_lista2: number | null;
   precio_lista3: number | null;
+  contenedor_id?: string | null;
+  unidades_por_contenedor?: number | null;
 };
 
 function mapProductoTablaRow(
@@ -39,6 +41,8 @@ function mapProductoTablaRow(
     precio_lista2: row.precio_lista2 ?? 0,
     precio_lista3: row.precio_lista3 ?? 0,
     stock_disponible: stock,
+    contenedor_id: row.contenedor_id ?? null,
+    unidades_por_contenedor: row.unidades_por_contenedor ?? null,
   };
 }
 
@@ -72,7 +76,7 @@ async function buscarProductosEnTabla(
   const { data: rows, error } = await createAdminClient()
     .from("productos")
     .select(
-      "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3",
+      "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor",
     )
     .or(
       `codigo_producto.ilike.${pattern},nombre.ilike.${pattern},codigo_barras.ilike.${pattern}`,
@@ -125,7 +129,7 @@ async function enriquecerProductosLista(
   const { data, error } = await createAdminClient()
     .from("productos")
     .select(
-      "id, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3",
+      "id, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor",
     )
     .in("id", ids);
 
@@ -148,6 +152,9 @@ async function enriquecerProductosLista(
         precio_lista1: p.precio_lista1 ?? row.precio_lista1 ?? p.precio,
         precio_lista2: p.precio_lista2 ?? row.precio_lista2 ?? 0,
         precio_lista3: p.precio_lista3 ?? row.precio_lista3 ?? 0,
+        contenedor_id: p.contenedor_id ?? row.contenedor_id ?? null,
+        unidades_por_contenedor:
+          p.unidades_por_contenedor ?? row.unidades_por_contenedor ?? null,
       };
     }),
   };
@@ -205,7 +212,7 @@ export async function obtenerProductoParaEditarAction(
   const { data, error } = await admin
     .from("productos")
     .select(
-      "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3",
+      "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor",
     )
     .eq("id", productoId)
     .single();
@@ -230,6 +237,8 @@ export async function obtenerProductoParaEditarAction(
       precio_lista1: data.precio_lista1 ?? 0,
       precio_lista2: data.precio_lista2 ?? 0,
       precio_lista3: data.precio_lista3 ?? 0,
+      contenedor_id: data.contenedor_id ?? null,
+      unidades_por_contenedor: data.unidades_por_contenedor ?? 1,
       stock_disponible: inventario?.stock_disponible,
     },
   };
@@ -259,6 +268,18 @@ function validateActualizarProductoInput(
     if (!Number.isFinite(value) || value < 0) {
       return `El ${label} no puede ser negativo.`;
     }
+  }
+
+  if (input.contenedor_id?.trim() && !isUuid(input.contenedor_id)) {
+    return "Contenedor / empaque inválido.";
+  }
+
+  if (
+    input.unidades_por_contenedor != null &&
+    (!Number.isFinite(input.unidades_por_contenedor) ||
+      input.unidades_por_contenedor < 1)
+  ) {
+    return "Unidades por contenedor debe ser al menos 1.";
   }
 
   return null;
@@ -292,6 +313,27 @@ export async function actualizarProductoAction(
 
   if (!data) {
     return { ok: false, error: "No se encontró un producto con ese ID." };
+  }
+
+  const contenedorId = input.contenedor_id?.trim() || null;
+  const unidades =
+    contenedorId != null
+      ? Math.max(1, Number(input.unidades_por_contenedor) || 1)
+      : null;
+
+  const { error: contenedorError } = await createAdminClient()
+    .from("productos")
+    .update({
+      contenedor_id: contenedorId,
+      unidades_por_contenedor: unidades,
+    })
+    .eq("id", input.id.trim());
+
+  if (contenedorError) {
+    return {
+      ok: false,
+      error: `Producto actualizado, pero no se pudo guardar el empaque: ${contenedorError.message}`,
+    };
   }
 
   revalidatePath("/productos");

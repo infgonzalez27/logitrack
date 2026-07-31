@@ -127,6 +127,11 @@ export async function createProductoAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase } = await getUserId();
+  const contenedorRaw = String(formData.get("contenedor_id") || "").trim();
+  const unidadesRaw = Number(formData.get("unidades_por_contenedor") || 1);
+  const unidadesPorContenedor =
+    Number.isFinite(unidadesRaw) && unidadesRaw > 0 ? unidadesRaw : 1;
+
   const { error } = await supabase.from("productos").insert({
     codigo_barras: String(formData.get("codigo_barras") || "") || null,
     nombre: String(formData.get("nombre")).trim(),
@@ -134,6 +139,8 @@ export async function createProductoAction(
     unidad_medida: String(formData.get("unidad_medida") || "unidades"),
     peso_unitario_kg: Number(formData.get("peso_unitario_kg") || 0),
     cant_unidad_medida: Number(formData.get("cant_unidad_medida") || 0),
+    contenedor_id: contenedorRaw || null,
+    unidades_por_contenedor: contenedorRaw ? unidadesPorContenedor : null,
   });
 
   if (error) return { error: error.message };

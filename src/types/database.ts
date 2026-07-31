@@ -137,6 +137,13 @@ export interface Producto {
   unidad_medida: string;
   peso_unitario_kg: number;
   cant_unidad_medida: number;
+  /** Empaque/contenedor retornable (opcional). */
+  contenedor_id?: string | null;
+  /** Unidades de producto por 1 contenedor (default 1). */
+  unidades_por_contenedor?: number | null;
+  precio_lista1?: number | null;
+  precio_lista2?: number | null;
+  precio_lista3?: number | null;
   created_at: string;
 }
 
@@ -323,7 +330,10 @@ type TableDef<T> = {
 export type ProductoOrdenRpc = {
   producto_id: string;
   cantidad: number;
-  precio_unitario: number;
+  /** Compatibilidad con SP antiguo. */
+  precio_unitario?: number;
+  valor_unitario_recaudar?: number;
+  valor_unitario_usd?: number | null;
 };
 
 export type ProductoListaRpc = {
@@ -336,6 +346,14 @@ export type ProductoListaRpc = {
   precio_lista2?: number;
   precio_lista3?: number;
   stock_disponible: number;
+  contenedor_id?: string | null;
+  unidades_por_contenedor?: number | null;
+};
+
+export type ContenedorListaRpc = {
+  id: string;
+  nombre: string;
+  codigo?: string | null;
 };
 
 export type PerfilUsuarioEditar = {
@@ -362,6 +380,8 @@ export type ActualizarProductoRpcInput = {
   precio_lista1: number;
   precio_lista2: number;
   precio_lista3: number;
+  contenedor_id?: string | null;
+  unidades_por_contenedor?: number | null;
 };
 
 export type ActualizarPerfilUsuarioRpcInput = {
@@ -412,12 +432,21 @@ export interface Database {
           p_chofer_id: string;
           p_cliente_id: string;
           p_camion_id: string;
+          p_tasa_cambio?: number | null;
           p_productos_json: ProductoOrdenRpc[];
         };
         Returns: {
           success: boolean;
           message?: string;
           orden_id?: string;
+        };
+      };
+      retorna_lista_contenedores: {
+        Args: Record<string, never>;
+        Returns: {
+          success: boolean;
+          data: ContenedorListaRpc[] | null;
+          error: { code: string; message: string; details: string | null } | null;
         };
       };
       aprobar_orden_distribucion: {

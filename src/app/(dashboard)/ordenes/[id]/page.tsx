@@ -254,7 +254,10 @@ export default async function OrdenDetallePage({
       {puedeRegistrarContenedores ? (
         <Card title="Movimiento de contenedores" className="lt-no-print">
           <p className="mb-4 text-sm text-lt-text-muted">
-            Entrega o retiro de envases retornables en ruta.
+            Al despachar, los vacíos de productos con empaque se acreditan solos
+            al cliente. Aquí registra principalmente el{" "}
+            <strong>retiro</strong> de envases que el cliente devolvió en ruta
+            (también puedes ajustar entregas manualmente).
           </p>
           {!contenedoresResult.ok ? (
             <p className="text-sm text-lt-danger-text">

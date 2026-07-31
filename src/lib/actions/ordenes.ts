@@ -61,12 +61,30 @@ function parseRpcError(data: unknown, fallback: string): string {
   return fallback;
 }
 
-function mapProductosJson(lineas: LineaOrdenInput[]): ProductoOrdenRpc[] {
-  return lineas.map((linea) => ({
-    producto_id: linea.producto_id.trim(),
-    cantidad: linea.cantidad_solicitada,
-    precio_unitario: linea.valor_unitario_recaudar,
-  }));
+function mapProductosJson(
+  lineas: LineaOrdenInput[],
+  tasaCambio?: number | null,
+): ProductoOrdenRpc[] {
+  const tasa =
+    tasaCambio != null && Number.isFinite(tasaCambio) && tasaCambio > 0
+      ? tasaCambio
+      : null;
+
+  return lineas.map((linea) => {
+    const valorBs = linea.valor_unitario_recaudar;
+    const valorUsd =
+      tasa != null && valorBs > 0
+        ? Math.round((valorBs / tasa) * 100) / 100
+        : null;
+
+    return {
+      producto_id: linea.producto_id.trim(),
+      cantidad: linea.cantidad_solicitada,
+      precio_unitario: valorBs,
+      valor_unitario_recaudar: valorBs,
+      valor_unitario_usd: valorUsd,
+    };
+  });
 }
 
 function validateCreateOrdenInput(
@@ -133,6 +151,7 @@ export async function createOrdenAction(input: {
   camion_id: string;
   chofer_id: string;
   lineas: LineaOrdenInput[];
+  tasa_cambio?: number | null;
 }) {
   const supabase = await createClient();
   const user = await getSessionUser();
@@ -148,17 +167,25 @@ export async function createOrdenAction(input: {
     return { error: validationError };
   }
 
-  const productosJson = mapProductosJson(input.lineas);
+  const tasa =
+    input.tasa_cambio != null &&
+    Number.isFinite(input.tasa_cambio) &&
+    input.tasa_cambio > 0
+      ? input.tasa_cambio
+      : null;
+
+  const productosJson = mapProductosJson(input.lineas, tasa);
   if (!productosJson.length) {
     return { error: "Agrega al menos una línea de producto." };
   }
 
-  // Firma actual del SP en BD (db/functions/crear_orden_distribucion.sql)
+  // DB-016b: p_tasa_cambio opcional; SP calcula USD/Bs si falta uno.
   const { data, error } = await supabase.rpc("crear_orden_distribucion", {
     p_vendedor_id: user!.id,
     p_chofer_id: input.chofer_id.trim(),
     p_cliente_id: input.cliente_id.trim(),
     p_camion_id: input.camion_id.trim(),
+    p_tasa_cambio: tasa,
     p_productos_json: productosJson,
   });
 
@@ -258,6 +285,9 @@ export async function updateOrdenEstadoAction(
         code: response.error?.code,
       };
     }
+
+    // Al despachar: acreditar vacíos al cliente según productos con empaque.
+    await registrarVaciosEntregaAlDespachar(ordenIdTrim, user.id);
   } else if (estado === "liquidada") {
     // DB-005: requiere rendición aprobada vinculada a la orden
     const response = await callDbProcedure<{
@@ -381,18 +411,40 @@ export type TipoContenedorOption = {
   nombre: string;
 };
 
+/** DB-019 — lista tipos de contenedores (RPC con fallback a tabla). */
 export async function listarTiposContenedoresAction(): Promise<
   | { ok: true; contenedores: TipoContenedorOption[] }
   | { ok: false; error: string }
 > {
   try {
+    const response = await callDbProcedure<
+      Array<{ id: string; nombre: string; codigo?: string | null }>
+    >("retorna_lista_contenedores");
+
+    if (response.success && Array.isArray(response.data)) {
+      return {
+        ok: true,
+        contenedores: response.data.map((row) => ({
+          id: row.id,
+          codigo: row.codigo?.trim() || row.nombre,
+          nombre: row.nombre,
+        })),
+      };
+    }
+
     const { data, error } = await createAdminClient()
       .from("tipos_contenedores")
       .select("id, codigo, nombre")
       .order("nombre");
 
     if (error) {
-      return { ok: false, error: error.message };
+      return {
+        ok: false,
+        error:
+          response.error?.message ??
+          error.message ??
+          "No se pudieron cargar los tipos de contenedores.",
+      };
     }
 
     return {
@@ -411,6 +463,83 @@ export async function listarTiposContenedoresAction(): Promise<
           ? err.message
           : "No se pudieron cargar los tipos de contenedores.",
     };
+  }
+}
+
+/**
+ * Calcula vacíos a acreditar al cliente al despachar:
+ * floor(cantidad_solicitada / unidades_por_contenedor) por tipo.
+ * No falla el despacho si el movimiento no se puede registrar.
+ */
+async function registrarVaciosEntregaAlDespachar(
+  ordenId: string,
+  creadoPor: string,
+): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data: orden } = await admin
+      .from("ordenes_distribucion")
+      .select("cliente_id")
+      .eq("id", ordenId)
+      .single();
+
+    if (!orden?.cliente_id) return;
+
+    const { data: detalles } = await admin
+      .from("detalle_distribucion")
+      .select(
+        "cantidad_solicitada, productos(contenedor_id, unidades_por_contenedor)",
+      )
+      .eq("orden_id", ordenId);
+
+    if (!detalles?.length) return;
+
+    const porContenedor = new Map<string, number>();
+
+    for (const detalle of detalles) {
+      const productoRaw = detalle.productos as
+        | {
+            contenedor_id?: string | null;
+            unidades_por_contenedor?: number | null;
+          }
+        | {
+            contenedor_id?: string | null;
+            unidades_por_contenedor?: number | null;
+          }[]
+        | null;
+
+      const producto = Array.isArray(productoRaw)
+        ? productoRaw[0]
+        : productoRaw;
+      const contenedorId = producto?.contenedor_id?.trim();
+      if (!contenedorId) continue;
+
+      const unidades = Math.max(
+        1,
+        Number(producto?.unidades_por_contenedor) || 1,
+      );
+      const cantidad = Number(detalle.cantidad_solicitada) || 0;
+      const vacios = Math.floor(cantidad / unidades);
+      if (vacios <= 0) continue;
+
+      porContenedor.set(
+        contenedorId,
+        (porContenedor.get(contenedorId) ?? 0) + vacios,
+      );
+    }
+
+    for (const [contenedorId, cantidadEntregada] of porContenedor) {
+      await callDbProcedure("registrar_movimiento_contenedores", {
+        p_cliente_id: orden.cliente_id,
+        p_orden_id: ordenId,
+        p_contenedor_id: contenedorId,
+        p_cantidad_entregada: cantidadEntregada,
+        p_cantidad_retirada: 0,
+        p_creado_por: creadoPor,
+      });
+    }
+  } catch {
+    // Best-effort: el despacho ya ocurrió.
   }
 }
 

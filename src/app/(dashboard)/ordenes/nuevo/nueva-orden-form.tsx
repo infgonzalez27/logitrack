@@ -93,6 +93,7 @@ export function NuevaOrdenForm({
       camion_id: camionId,
       chofer_id: choferId,
       lineas: lineas.filter((l) => l.producto_id),
+      tasa_cambio: tasaActual?.tasa_cambio ?? null,
     });
 
     if (result?.error) {
