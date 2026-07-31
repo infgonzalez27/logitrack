@@ -424,6 +424,24 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.11. Consulta de Lista de Contenedores (`retorna_lista_contenedores`)
+- **Firma SQL:** `retorna_lista_contenedores()`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_contenedores');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      { "id": "11111111-1111-1111-1111-111111111111", "nombre": "Caja Plástica 24 Unidades" },
+      { "id": "22222222-2222-2222-2222-222222222222", "nombre": "Cesta Térmica 50L" }
+    ],
+    "error": null
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend

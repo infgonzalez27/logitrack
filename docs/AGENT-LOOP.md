@@ -218,7 +218,7 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     - Si el solicitante es un **Gerente** o **Admin**, retorna las órdenes de todos los clientes.
   - **Output:** JSON `{ success: boolean, data: ARRAY[ordenes], error: object }`.
 
-- `[ ]` **Tarea DB-019: RPC Consulta de Lista de Contenedores (`retorna_lista_contenedores`)**
+- `[x]` **Tarea DB-019: RPC Consulta de Lista de Contenedores (`retorna_lista_contenedores`)**
   - **Función:** Crear la función `retorna_lista_contenedores` que retornará el listado de los contenedores registrados en la tabla `tipos_contenedores`.
   - **Inputs:** Ninguno.
   - **Comportamiento:** Consulta la tabla `tipos_contenedores` devolviendo una lista con los campos `id` y `nombre`.
