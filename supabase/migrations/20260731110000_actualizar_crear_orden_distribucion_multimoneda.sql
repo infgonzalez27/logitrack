@@ -1,3 +1,5 @@
+-- Migration: Actualizar función crear_orden_distribucion con soporte para campos multimoneda (DB-016b)
+
 CREATE OR REPLACE FUNCTION public.crear_orden_distribucion(
     p_vendedor_id UUID,
     p_chofer_id UUID,

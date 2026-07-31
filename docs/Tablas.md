@@ -155,6 +155,10 @@
 | `factura_origen_numero` | `varchar` |  |
 | `creado_por` | `uuid` |  Nullable |
 | `created_at` | `timestamptz` |  Nullable |
+| `tasa_cambio` | `numeric` |  Nullable |
+| `total_recaudar_bs` | `numeric` |  Nullable |
+| `total_recaudar_usd` | `numeric` |  Nullable |
+
 
 ## Table `detalle_distribucion`
 
@@ -172,6 +176,8 @@
 | `secuencia_entrega` | `int4` |  Nullable |
 | `estado_entrega` | `text` |  Nullable |
 | `motivo_rechazo` | `text` |  Nullable |
+| `valor_unitario_usd` | `numeric` |  Nullable |
+| `subtotal_recaudar_usd` | `numeric` |  Nullable |
 
 ## Table `rendiciones_cuentas`
 

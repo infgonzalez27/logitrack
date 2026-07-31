@@ -102,31 +102,48 @@ export async function submitCrearOrdenAction(formData: any) {
 A continuación se listan las firmas de los procedimientos almacenados que el equipo de base de datos implementará. Utiliza esta sección como referencia para preparar tus componentes de frontend.
 
 ### 2.1. Crear Orden de Distribución (`crear_orden_distribucion`)
-- **Firma SQL:** `crear_orden_distribucion(p_cliente_id UUID, p_camion_id UUID, p_chofer_id UUID, p_factura_origen_numero VARCHAR, p_creado_por UUID, p_detalles JSONB)`
-- **Uso en Frontend (RPC):**
+- **Firma SQL:** `crear_orden_distribucion(p_vendedor_id UUID, p_chofer_id UUID, p_cliente_id UUID, p_camion_id UUID, p_tasa_cambio NUMERIC DEFAULT NULL, p_productos_json JSONB DEFAULT '[]'::jsonb)`
+- **Campos multimoneda calculados automáticamente en DB:**
+  - `ordenes_distribucion`: `tasa_cambio`, `total_recaudar_bs` (suma de subtotales en Bs), `total_recaudar_usd` (suma de subtotales en USD).
+  - `detalle_distribucion`: `valor_unitario_recaudar` (Bs), `subtotal_recaudar` (Bs), `valor_unitario_usd` (USD), `subtotal_recaudar_usd` (USD).
+- **Uso en Frontend (RPC) / Cursor Editor:**
   ```typescript
   const { data, error } = await supabase.rpc('crear_orden_distribucion', {
+    p_vendedor_id: 'UUID_DEL_VENDEDOR',
+    p_chofer_id: 'UUID_DEL_CHOFER',
     p_cliente_id: 'UUID_DEL_CLIENTE',
     p_camion_id: 'UUID_DEL_CAMION',
-    p_chofer_id: 'UUID_DEL_CHOFER',
-    p_factura_origen_numero: 'FACT-2026-001',
-    p_creado_por: 'UUID_DEL_DESPACHADOR',
-    p_detalles: [
-      { producto_id: 'UUID_PRODUCTO_1', cantidad: 5, valor_unitario: 12.50 },
-      { producto_id: 'UUID_PRODUCTO_2', cantidad: 2, valor_unitario: 50.00 }
-    ] // Supabase SDK se encarga de serializar arrays/objetos a JSONB
+    p_tasa_cambio: 50.25, // Opcional (si se omite/es null, toma la tasa oficial más reciente de la tabla tasa_cambio)
+    p_productos_json: [
+      {
+        producto_id: 'UUID_PRODUCTO_1',
+        cantidad: 5,
+        valor_unitario_recaudar: 500.00, // Precio unitario en Bolívares (Bs)
+        valor_unitario_usd: 9.95        // Precio unitario en Dólares (USD)
+      },
+      {
+        producto_id: 'UUID_PRODUCTO_2',
+        cantidad: 2,
+        valor_unitario_recaudar: 1000.00,
+        valor_unitario_usd: 19.90
+      }
+    ]
   });
   ```
 - **Respuesta esperada en `data`:**
   ```json
   {
     "success": true,
+    "message": "Orden de distribución creada exitosamente.",
+    "orden_id": "UUID_DE_LA_NUEVA_ORDEN",
     "data": {
       "orden_id": "UUID_DE_LA_NUEVA_ORDEN",
       "correlativo": 105,
+      "tasa_cambio": 50.25,
+      "total_recaudar_bs": 4500.00,
+      "total_recaudar_usd": 89.55,
       "peso_total_calculado": 125.40
-    },
-    "error": null
+    }
   }
   ```
 

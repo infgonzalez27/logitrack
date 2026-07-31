@@ -188,6 +188,19 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     2. **Creación por Rol Vendedor:** El usuario con rol `vendedor` solo puede crear órdenes de distribución para los clientes que tiene asignados (`clientes.vendedor_id = auth.uid()`).
     3. **Creación por Rol Gerente/Admin:** Un usuario con rol `gerente` o `admin` puede crear órdenes a cualquier cliente; el vendedor de la orden será automáticamente el que el cliente tiene configurado en la tabla `clientes`.
 
+- `[x]` **Tarea DB-016b: Modificación de `crear_orden_distribucion` para Incluir Campos Multimoneda**
+  - **Función:** Actualizar la función RPC `crear_orden_distribucion` en Supabase para soportar e insertar los nuevos campos de la cabecera y el detalle según la nueva estructura de [docs/Tablas.md](file:///d:/ProyectosWeb/LogiTrack/docs/Tablas.md).
+  - **Nuevos Campos a Incluir:**
+    - Cabecera (`ordenes_distribucion`): `tasa_cambio`, `total_recaudar_bs` (suma de `subtotal_recaudar` de los detalles), `total_recaudar_usd` (suma de `subtotal_recaudar_usd` de los detalles).
+    - Detalle (`detalle_distribucion`): `valor_unitario_usd`, `subtotal_recaudar_usd` (`cantidad_solicitada * valor_unitario_usd`).
+  - **Inputs:** `p_vendedor_id UUID`, `p_chofer_id UUID`, `p_cliente_id UUID`, `p_camion_id UUID`, `p_tasa_cambio NUMERIC`, `p_productos_json JSONB` (donde cada objeto contiene `producto_id`, `cantidad`, `valor_unitario_recaudar` (Bs), `valor_unitario_usd` (USD)).
+  - **Comportamiento:**
+    1. Valida parámetros de entrada y calcula acumulados de peso total (`peso_total_calculado`), total en Bolívares (`total_recaudar_bs`) y total en USD (`total_recaudar_usd`).
+    2. Registra la cabecera en `ordenes_distribucion` incluyendo `tasa_cambio`, `total_recaudar_bs` y `total_recaudar_usd`.
+    3. Registra cada producto en `detalle_distribucion` guardando `valor_unitario_recaudar`, `subtotal_recaudar` (Bs), `valor_unitario_usd` y `subtotal_recaudar_usd` (USD).
+  - **Output:** JSON `{ success: boolean, message: text, orden_id: UUID }`.
+
+
 - `[ ]` **Tarea DB-017: RPC de Actualización de Orden por Correlativo (`actualiza_orden_distribucion_segun_correlativo`)**
   - **Función:** Permite modificar una orden de distribución existente y su detalle a partir de su correlativo numérico.
   - **Inputs:** `p_correlativo INT` (o `tnCorrelativo`), `p_header JSONB`, `p_detalle JSONB`.
