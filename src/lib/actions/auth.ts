@@ -18,7 +18,7 @@ export async function loginAction(
 ): Promise<AuthFormState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const redirectTo = String(formData.get("redirect") ?? "/ordenes");
+  const redirectTo = String(formData.get("redirect") ?? "/");
 
   if (!email || !password) {
     return { error: "Ingresa correo y contraseña." };

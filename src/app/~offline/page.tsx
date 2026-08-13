@@ -17,7 +17,7 @@ export default function OfflinePage() {
       <p className="mt-3 max-w-sm text-sm text-lt-text-muted">
         No hay internet en este momento. Revisa tu red e intenta de nuevo.
       </p>
-      <Button href="/ordenes" className="mt-8">
+      <Button href="/" className="mt-8">
         Reintentar
       </Button>
       <p className="mt-4 text-xs text-lt-text-subtle">

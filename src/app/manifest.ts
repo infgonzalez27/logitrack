@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "LogiTrack",
     description:
       "Sistema de distribución, inventario y despacho logístico",
-    start_url: "/ordenes",
+    start_url: "/",
     scope: "/",
     display: "standalone",
     orientation: "portrait-primary",

@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/ordenes";
+  const redirectTo = searchParams.get("redirect") || "/";
   const registered = searchParams.get("registered") === "1";
   const showDebug = isDevDebug();
 
@@ -80,7 +80,7 @@ export default function LoginForm() {
         return;
       }
 
-      router.replace(redirectTo.startsWith("/") ? redirectTo : "/ordenes");
+      router.replace(redirectTo.startsWith("/") ? redirectTo : "/");
       router.refresh();
     } catch (err) {
       const serialized = serializeErrorForLog(err);

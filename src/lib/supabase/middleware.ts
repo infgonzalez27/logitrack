@@ -63,7 +63,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && GUEST_ONLY_ROUTES.some((route) => pathname.startsWith(route))) {
     const url = request.nextUrl.clone();
-    url.pathname = "/ordenes";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
