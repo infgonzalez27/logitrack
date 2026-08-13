@@ -3,8 +3,8 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { canCreateOrden } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
-import { listarChoferesParaOrdenAction } from "@/lib/actions/usuarios";
 import { listarProductosAction } from "@/lib/actions/productos";
+import { retornaUsuariosDespachadoresAction } from "@/lib/actions/rutas";
 import { retornaUltimaTasaCambioAction } from "@/lib/actions/tasa-cambio";
 import { createClient } from "@/lib/supabase/server";
 import { NuevaOrdenForm } from "./nueva-orden-form";
@@ -21,7 +21,7 @@ export default async function NuevaOrdenPage() {
 
   let clientesQuery = supabase
     .from("clientes")
-    .select("id, razon_social, vendedor_id")
+    .select("id, razon_social, vendedor_id, despachador_id")
     .eq("activo", true)
     .order("razon_social");
 
@@ -33,38 +33,40 @@ export default async function NuevaOrdenPage() {
   const [
     { data: clientes },
     camionesResult,
-    choferesResult,
+    despachadoresResult,
     productosResult,
     tasaResult,
   ] = await Promise.all([
     clientesQuery,
     listarCamionesParaOrdenAction(),
-    listarChoferesParaOrdenAction(),
+    retornaUsuariosDespachadoresAction(),
     listarProductosAction(),
     retornaUltimaTasaCambioAction(),
   ]);
 
   const camiones = camionesResult.ok ? camionesResult.camiones : [];
-  const choferes = choferesResult.ok ? choferesResult.choferes : [];
   const productos = productosResult.ok ? productosResult.productos : [];
+  const despachadorNombrePorId = new Map(
+    (despachadoresResult.ok ? despachadoresResult.despachadores : []).map(
+      (d) => [d.id, d.nombre_completo],
+    ),
+  );
 
   return (
     <NuevaOrdenForm
       clientes={(clientes ?? []).map((c) => ({
         value: c.id,
         label: c.razon_social,
+        despachador_id: c.despachador_id ?? null,
+        despachador_nombre: c.despachador_id
+          ? (despachadorNombrePorId.get(c.despachador_id) ?? null)
+          : null,
       }))}
       camiones={camiones.map((c) => ({
         value: c.id,
         label: c.placa,
       }))}
       camionesError={camionesResult.ok ? null : camionesResult.error}
-      choferes={choferes.map((c) => ({
-        value: c.id,
-        label: c.nombre_completo,
-      }))}
-      choferesError={choferesResult.ok ? null : choferesResult.error}
-      choferesAviso={choferesResult.ok ? choferesResult.aviso : null}
       productos={productos}
       productosError={productosResult.ok ? null : productosResult.error}
       tasaActual={tasaResult.ok ? tasaResult.tasa : null}

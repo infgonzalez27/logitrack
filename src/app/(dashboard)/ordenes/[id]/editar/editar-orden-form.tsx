@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { actualizaOrdenDistribucionAction } from "@/lib/actions/ordenes";
 import { PageHeader } from "@/components/layout/page-header";
@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LineaProductoRow } from "../../nuevo/linea-producto-row";
+import type { ClienteOrdenOption } from "../../nuevo/nueva-orden-form";
 import { formatDateOnly, formatNumber } from "@/lib/format";
 import type { ProductoListaRpc, TasaCambio } from "@/types/database";
 
@@ -26,7 +27,6 @@ export function EditarOrdenForm({
   initial,
   clientes,
   camiones,
-  choferes,
   productos,
   tasaActual = null,
   ordenTasa = null,
@@ -36,14 +36,12 @@ export function EditarOrdenForm({
   initial: {
     cliente_id: string;
     camion_id: string;
-    chofer_id: string;
     factura_origen_numero: string;
     fecha_despacho: string;
     lineas: Linea[];
   };
-  clientes: Option[];
+  clientes: ClienteOrdenOption[];
   camiones: Option[];
-  choferes: Option[];
   productos: ProductoListaRpc[];
   tasaActual?: TasaCambio | null;
   ordenTasa?: number | null;
@@ -53,7 +51,6 @@ export function EditarOrdenForm({
   const [pending, setPending] = useState(false);
   const [clienteId, setClienteId] = useState(initial.cliente_id);
   const [camionId, setCamionId] = useState(initial.camion_id);
-  const [choferId, setChoferId] = useState(initial.chofer_id);
   const [factura, setFactura] = useState(initial.factura_origen_numero);
   const [fechaDespacho, setFechaDespacho] = useState(initial.fecha_despacho);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
@@ -63,6 +60,11 @@ export function EditarOrdenForm({
     initial.lineas.length
       ? initial.lineas
       : [{ producto_id: "", cantidad_solicitada: 1, valor_unitario_recaudar: 0 }],
+  );
+
+  const clienteSeleccionado = useMemo(
+    () => clientes.find((c) => c.value === clienteId) ?? null,
+    [clientes, clienteId],
   );
 
   function updateLinea(index: number, patch: Partial<Linea>) {
@@ -76,11 +78,18 @@ export function EditarOrdenForm({
     setPending(true);
     setError(null);
 
+    if (!clienteSeleccionado?.despachador_id) {
+      setError(
+        "El cliente no tiene despachador asignado. Asígnalo en la ficha del cliente.",
+      );
+      setPending(false);
+      return;
+    }
+
     const result = await actualizaOrdenDistribucionAction({
       correlativo,
       cliente_id: clienteId,
       camion_id: camionId,
-      chofer_id: choferId,
       factura_origen_numero: factura,
       fecha_despacho: fechaDespacho || null,
       lineas: lineas.filter((l) => l.producto_id),
@@ -108,7 +117,10 @@ export function EditarOrdenForm({
           <Select
             label="Cliente"
             required
-            options={clientes}
+            options={clientes.map((c) => ({
+              value: c.value,
+              label: c.label,
+            }))}
             value={clienteId}
             onChange={(e) => setClienteId(e.target.value)}
           />
@@ -124,12 +136,13 @@ export function EditarOrdenForm({
             value={camionId}
             onChange={(e) => setCamionId(e.target.value)}
           />
-          <Select
-            label="Chofer"
-            required
-            options={choferes}
-            value={choferId}
-            onChange={(e) => setChoferId(e.target.value)}
+          <Input
+            label="Despachador del cliente"
+            readOnly
+            value={
+              clienteSeleccionado?.despachador_nombre ||
+              "Sin despachador asignado"
+            }
           />
           <Input
             label="Fecha despacho"
@@ -149,6 +162,11 @@ export function EditarOrdenForm({
             }
           />
         </div>
+        {clienteId && !clienteSeleccionado?.despachador_id ? (
+          <p className="mt-2 text-sm text-amber-700">
+            Este cliente no tiene despachador asignado.
+          </p>
+        ) : null}
       </Card>
 
       <Card title="Detalle de productos">

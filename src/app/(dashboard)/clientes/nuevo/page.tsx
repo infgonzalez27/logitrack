@@ -40,6 +40,8 @@ export default async function NuevoClientePage() {
       }))
     : [];
 
+  const rutaUnica = rutas.length === 1 ? rutas[0] : null;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
@@ -60,16 +62,42 @@ export default async function NuevoClientePage() {
             placeholder="Sin asignar"
             options={vendedores}
           />
-          <Select
-            label="Ruta"
-            name="id_ruta"
-            placeholder="Sin asignar"
-            options={rutas}
-          />
+
+          {!rutasResult.ok ? (
+            <p className="text-sm text-lt-danger-text">{rutasResult.error}</p>
+          ) : rutas.length === 0 ? (
+            <p className="text-sm text-amber-700">
+              No hay rutas disponibles en la licencia. El administrador de BD
+              debe provisionarlas antes de asignar.
+            </p>
+          ) : rutaUnica ? (
+            <>
+              <Input
+                label="Ruta"
+                name="ruta_display"
+                readOnly
+                value={rutaUnica.label}
+              />
+              <input type="hidden" name="id_ruta" value={rutaUnica.value} />
+              <p className="text-xs text-lt-text-muted">
+                Hay una sola ruta en la licencia; se asigna automáticamente.
+              </p>
+            </>
+          ) : (
+            <Select
+              label="Ruta"
+              name="id_ruta"
+              required
+              placeholder="Selecciona ruta"
+              options={rutas}
+            />
+          )}
+
           <Select
             label="Despachador"
             name="despachador_id"
-            placeholder="Sin asignar"
+            required
+            placeholder="Selecciona despachador"
             options={despachadores}
           />
           {!vendedoresResult.ok ? (
@@ -77,12 +105,14 @@ export default async function NuevoClientePage() {
               {vendedoresResult.error}
             </p>
           ) : null}
-          {!rutasResult.ok ? (
-            <p className="text-sm text-lt-danger-text">{rutasResult.error}</p>
-          ) : null}
           {!despachadoresResult.ok ? (
             <p className="text-sm text-lt-danger-text">
               {despachadoresResult.error}
+            </p>
+          ) : null}
+          {despachadoresResult.ok && despachadores.length === 0 ? (
+            <p className="text-sm text-amber-700">
+              No hay usuarios con rol despachador activos.
             </p>
           ) : null}
           <Button type="submit">Guardar cliente</Button>

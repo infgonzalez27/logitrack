@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createOrdenAction } from "@/lib/actions/ordenes";
 import { PageHeader } from "@/components/layout/page-header";
@@ -14,6 +14,11 @@ import type { ProductoListaRpc, TasaCambio } from "@/types/database";
 
 type Option = { value: string; label: string };
 
+export type ClienteOrdenOption = Option & {
+  despachador_id: string | null;
+  despachador_nombre: string | null;
+};
+
 type Linea = {
   producto_id: string;
   cantidad_solicitada: number;
@@ -24,19 +29,13 @@ export function NuevaOrdenForm({
   clientes,
   camiones,
   camionesError = null,
-  choferes,
-  choferesError = null,
-  choferesAviso = null,
   productos,
   productosError = null,
   tasaActual = null,
 }: {
-  clientes: Option[];
+  clientes: ClienteOrdenOption[];
   camiones: Option[];
   camionesError?: string | null;
-  choferes: Option[];
-  choferesError?: string | null;
-  choferesAviso?: string | null;
   productos: ProductoListaRpc[];
   productosError?: string | null;
   tasaActual?: TasaCambio | null;
@@ -46,7 +45,6 @@ export function NuevaOrdenForm({
   const [pending, setPending] = useState(false);
   const [clienteId, setClienteId] = useState("");
   const [camionId, setCamionId] = useState("");
-  const [choferId, setChoferId] = useState("");
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(() =>
     Object.fromEntries(productos.map((p) => [p.id, p])),
   );
@@ -57,6 +55,11 @@ export function NuevaOrdenForm({
       valor_unitario_recaudar: 0,
     },
   ]);
+
+  const clienteSeleccionado = useMemo(
+    () => clientes.find((c) => c.value === clienteId) ?? null,
+    [clientes, clienteId],
+  );
 
   function updateLinea(index: number, patch: Partial<Linea>) {
     setLineas((prev) =>
@@ -88,10 +91,17 @@ export function NuevaOrdenForm({
     setPending(true);
     setError(null);
 
+    if (!clienteSeleccionado?.despachador_id) {
+      setError(
+        "El cliente no tiene despachador asignado. Asígnalo en la ficha del cliente.",
+      );
+      setPending(false);
+      return;
+    }
+
     const result = await createOrdenAction({
       cliente_id: clienteId,
       camion_id: camionId,
-      chofer_id: choferId,
       lineas: lineas.filter((l) => l.producto_id),
       tasa_cambio: tasaActual?.tasa_cambio ?? null,
     });
@@ -128,7 +138,10 @@ export function NuevaOrdenForm({
               name="cliente_id"
               required
               placeholder="Selecciona cliente"
-              options={clientes}
+              options={clientes.map((c) => ({
+                value: c.value,
+                label: c.label,
+              }))}
               value={clienteId}
               onChange={(e) => setClienteId(e.target.value)}
             />
@@ -141,14 +154,15 @@ export function NuevaOrdenForm({
               value={camionId}
               onChange={(e) => setCamionId(e.target.value)}
             />
-            <Select
-              label="Chofer"
-              name="chofer_id"
-              required
-              placeholder="Selecciona chofer"
-              options={choferes}
-              value={choferId}
-              onChange={(e) => setChoferId(e.target.value)}
+            <Input
+              label="Despachador del cliente"
+              readOnly
+              value={
+                !clienteId
+                  ? "Selecciona un cliente"
+                  : clienteSeleccionado?.despachador_nombre ||
+                    "Sin despachador asignado"
+              }
             />
             <Input
               label="Tasa de cambio"
@@ -160,6 +174,15 @@ export function NuevaOrdenForm({
               }
             />
           </div>
+          {clienteId && !clienteSeleccionado?.despachador_id ? (
+            <p className="mt-2 text-sm text-amber-700">
+              Este cliente no tiene despachador. Asígnalo en{" "}
+              <a href="/clientes/nuevo" className="underline">
+                Clientes
+              </a>{" "}
+              antes de crear la orden.
+            </p>
+          ) : null}
           {!tasaActual ? (
             <p className="mt-2 text-sm text-amber-700">
               No hay tasa del día. Regístrala en{" "}
@@ -171,12 +194,6 @@ export function NuevaOrdenForm({
           ) : null}
           {camionesError ? (
             <p className="mt-2 text-sm text-lt-danger-text">{camionesError}</p>
-          ) : null}
-          {choferesError ? (
-            <p className="mt-2 text-sm text-lt-danger-text">{choferesError}</p>
-          ) : null}
-          {choferesAviso ? (
-            <p className="mt-2 text-sm text-amber-700">{choferesAviso}</p>
           ) : null}
         </Card>
 

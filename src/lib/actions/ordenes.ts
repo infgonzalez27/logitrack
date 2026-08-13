@@ -115,10 +115,10 @@ function validateCreateOrdenInput(
     return "Camión inválido.";
   }
   if (!input.chofer_id?.trim()) {
-    return "Selecciona un chofer.";
+    return "El cliente no tiene despachador asignado.";
   }
   if (!isUuid(input.chofer_id)) {
-    return "Chofer inválido.";
+    return "Despachador del cliente inválido.";
   }
   if (!input.lineas.length) {
     return "Agrega al menos una línea de producto.";
@@ -146,10 +146,36 @@ function validateCreateOrdenInput(
   return null;
 }
 
+/** Resuelve el despachador asignado al cliente (va como p_chofer_id del SP). */
+async function resolveDespachadorIdDelCliente(
+  clienteId: string,
+): Promise<
+  { ok: true; despachador_id: string } | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("despachador_id")
+    .eq("id", clienteId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  const despachadorId = data?.despachador_id?.trim();
+  if (!despachadorId || !isUuid(despachadorId)) {
+    return {
+      ok: false,
+      error:
+        "El cliente no tiene despachador asignado. Asígnalo en la ficha del cliente.",
+    };
+  }
+  return { ok: true, despachador_id: despachadorId };
+}
+
 export async function createOrdenAction(input: {
   cliente_id: string;
   camion_id: string;
-  chofer_id: string;
   lineas: LineaOrdenInput[];
   tasa_cambio?: number | null;
 }) {
@@ -162,7 +188,20 @@ export async function createOrdenAction(input: {
     return { error: "No tienes permiso para crear órdenes de distribución." };
   }
 
-  const validationError = validateCreateOrdenInput(input, user?.id);
+  const despachadorResult = await resolveDespachadorIdDelCliente(
+    input.cliente_id.trim(),
+  );
+  if (!despachadorResult.ok) {
+    return { error: despachadorResult.error };
+  }
+
+  const validationError = validateCreateOrdenInput(
+    {
+      ...input,
+      chofer_id: despachadorResult.despachador_id,
+    },
+    user?.id,
+  );
   if (validationError) {
     return { error: validationError };
   }
@@ -179,10 +218,10 @@ export async function createOrdenAction(input: {
     return { error: "Agrega al menos una línea de producto." };
   }
 
-  // DB-016b: p_tasa_cambio opcional; SP calcula USD/Bs si falta uno.
+  // DB-016b: p_chofer_id = despachador asignado al cliente (sin selector de chofer).
   const { data, error } = await supabase.rpc("crear_orden_distribucion", {
     p_vendedor_id: user!.id,
-    p_chofer_id: input.chofer_id.trim(),
+    p_chofer_id: despachadorResult.despachador_id,
     p_cliente_id: input.cliente_id.trim(),
     p_camion_id: input.camion_id.trim(),
     p_tasa_cambio: tasa,
@@ -628,7 +667,6 @@ export async function actualizaOrdenDistribucionAction(input: {
   correlativo: number;
   cliente_id: string;
   camion_id: string;
-  chofer_id: string;
   fecha_despacho?: string | null;
   factura_origen_numero?: string | null;
   lineas: ActualizaOrdenDetalleInput[];
@@ -653,6 +691,13 @@ export async function actualizaOrdenDistribucionAction(input: {
     return { error: "Agrega al menos una línea de producto." };
   }
 
+  const despachadorResult = await resolveDespachadorIdDelCliente(
+    input.cliente_id.trim(),
+  );
+  if (!despachadorResult.ok) {
+    return { error: despachadorResult.error };
+  }
+
   const response = await callDbProcedure<{
     correlativo: number;
     orden_id: string;
@@ -664,7 +709,7 @@ export async function actualizaOrdenDistribucionAction(input: {
     p_header: {
       cliente_id: input.cliente_id.trim(),
       camion_id: input.camion_id.trim(),
-      chofer_id: input.chofer_id.trim(),
+      chofer_id: despachadorResult.despachador_id,
       fecha_despacho: input.fecha_despacho?.trim() || null,
       factura_origen_numero: input.factura_origen_numero?.trim() || null,
     },
