@@ -92,7 +92,6 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Maestros",
     items: [
       { href: "/clientes", label: "Clientes" },
-      { href: "/rutas", label: "Rutas" },
       { href: "/proveedores", label: "Proveedores" },
       { href: "/camiones", label: "Camiones" },
       { href: "/choferes", label: "Choferes" },
