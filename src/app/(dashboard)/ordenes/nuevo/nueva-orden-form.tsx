@@ -8,7 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LineaProductoRow } from "./linea-producto-row";
+import { ProductoCatalogo } from "./producto-catalogo";
+import { resolveProductoImage } from "@/lib/product-images";
 import { formatDateOnly, formatNumber } from "@/lib/format";
 import type { ProductoListaRpc, TasaCambio } from "@/types/database";
 
@@ -45,45 +46,50 @@ export function NuevaOrdenForm({
   const [pending, setPending] = useState(false);
   const [clienteId, setClienteId] = useState("");
   const [camionId, setCamionId] = useState("");
-  const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(() =>
-    Object.fromEntries(productos.map((p) => [p.id, p])),
+  const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
+    () => Object.fromEntries(productos.map((p) => [p.id, p])),
   );
-  const [lineas, setLineas] = useState<Linea[]>([
-    {
-      producto_id: "",
-      cantidad_solicitada: 1,
-      valor_unitario_recaudar: 0,
-    },
-  ]);
+  const [lineas, setLineas] = useState<Linea[]>([]);
 
   const clienteSeleccionado = useMemo(
     () => clientes.find((c) => c.value === clienteId) ?? null,
     [clientes, clienteId],
   );
 
-  function updateLinea(index: number, patch: Partial<Linea>) {
+  function registrarProducto(producto: ProductoListaRpc) {
+    setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
+  }
+
+  function agregarProducto(producto: ProductoListaRpc) {
+    registrarProducto(producto);
+    setLineas((prev) => {
+      const existente = prev.find((l) => l.producto_id === producto.id);
+      if (existente) {
+        return prev.map((l) =>
+          l.producto_id === producto.id
+            ? { ...l, cantidad_solicitada: l.cantidad_solicitada + 1 }
+            : l,
+        );
+      }
+      return [
+        ...prev,
+        {
+          producto_id: producto.id,
+          cantidad_solicitada: 1,
+          valor_unitario_recaudar: producto.precio_lista1 ?? producto.precio ?? 0,
+        },
+      ];
+    });
+  }
+
+  function updateLinea(productoId: string, patch: Partial<Linea>) {
     setLineas((prev) =>
-      prev.map((linea, i) => (i === index ? { ...linea, ...patch } : linea)),
+      prev.map((l) => (l.producto_id === productoId ? { ...l, ...patch } : l)),
     );
   }
 
-  function addLinea() {
-    setLineas((prev) => [
-      ...prev,
-      {
-        producto_id: "",
-        cantidad_solicitada: 1,
-        valor_unitario_recaudar: 0,
-      },
-    ]);
-  }
-
-  function removeLinea(index: number) {
-    setLineas((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function registrarProducto(producto: ProductoListaRpc) {
-    setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
+  function removeLinea(productoId: string) {
+    setLineas((prev) => prev.filter((l) => l.producto_id !== productoId));
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -98,11 +104,16 @@ export function NuevaOrdenForm({
       setPending(false);
       return;
     }
+    if (!lineas.length) {
+      setError("Agrega al menos un producto a la orden.");
+      setPending(false);
+      return;
+    }
 
     const result = await createOrdenAction({
       cliente_id: clienteId,
       camion_id: camionId,
-      lineas: lineas.filter((l) => l.producto_id),
+      lineas,
       tasa_cambio: tasaActual?.tasa_cambio ?? null,
     });
 
@@ -124,7 +135,7 @@ export function NuevaOrdenForm({
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Nueva orden de distribución"
         description="Estado inicial: borrador"
@@ -176,20 +187,13 @@ export function NuevaOrdenForm({
           </div>
           {clienteId && !clienteSeleccionado?.despachador_id ? (
             <p className="mt-2 text-sm text-amber-700">
-              Este cliente no tiene despachador. Asígnalo en{" "}
-              <a href="/clientes/nuevo" className="underline">
-                Clientes
-              </a>{" "}
-              antes de crear la orden.
+              Este cliente no tiene despachador. Asígnalo en Clientes antes de
+              crear la orden.
             </p>
           ) : null}
           {!tasaActual ? (
             <p className="mt-2 text-sm text-amber-700">
-              No hay tasa del día. Regístrala en{" "}
-              <a href="/tasas-cambio" className="underline">
-                Tasas de cambio
-              </a>{" "}
-              antes de crear la orden.
+              No hay tasa del día. Regístrala en Tasas de cambio.
             </p>
           ) : null}
           {camionesError ? (
@@ -197,35 +201,94 @@ export function NuevaOrdenForm({
           ) : null}
         </Card>
 
-        <Card title="Detalle de productos">
+        <Card title="Catálogo de productos">
           {productosError ? (
             <p className="mb-4 text-sm text-lt-danger-text">{productosError}</p>
           ) : null}
-          <div className="space-y-4">
-            {lineas.map((linea, index) => (
-              <LineaProductoRow
-                key={index}
-                linea={linea}
-                catalogo={productos}
-                producto={
-                  linea.producto_id
-                    ? catalogo[linea.producto_id]
-                    : undefined
-                }
-                onLineaChange={(patch) => updateLinea(index, patch)}
-                onProductoCatalogo={registrarProducto}
-                onRemove={() => removeLinea(index)}
-                canRemove={lineas.length > 1}
-              />
-            ))}
-          </div>
+          <ProductoCatalogo
+            productos={productos}
+            onAdd={agregarProducto}
+            selectedIds={lineas.map((l) => l.producto_id)}
+          />
+        </Card>
 
-          <div className="mt-4 flex justify-center">
-            <Button type="button" variant="secondary" onClick={addLinea}>
-              Agrega otro producto
-            </Button>
-          </div>
-
+        <Card title="Productos en la orden">
+          {!lineas.length ? (
+            <p className="text-sm text-lt-text-muted">
+              Agrega productos desde el catálogo.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {lineas.map((linea) => {
+                const producto = catalogo[linea.producto_id];
+                const img = producto
+                  ? resolveProductoImage(producto.nombre)
+                  : null;
+                return (
+                  <li
+                    key={linea.producto_id}
+                    className="grid gap-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/40 p-3 sm:grid-cols-[72px_1fr_auto]"
+                  >
+                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-white">
+                      {img ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={img}
+                          alt=""
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-[10px] text-lt-text-muted">
+                          N/A
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 space-y-2">
+                      <p className="truncate text-sm font-medium text-lt-text">
+                        {producto?.nombre ?? "Producto"}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          label="Cantidad"
+                          type="number"
+                          min={1}
+                          required
+                          value={linea.cantidad_solicitada}
+                          onChange={(e) =>
+                            updateLinea(linea.producto_id, {
+                              cantidad_solicitada: Number(e.target.value),
+                            })
+                          }
+                        />
+                        <Input
+                          label="Precio unitario"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          required
+                          value={linea.valor_unitario_recaudar}
+                          onChange={(e) =>
+                            updateLinea(linea.producto_id, {
+                              valor_unitario_recaudar: Number(e.target.value),
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-start justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => removeLinea(linea.producto_id)}
+                      >
+                        Quitar
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           <p className="mt-4 text-sm text-lt-text-muted">
             Total a recaudar:{" "}
             <span className="font-medium text-lt-text">
