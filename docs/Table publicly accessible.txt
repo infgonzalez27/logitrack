@@ -1,0 +1,21 @@
+These issues require
+your immediate attention
+
+We detected security vulnerabilities in the projects listed below that could expose your data to unauthorized access. Review and fix them before your data is compromised.
+
+Issues as of 09 Aug 2026:
+
+Critical issue
+
+Table publicly accessible
+
+Anyone with your project URL can read, edit, and delete all data in this table because Row-Level Security is not enabled.
+
+rls_disabled_in_public
+
+| name                   | title                  | level | facing   | categories   | description                                                                                                 | detail                                                                                | remediation                                                                                | metadata                                                                | cache_key                                                 |
+| ---------------------- | ---------------------- | ----- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------- |
+| rls_disabled_in_public | RLS Disabled in Public | ERROR | EXTERNAL | ["SECURITY"] | Detects cases where row level security (RLS) has not been enabled on tables in schemas exposed to PostgREST | Table \`public.saldo_contenedores_clientes\` is public, but RLS has not been enabled. | https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public | {"name":"saldo_contenedores_clientes","type":"table","schema":"public"} | rls_disabled_in_public_public_saldo_contenedores_clientes |
+| rls_disabled_in_public | RLS Disabled in Public | ERROR | EXTERNAL | ["SECURITY"] | Detects cases where row level security (RLS) has not been enabled on tables in schemas exposed to PostgREST | Table \`public.tipos_contenedores\` is public, but RLS has not been enabled.          | https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public | {"name":"tipos_contenedores","type":"table","schema":"public"}          | rls_disabled_in_public_public_tipos_contenedores          |
+| rls_disabled_in_public | RLS Disabled in Public | ERROR | EXTERNAL | ["SECURITY"] | Detects cases where row level security (RLS) has not been enabled on tables in schemas exposed to PostgREST | Table \`public.movimientos_saldo_favor\` is public, but RLS has not been enabled.     | https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public | {"name":"movimientos_saldo_favor","type":"table","schema":"public"}     | rls_disabled_in_public_public_movimientos_saldo_favor     |
+| rls_disabled_in_public | RLS Disabled in Public | ERROR | EXTERNAL | ["SECURITY"] | Detects cases where row level security (RLS) has not been enabled on tables in schemas exposed to PostgREST | Table \`public.movimientos_contenedores\` is public, but RLS has not been enabled.    | https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public | {"name":"movimientos_contenedores","type":"table","schema":"public"}    | rls_disabled_in_public_public_movimientos_contenedores    |
