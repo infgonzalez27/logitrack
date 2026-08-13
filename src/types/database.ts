@@ -61,6 +61,19 @@ export interface PerfilUsuario {
   roles?: Rol | null;
 }
 
+export interface Ruta {
+  id_ruta: string;
+  nombre_ruta: string;
+  descripcion_ruta: string | null;
+  created_at: string;
+}
+
+export type DespachadorListaRpc = {
+  id: string;
+  nombre_completo: string;
+  telefono: string | null;
+};
+
 export interface Cliente {
   id: string;
   rif_nit: string;
@@ -75,6 +88,10 @@ export interface Cliente {
   max_liq: number | null;
   /** Vendedor asignado (DB-014). */
   vendedor_id?: string | null;
+  /** Despachador preferente (DB-020). */
+  despachador_id?: string | null;
+  /** Ruta de distribución (DB-021). */
+  id_ruta?: string | null;
   activo: boolean;
   created_at: string;
   perfiles_usuario?: PerfilUsuario | null;
@@ -396,6 +413,7 @@ export interface Database {
   public: {
     Tables: {
       roles: TableDef<Rol>;
+      rutas: TableDef<Ruta>;
       clientes: TableDef<Cliente>;
       proveedores: TableDef<Proveedor>;
       camiones: TableDef<Camion>;
@@ -508,6 +526,36 @@ export interface Database {
       retorna_lista_camiones: {
         Args: Record<string, never>;
         Returns: CamionListaRpc[];
+      };
+      retorna_lista_rutas: {
+        Args: Record<string, never>;
+        Returns: {
+          success: boolean;
+          total_registros?: number;
+          data: Ruta[] | null;
+          error: { code: string; message: string; details?: string | null } | null;
+        };
+      };
+      retorna_usuarios_despachadores: {
+        Args: Record<string, never>;
+        Returns: {
+          success: boolean;
+          data: DespachadorListaRpc[] | null;
+          error: { code: string; message: string; details?: string | null } | null;
+        };
+      };
+      actualiza_registro_rutas_segun_uuid: {
+        Args: {
+          p_id_ruta: string;
+          p_nombre_ruta: string;
+          p_descripcion_ruta?: string | null;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data: Ruta | null;
+          error?: { code: string; message: string; details?: string | null } | null;
+        };
       };
       retorna_lista_productos_segun_parametros: {
         Args: {
