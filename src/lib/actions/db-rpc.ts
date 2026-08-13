@@ -12,6 +12,8 @@ export type RpcResponse<T> = {
   error: RpcErrorPayload | null;
   /** Formato legado de algunos SPs (`message` en raíz). */
   message?: string;
+  /** Presente en algunos listados (ej. `retorna_lista_rutas`). */
+  total_registros?: number;
 };
 
 /** Wrapper estándar para supabase.rpc según docs/INTEGRACION-RPC.md */
@@ -53,11 +55,15 @@ export async function callDbProcedure<T>(
     };
 
     if (typeof response.success === "boolean") {
+      const withTotal = response as RpcResponse<T> & {
+        total_registros?: number;
+      };
       return {
         success: response.success,
         data: response.data ?? null,
         error: response.error ?? null,
         message: response.message,
+        total_registros: withTotal.total_registros,
       };
     }
   }

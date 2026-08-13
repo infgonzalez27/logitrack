@@ -1,0 +1,550 @@
+# Guía de Integración de Stored Procedures (RPC) para Front & Backend
+
+**Proyecto:** LogiTrack  
+**Propósito:** Proveer instrucciones de código y contratos para consumir las funciones de base de datos desde Next.js Server Actions o componentes del cliente.  
+**Desarrollado para:** Desarrollador Front/Backend del equipo de LogiTrack.
+
+---
+
+## 1. Patrón General de Consumo en TypeScript
+
+Todas las llamadas a funciones de negocio en PostgreSQL deben realizarse utilizando el método `.rpc()` del cliente de Supabase.
+
+### 1.1. Manejo de la Respuesta Estandarizada
+Dado que las funciones devuelven una estructura JSON unificada (ver [docs/SUPABASE-SDD.md](file:///d:/ProyectosWeb/LogiTrack/docs/SUPABASE-SDD.md)), la llamada en Next.js debe deserializarse e interpretarse del siguiente modo:
+
+```typescript
+import { createClient } from '@/lib/supabase/server'; // O tu cliente correspondiente
+
+interface RPCResponse<T> {
+  success: boolean;
+  data: T | null;
+  error: {
+    code: string;
+    message: string;
+    details: string | null;
+  } | null;
+}
+
+export async function callDbProcedure<T>(procedureName: string, params: Record<string, any>) {
+  const supabase = await createClient(); // Cliente del lado del servidor
+  
+  const { data, error } = await supabase.rpc(procedureName, params);
+  
+  if (error) {
+    // Error crítico de red o de comunicación de la API de Supabase
+    return {
+      success: false,
+      data: null,
+      error: {
+        code: 'NETWORK_OR_API_ERROR',
+        message: error.message,
+        details: error.details
+      }
+    };
+  }
+
+  // Cast de la respuesta estructurada de PostgreSQL
+  const response = data as RPCResponse<T>;
+  return response;
+}
+```
+
+### 1.2. Ejemplo de Integración en un Server Action de Next.js
+Aquí se muestra cómo el desarrollador de Back/Front debe invocar la función en un Server Action para cambiar la interfaz de usuario de acuerdo al resultado.
+
+```typescript
+'use server';
+
+import { callDbProcedure } from '@/lib/actions/db-helper'; // Supuesta ubicación del helper
+import { revalidatePath } from 'next/cache';
+
+interface CrearOrdenData {
+  orden_id: string;
+  correlativo: number;
+  peso_total_calculado: number;
+}
+
+export async function submitCrearOrdenAction(formData: any) {
+  const params = {
+    p_cliente_id: formData.clienteId,
+    p_camion_id: formData.camionId,
+    p_chofer_id: formData.choferId,
+    p_factura_origen_numero: formData.facturaNumero,
+    p_creado_por: formData.usuarioId,
+    p_detalles: JSON.stringify(formData.detalles) // Debe pasarse como string de JSON para ser leído como JSONB
+  };
+
+  const response = await callDbProcedure<CrearOrdenData>('crear_orden_distribucion', params);
+
+  if (!response.success) {
+    // Controlar error lógico (ej: STOCK_INSUFICIENTE, CLIENTE_INEXISTENTE)
+    return {
+      error: response.error?.message || 'Error desconocido al crear la orden.',
+      code: response.error?.code
+    };
+  }
+
+  // Si fue exitoso, revalidamos la ruta para refrescar el listado
+  revalidatePath('/ordenes');
+  
+  return {
+    success: true,
+    data: response.data
+  };
+}
+```
+
+---
+
+## 2. Catálogo de Stored Procedures e Indicaciones de Parámetros
+
+A continuación se listan las firmas de los procedimientos almacenados que el equipo de base de datos implementará. Utiliza esta sección como referencia para preparar tus componentes de frontend.
+
+### 2.1. Crear Orden de Distribución (`crear_orden_distribucion`)
+- **Firma SQL:** `crear_orden_distribucion(p_vendedor_id UUID, p_chofer_id UUID, p_cliente_id UUID, p_camion_id UUID, p_tasa_cambio NUMERIC DEFAULT NULL, p_productos_json JSONB DEFAULT '[]'::jsonb)`
+- **Campos multimoneda calculados automáticamente en DB:**
+  - `ordenes_distribucion`: `tasa_cambio`, `total_recaudar_bs` (suma de subtotales en Bs), `total_recaudar_usd` (suma de subtotales en USD).
+  - `detalle_distribucion`: `valor_unitario_recaudar` (Bs), `subtotal_recaudar` (Bs), `valor_unitario_usd` (USD), `subtotal_recaudar_usd` (USD).
+- **Uso en Frontend (RPC) / Cursor Editor:**
+  ```typescript
+  const { data, error } = await supabase.rpc('crear_orden_distribucion', {
+    p_vendedor_id: 'UUID_DEL_VENDEDOR',
+    p_chofer_id: 'UUID_DEL_CHOFER',
+    p_cliente_id: 'UUID_DEL_CLIENTE',
+    p_camion_id: 'UUID_DEL_CAMION',
+    p_tasa_cambio: 50.25, // Opcional (si se omite/es null, toma la tasa oficial más reciente de la tabla tasa_cambio)
+    p_productos_json: [
+      {
+        producto_id: 'UUID_PRODUCTO_1',
+        cantidad: 5,
+        valor_unitario_recaudar: 500.00, // Precio unitario en Bolívares (Bs)
+        valor_unitario_usd: 9.95        // Precio unitario en Dólares (USD)
+      },
+      {
+        producto_id: 'UUID_PRODUCTO_2',
+        cantidad: 2,
+        valor_unitario_recaudar: 1000.00,
+        valor_unitario_usd: 19.90
+      }
+    ]
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Orden de distribución creada exitosamente.",
+    "orden_id": "UUID_DE_LA_NUEVA_ORDEN",
+    "data": {
+      "orden_id": "UUID_DE_LA_NUEVA_ORDEN",
+      "correlativo": 105,
+      "tasa_cambio": 50.25,
+      "total_recaudar_bs": 4500.00,
+      "total_recaudar_usd": 89.55,
+      "peso_total_calculado": 125.40
+    }
+  }
+  ```
+
+### 2.2. Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)
+- **Firma SQL:** `aprobar_orden_distribucion(p_orden_id UUID)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('aprobar_orden_distribucion', {
+    p_orden_id: 'UUID_DE_LA_ORDEN'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "orden_id": "UUID_DE_LA_ORDEN",
+      "nuevo_estado": "aprobada"
+    },
+    "error": null
+  }
+  ```
+
+### 2.3. Carga a Inventario Móvil (`cargar_inventario_movil`)
+- **Firma SQL:** `cargar_inventario_movil(p_orden_id UUID)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('cargar_inventario_movil', {
+    p_orden_id: 'UUID_DE_LA_ORDEN'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "orden_id": "UUID_DE_LA_ORDEN",
+      "nuevo_estado": "en_transito"
+    },
+    "error": null
+  }
+  ```
+
+### 2.4. Registro de Entregas y Devoluciones en Ruta (`registrar_entrega_detalle`)
+- **Firma SQL:** `registrar_entrega_detalle(p_detalle_id UUID, p_cantidad_despachada INT, p_estado_entrega TEXT, p_motivo_rechazo TEXT)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_entrega_detalle', {
+    p_detalle_id: 'UUID_DEL_DETALLE_LINEA',
+    p_cantidad_despachada: 4, // Cantidad que realmente recibió el cliente
+    p_estado_entrega: 'entregado_parcial', // 'entregado', 'entregado_parcial', 'rechazado'
+    p_motivo_rechazo: '2 unidades dañadas en el trayecto' // Null si es 'entregado' completo
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "detalle_id": "UUID_DEL_DETALLE_LINEA",
+      "estado_entrega": "entregado_parcial",
+      "orden_estado": "por_liquidar" // o "en_transito" si aún hay líneas pendientes
+    },
+    "error": null
+  }
+  ```
+
+### 2.5. Liquidación de Despacho (`liquidar_orden_distribucion`)
+- **Firma SQL:** `liquidar_orden_distribucion(p_orden_id UUID)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('liquidar_orden_distribucion', {
+    p_orden_id: 'UUID_DE_LA_ORDEN'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "orden_id": "UUID_DE_LA_ORDEN",
+      "nuevo_estado": "liquidada"
+    },
+    "error": null
+  }
+  ```
+
+### 2.6. Anulación de Orden (`anular_orden_distribucion`)
+- **Firma SQL:** `anular_orden_distribucion(p_orden_id UUID)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('anular_orden_distribucion', {
+    p_orden_id: 'UUID_DE_LA_ORDEN'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "orden_id": "UUID_DE_LA_ORDEN",
+      "nuevo_estado": "anulada"
+    },
+    "error": null
+  }
+  ```
+
+### 2.7. Registrar Movimiento de Contenedores (`registrar_movimiento_contenedores`)
+- **Firma SQL:** `registrar_movimiento_contenedores(p_cliente_id UUID, p_orden_id UUID, p_contenedor_id UUID, p_cantidad_entregada INT, p_cantidad_retirada INT, p_creado_por UUID)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_movimiento_contenedores', {
+    p_cliente_id: 'UUID_DEL_CLIENTE',
+    p_orden_id: 'UUID_DE_LA_ORDEN',
+    p_contenedor_id: 'UUID_DEL_CONTENEDOR',
+    p_cantidad_entregada: 5,
+    p_cantidad_retirada: 3,
+    p_creado_por: 'UUID_DEL_DESPACHADOR'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "movimiento_id": "UUID_DEL_REGISTRO_MOVIMIENTO"
+    },
+    "error": null
+  }
+  ```
+
+### 2.8. Registrar Rendición de Cuentas (`registrar_rendicion_cuentas`)
+- **Firma SQL:** `registrar_rendicion_cuentas(p_cliente_id UUID, p_observaciones TEXT, p_creado_por UUID, p_ordenes JSONB, p_pagos JSONB)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_rendicion_cuentas', {
+    p_cliente_id: 'UUID_DEL_CLIENTE',
+    p_observaciones: 'Rendición de la cobranza de la tarde',
+    p_creado_por: 'UUID_DEL_VENDEDOR',
+    p_ordenes: [
+      { orden_id: 'UUID_DE_LA_ORDEN_1', monto_recaudado: 120.00 },
+      { orden_id: 'UUID_DE_LA_ORDEN_2', monto_recaudado: 80.00 }
+    ],
+    p_pagos: [
+      { fpago_id: '1a5b84c8-47bc-4ee0-880c-7833215be11b', monto: 150.00, referencia_bancaria: 'REF1234', cuenta_bancaria: '0102-XXXX', capture_url: 'storage-url' },
+      { fpago_id: '4d8eb7fb-7ade-4113-bb3f-ab66548e144e', monto: 100.00, referencia_bancaria: null, cuenta_bancaria: null, capture_url: null }
+    ]
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "rendicion_id": "UUID_DE_LA_NUEVA_RENDICION",
+      "total_ordenes": 200.00,
+      "total_pagos": 250.00,
+      "saldo_favor_generado": 50.00
+    },
+    "error": null
+  }
+  ```
+
+### 2.9. Consulta de Registros de Formas de Pago (`consulta_registros_formas_pago`)
+- **Firma SQL:** `consulta_registros_formas_pago()`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('consulta_registros_formas_pago');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      { "fpago_id": "6fa0d91d-9c00-4335-dd5f-cd88760a366a", "fpago_concepto": "BINANCE", "fpago_info": true },
+      { "fpago_id": "3c7da6ea-69de-4002-aa2e-9a55437d033d", "fpago_concepto": "Efectivo Bs", "fpago_info": false },
+      { "fpago_id": "4d8eb7fb-7ade-4113-bb3f-ab66548e144e", "fpago_concepto": "Efectivo USD", "fpago_info": false },
+      { "fpago_id": "1a5b84c8-47bc-4ee0-880c-7833215be11b", "fpago_concepto": "Pago movil", "fpago_info": true },
+      { "fpago_id": "2b6c95d9-58cd-4ff1-991d-8944326cf22c", "fpago_concepto": "Transferencia", "fpago_info": true },
+      { "fpago_id": "5e9fc80c-8bef-4224-cc4f-bc77659f255f", "fpago_concepto": "ZELLE", "fpago_info": true }
+    ],
+    "error": null
+  }
+  ```
+
+### 2.10. Módulo de Mantenimiento de Tasas de Cambio (`tasa_cambio`)
+
+El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales utilizadas en la facturación y cobranza en multimoneda.
+
+#### Comportamiento Esperado del Módulo en Frontend:
+1. **Carga Inicial por Defecto:** Al ingresar al módulo, debe invocar `retorna_ultima_tasa_cambio` para mostrar la tasa más reciente registrada con su fecha.
+2. **Registro de Nueva Tasa:** Permite ingresar una fecha y monto de tasa con `inserta_tasa_cambio`. (No permite fechas duplicadas).
+3. **Eliminación de Tasa:** Permite eliminar la tasa de una fecha con `elimina_tasa_cambio`. (Para actualizar una tasa, se debe eliminar la fecha y registrarla de nuevo).
+4. **Consulta Histórica por Rango:** Permite al usuario consultar el listado de tasas en un rango de fechas con `retorna_tasas_cambio_por_rango`.
+
+---
+
+#### 2.10.1. Consultar Última Tasa Registrada (`retorna_ultima_tasa_cambio`)
+- **Firma SQL:** `retorna_ultima_tasa_cambio()`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_ultima_tasa_cambio');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "fecha_tasa": "2026-07-30",
+      "tasa_cambio": 36.54,
+      "created_at": "2026-07-30T14:00:00Z"
+    },
+    "error": null
+  }
+  ```
+
+#### 2.10.2. Registrar Nueva Tasa (`inserta_tasa_cambio`)
+- **Firma SQL:** `inserta_tasa_cambio(p_fecha_tasa DATE, p_tasa NUMERIC)`
+- **Regla:** No se permiten fechas duplicadas. Si la fecha ya existe, retorna error de restricción `FECHA_TASA_DUPLICADA`.
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('inserta_tasa_cambio', {
+    p_fecha_tasa: '2026-07-30',
+    p_tasa: 36.54
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "fecha_tasa": "2026-07-30",
+      "tasa_cambio": 36.54
+    },
+    "error": null
+  }
+  ```
+
+#### 2.10.3. Eliminar Tasa por Fecha (`elimina_tasa_cambio`)
+- **Firma SQL:** `elimina_tasa_cambio(p_fecha_tasa DATE)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('elimina_tasa_cambio', {
+    p_fecha_tasa: '2026-07-30'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "fecha_tasa": "2026-07-30",
+      "eliminado": true
+    },
+    "error": null
+  }
+  ```
+
+#### 2.10.4. Consultar Tasas por Rango de Fechas (`retorna_tasas_cambio_por_rango`)
+- **Firma SQL:** `retorna_tasas_cambio_por_rango(p_fecha_desde DATE, p_fecha_hasta DATE)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_tasas_cambio_por_rango', {
+    p_fecha_desde: '2026-07-01',
+    p_fecha_hasta: '2026-07-30'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      { "fecha_tasa": "2026-07-30", "tasa_cambio": 36.54 },
+      { "fecha_tasa": "2026-07-29", "tasa_cambio": 36.50 },
+      { "fecha_tasa": "2026-07-28", "tasa_cambio": 36.48 }
+    ],
+    "error": null
+  }
+  ```
+
+### 2.11. Consulta de Lista de Contenedores (`retorna_lista_contenedores`)
+- **Firma SQL:** `retorna_lista_contenedores()`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_contenedores');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      { "id": "11111111-1111-1111-1111-111111111111", "nombre": "Caja Plástica 24 Unidades" },
+      { "id": "22222222-2222-2222-2222-222222222222", "nombre": "Cesta Térmica 50L" }
+    ],
+    "error": null
+  }
+  ```
+
+### 2.12. Consulta de Lista de Rutas (`retorna_lista_rutas`)
+- **Firma SQL:** `retorna_lista_rutas()`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_rutas');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "total_registros": 2,
+    "data": [
+      {
+        "id_ruta": "3a8f94c0-1122-4433-8899-aabbccdd1122",
+        "nombre_ruta": "Ruta Centro - Comercial",
+        "descripcion_ruta": "Atención a clientes del casco central",
+        "created_at": "2026-08-13T12:00:00+00:00"
+      },
+      {
+        "id_ruta": "4b9f05d1-2233-5544-9900-bbccddee2233",
+        "nombre_ruta": "Ruta Norte - Industrial",
+        "descripcion_ruta": null,
+        "created_at": "2026-08-13T12:05:00+00:00"
+      }
+    ],
+    "error": null
+  }
+  ```
+
+### 2.13. Consulta de Usuarios Despachadores (`retorna_usuarios_despachadores`)
+- **Firma SQL:** `retorna_usuarios_despachadores()`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_usuarios_despachadores');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
+        "nombre_completo": "Carlos Pérez (Despachador)",
+        "telefono": "+584141112233"
+      },
+      {
+        "id": "6d1b27f3-4455-7766-1122-ddeeff004455",
+        "nombre_completo": "José Rodríguez",
+        "telefono": "+584129998877"
+      }
+    ],
+    "error": null
+  }
+  ```
+
+### 2.14. Actualizar Registro de Ruta por UUID (`actualiza_registro_rutas_segun_uuid`)
+- **Firma SQL:** `actualiza_registro_rutas_segun_uuid(p_id_ruta UUID, p_nombre_ruta TEXT, p_descripcion_ruta TEXT DEFAULT NULL)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('actualiza_registro_rutas_segun_uuid', {
+    p_id_ruta: '3a8f94c0-1122-4433-8899-aabbccdd1122',
+    p_nombre_ruta: 'Ruta Centro - Actualizada',
+    p_descripcion_ruta: 'Nueva descripción de la ruta comercial' // Opcional / Acepta null
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Ruta actualizada exitosamente.",
+    "data": {
+      "id_ruta": "3a8f94c0-1122-4433-8899-aabbccdd1122",
+      "nombre_ruta": "Ruta Centro - Actualizada",
+      "descripcion_ruta": "Nueva descripción de la ruta comercial",
+      "created_at": "2026-08-13T12:00:00+00:00"
+    }
+  }
+  ```
+- **Respuesta esperada en `data` (Fallo - Ruta Inexistente):**
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "RUTA_INEXISTENTE",
+      "message": "No se encontró ninguna ruta con el id_ruta especificado."
+    }
+  }
+  ```
+
+---
+
+## 3. Códigos de Error Comunes para Control en Frontend
+
+Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar notificaciones o flujos condicionales específicos. Aquí tienes la lista de códigos de error planificados:
+
+| Código de Error | Descripción | Acción recomendada en Frontend |
+|-----------------|-------------|--------------------------------|
+| `PARAMETRO_INVALIDO` | Algún parámetro requerido viene vacío o nulo. | Mostrar alerta de validación local. |
+| `CLIENTE_INEXISTENTE` | El cliente ingresado no existe o está inactivo. | Bloquear la creación de la orden. |
+| `RUTA_INEXISTENTE` | La ruta ingresada no existe en el sistema. | Notificar al usuario que la ruta no fue encontrada. |
+| `STOCK_INSUFICIENTE` | Uno o más productos no disponen de stock en almacén. | Mostrar cuáles productos fallaron y sus cantidades. |
+| `EXCEPCION_TASA_NO_ENCONTRADA` | No existe tasa de cambio registrada para la fecha. | Redirigir o solicitar registro en el Módulo de Mantenimiento de Tasas. |
+| `FECHA_TASA_DUPLICADA` | Se intentó registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
+| `ESTADO_INVALIDO` | La orden no está en el estado requerido para la acción. | Bloquear el botón o refrescar la pantalla. |
+| `SQL_ERROR` | Error interno inesperado en PostgreSQL. | Mostrar error genérico de base de datos e informar al administrador. |
+
