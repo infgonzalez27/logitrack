@@ -16,7 +16,7 @@ export default async function RutasPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Rutas"
-        description="Consulta y edición de rutas de la licencia. No se permiten altas desde la aplicación."
+        description="Consulta y edición de nombre/descripción. No se permiten altas desde la aplicación."
       />
       {!rutasResult.ok ? (
         <p className="lt-alert-error">{rutasResult.error}</p>

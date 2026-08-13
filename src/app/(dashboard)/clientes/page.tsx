@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export default async function ClientesPage() {
             { key: "razon", label: "Razón social" },
             { key: "telefono", label: "Teléfono" },
             { key: "estado", label: "Estado" },
+            { key: "acciones", label: "" },
           ]}
           rows={(clientes ?? []).map((c) => ({
             id: c.id,
@@ -37,6 +39,14 @@ export default async function ClientesPage() {
                 <Badge tone={c.activo ? "success" : "danger"}>
                   {c.activo ? "Activo" : "Inactivo"}
                 </Badge>
+              ),
+              acciones: (
+                <Link
+                  href={`/clientes/${c.id}`}
+                  className="text-sm font-medium text-lt-primary underline-offset-2 hover:underline"
+                >
+                  Editar
+                </Link>
               ),
             },
           }))}
