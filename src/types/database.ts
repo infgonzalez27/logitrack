@@ -59,6 +59,13 @@ export interface PerfilUsuario {
   roles?: Rol | null;
 }
 
+export interface Ruta {
+  id_ruta: string;
+  nombre_ruta: string;
+  descripcion_ruta: string | null;
+  created_at: string;
+}
+
 export interface Cliente {
   id: string;
   rif_nit: string;
@@ -71,6 +78,9 @@ export interface Cliente {
   correo_e: string | null;
   cond_liq: number | null;
   max_liq: number | null;
+  vendedor_id?: string | null;
+  despachador_id?: string | null;
+  id_ruta?: string | null;
   activo: boolean;
   created_at: string;
 }

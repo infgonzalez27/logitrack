@@ -224,6 +224,27 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Comportamiento:** Consulta la tabla `tipos_contenedores` devolviendo una lista con los campos `id` y `nombre`.
   - **Output:** JSON `{ success: boolean, data: ARRAY[{ id: UUID, nombre: TEXT }], error: object }`.
 
+- `[x]` **Tarea DB-020: RPC Consulta de Lista de Rutas (`retorna_lista_rutas`)**
+  - **Función:** Crear un procedure/función `retorna_lista_rutas` que retorne todos los registros de la tabla `rutas` y la cantidad total de registros retornados.
+  - **Inputs:** Ninguno.
+  - **Comportamiento:** Consulta la tabla `rutas` devolviendo el listado completo (`id_ruta`, `nombre_ruta`, `descripcion_ruta`, `created_at`) junto con el conteo de registros (`total_registros`).
+  - **Output:** JSON `{ success: boolean, total_registros: INT, data: ARRAY[{ id_ruta: UUID, nombre_ruta: TEXT, descripcion_ruta: TEXT, created_at: TIMESTAMP }], error: object }`.
+  - **Documentación:** Actualizar `docs/INTEGRACION-RPC.md` con las instrucciones de petición para el programador backend.
+
+- `[x]` **Tarea DB-021: RPC Consulta de Usuarios con Rol Despachador (`retorna_usuarios_despachadores`)**
+  - **Función:** Crear un procedure/función `retorna_usuarios_despachadores` que retorne de la tabla `perfiles_usuario` únicamente a las personas con el rol de `despachador`.
+  - **Inputs:** Ninguno.
+  - **Comportamiento:** Filtra en `perfiles_usuario` aquellos usuarios vinculados al rol `despachador` en la tabla `roles`. Devolviendo `id`, `nombre_completo` y `telefono`.
+  - **Output:** JSON `{ success: boolean, data: ARRAY[{ id: UUID, nombre_completo: TEXT, telefono: TEXT }], error: object }`.
+  - **Documentación:** Actualizar `docs/INTEGRACION-RPC.md` con las instrucciones de petición para el programador backend.
+
+- `[x]` **Tarea DB-022: RPC Actualización de Ruta por UUID (`actualiza_registro_rutas_segun_uuid`)**
+  - **Función:** Crear un procedure/función `actualiza_registro_rutas_segun_uuid` para actualizar la información de una ruta (`nombre_ruta`, `descripcion_ruta`) en la tabla `rutas` según su `id_ruta` (UUID).
+  - **Inputs:** `p_id_ruta UUID`, `p_nombre_ruta TEXT`, `p_descripcion_ruta TEXT DEFAULT NULL`.
+  - **Comportamiento:** Valida la existencia del `id_ruta` y no vacuidad del nombre. Actualiza los campos y retorna el registro modificado.
+  - **Output:** JSON `{ success: boolean, message: TEXT, data: { id_ruta: UUID, nombre_ruta: TEXT, descripcion_ruta: TEXT, created_at: TIMESTAMP }, error: object }`.
+  - **Documentación:** Actualizar `docs/INTEGRACION-RPC.md` con las instrucciones de petición para el programador backend.
+
 
 ### Módulo Backend & Scraping Tasa BCV (Prioridad Media/Alta)
 

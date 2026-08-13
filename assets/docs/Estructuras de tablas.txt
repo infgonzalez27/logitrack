@@ -48,6 +48,13 @@ CREATE TABLE logs_auditoria (
 -- MÓDULO 1: ENTIDADES MAESTRAS (CONTACTOS Y LOGÍSTICA)
 -- ============================================================================
 
+CREATE TABLE rutas (
+    id_ruta UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    nombre_ruta TEXT NOT NULL,
+    descripcion_ruta TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 CREATE TABLE clientes (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     rif_nit TEXT NOT NULL UNIQUE,
@@ -58,8 +65,11 @@ CREATE TABLE clientes (
 	movil2 TEXT,
 	movil3 TEXT,
     correo_e TEXT,
-	cond_liq NUMERIC(1,0),
+    cond_liq NUMERIC(1,0),
 	max_liq NUMERIC(14,2),
+    vendedor_id UUID REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    despachador_id UUID REFERENCES perfiles_usuario(id) ON DELETE SET NULL,
+    id_ruta UUID REFERENCES rutas(id_ruta) ON DELETE SET NULL,
     activo BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

@@ -442,6 +442,95 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.12. Consulta de Lista de Rutas (`retorna_lista_rutas`)
+- **Firma SQL:** `retorna_lista_rutas()`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_rutas');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "total_registros": 2,
+    "data": [
+      {
+        "id_ruta": "3a8f94c0-1122-4433-8899-aabbccdd1122",
+        "nombre_ruta": "Ruta Centro - Comercial",
+        "descripcion_ruta": "Atención a clientes del casco central",
+        "created_at": "2026-08-13T12:00:00+00:00"
+      },
+      {
+        "id_ruta": "4b9f05d1-2233-5544-9900-bbccddee2233",
+        "nombre_ruta": "Ruta Norte - Industrial",
+        "descripcion_ruta": null,
+        "created_at": "2026-08-13T12:05:00+00:00"
+      }
+    ],
+    "error": null
+  }
+  ```
+
+### 2.13. Consulta de Usuarios Despachadores (`retorna_usuarios_despachadores`)
+- **Firma SQL:** `retorna_usuarios_despachadores()`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_usuarios_despachadores');
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
+        "nombre_completo": "Carlos Pérez (Despachador)",
+        "telefono": "+584141112233"
+      },
+      {
+        "id": "6d1b27f3-4455-7766-1122-ddeeff004455",
+        "nombre_completo": "José Rodríguez",
+        "telefono": "+584129998877"
+      }
+    ],
+    "error": null
+  }
+  ```
+
+### 2.14. Actualizar Registro de Ruta por UUID (`actualiza_registro_rutas_segun_uuid`)
+- **Firma SQL:** `actualiza_registro_rutas_segun_uuid(p_id_ruta UUID, p_nombre_ruta TEXT, p_descripcion_ruta TEXT DEFAULT NULL)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('actualiza_registro_rutas_segun_uuid', {
+    p_id_ruta: '3a8f94c0-1122-4433-8899-aabbccdd1122',
+    p_nombre_ruta: 'Ruta Centro - Actualizada',
+    p_descripcion_ruta: 'Nueva descripción de la ruta comercial' // Opcional / Acepta null
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Ruta actualizada exitosamente.",
+    "data": {
+      "id_ruta": "3a8f94c0-1122-4433-8899-aabbccdd1122",
+      "nombre_ruta": "Ruta Centro - Actualizada",
+      "descripcion_ruta": "Nueva descripción de la ruta comercial",
+      "created_at": "2026-08-13T12:00:00+00:00"
+    }
+  }
+  ```
+- **Respuesta esperada en `data` (Fallo - Ruta Inexistente):**
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "RUTA_INEXISTENTE",
+      "message": "No se encontró ninguna ruta con el id_ruta especificado."
+    }
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
@@ -452,6 +541,7 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 |-----------------|-------------|--------------------------------|
 | `PARAMETRO_INVALIDO` | Algún parámetro requerido viene vacío o nulo. | Mostrar alerta de validación local. |
 | `CLIENTE_INEXISTENTE` | El cliente ingresado no existe o está inactivo. | Bloquear la creación de la orden. |
+| `RUTA_INEXISTENTE` | La ruta ingresada no existe en el sistema. | Notificar al usuario que la ruta no fue encontrada. |
 | `STOCK_INSUFICIENTE` | Uno o más productos no disponen de stock en almacén. | Mostrar cuáles productos fallaron y sus cantidades. |
 | `EXCEPCION_TASA_NO_ENCONTRADA` | No existe tasa de cambio registrada para la fecha. | Redirigir o solicitar registro en el Módulo de Mantenimiento de Tasas. |
 | `FECHA_TASA_DUPLICADA` | Se intentó registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
