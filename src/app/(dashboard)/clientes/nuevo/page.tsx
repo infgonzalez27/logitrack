@@ -40,8 +40,6 @@ export default async function NuevoClientePage() {
       }))
     : [];
 
-  const rutaUnica = rutas.length === 1 ? rutas[0] : null;
-
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
@@ -70,19 +68,6 @@ export default async function NuevoClientePage() {
               No hay rutas disponibles en la licencia. El administrador de BD
               debe provisionarlas antes de asignar.
             </p>
-          ) : rutaUnica ? (
-            <>
-              <Input
-                label="Ruta"
-                name="ruta_display"
-                readOnly
-                value={rutaUnica.label}
-              />
-              <input type="hidden" name="id_ruta" value={rutaUnica.value} />
-              <p className="text-xs text-lt-text-muted">
-                Hay una sola ruta en la licencia; se asigna automáticamente.
-              </p>
-            </>
           ) : (
             <Select
               label="Ruta"
