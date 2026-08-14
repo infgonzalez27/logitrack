@@ -245,6 +245,13 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Output:** JSON `{ success: boolean, message: TEXT, data: { id_ruta: UUID, nombre_ruta: TEXT, descripcion_ruta: TEXT, created_at: TIMESTAMP }, error: object }`.
   - **Documentación:** Actualizar `docs/INTEGRACION-RPC.md` con las instrucciones de petición para el programador backend.
 
+- `[x]` **Tarea DB-023: RPC Actualización de Cliente por UUID (`actualiza_registro_cliente_segun_uuid`)**
+  - **Función:** Crear un procedure/función `actualiza_registro_cliente_segun_uuid` para actualizar las modificaciones hechas desde el formulario frontend a la tabla `clientes` según su `id` (`tnId`).
+  - **Inputs:** `p_id UUID` (o `tnId`), `p_rif_nit TEXT DEFAULT NULL`, `p_razon_social TEXT DEFAULT NULL`, `p_direccion_fiscal TEXT DEFAULT NULL`, `p_telefono TEXT DEFAULT NULL`, `p_movil1 TEXT DEFAULT NULL`, `p_movil2 TEXT DEFAULT NULL`, `p_movil3 TEXT DEFAULT NULL`, `p_correo_e TEXT DEFAULT NULL`, `p_cond_liq NUMERIC DEFAULT NULL`, `p_max_liq NUMERIC DEFAULT NULL`, `p_vendedor_id UUID DEFAULT NULL`, `p_despachador_id UUID DEFAULT NULL`, `p_id_ruta UUID DEFAULT NULL`, `p_activo BOOLEAN DEFAULT NULL`.
+  - **Comportamiento:** Valida la existencia del cliente por su ID, valida que el RIF/NIT no esté duplicado en otro cliente si es modificado, y actualiza los campos correspondientes en la tabla `public.clientes`.
+  - **Output:** JSON `{ success: boolean, message: TEXT, data: { id: UUID, rif_nit: TEXT, razon_social: TEXT, ... }, error: object }`.
+  - **Documentación:** Actualizada en `docs/INTEGRACION-RPC.md` con instrucciones de llamado RPC en TypeScript/Next.js.
+
 
 ### Módulo Backend & Scraping Tasa BCV (Prioridad Media/Alta)
 

@@ -531,6 +531,62 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.15. Actualizar Registro de Cliente por UUID (`actualiza_registro_cliente_segun_uuid`)
+- **Firma SQL:** `actualiza_registro_cliente_segun_uuid(p_id UUID, p_rif_nit TEXT DEFAULT NULL, p_razon_social TEXT DEFAULT NULL, p_direccion_fiscal TEXT DEFAULT NULL, p_telefono TEXT DEFAULT NULL, p_movil1 TEXT DEFAULT NULL, p_movil2 TEXT DEFAULT NULL, p_movil3 TEXT DEFAULT NULL, p_correo_e TEXT DEFAULT NULL, p_cond_liq NUMERIC DEFAULT NULL, p_max_liq NUMERIC DEFAULT NULL, p_vendedor_id UUID DEFAULT NULL, p_despachador_id UUID DEFAULT NULL, p_id_ruta UUID DEFAULT NULL, p_activo BOOLEAN DEFAULT NULL)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('actualiza_registro_cliente_segun_uuid', {
+    p_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab',
+    p_rif_nit: 'J-12345678-9',
+    p_razon_social: 'Comercializadora Ejemplo C.A.',
+    p_direccion_fiscal: 'Av. Principal, Edf. LogiTrack, Piso 3',
+    p_telefono: '+582121112233',
+    p_movil1: '+584141234567',
+    p_correo_e: 'contacto@ejemplo.com',
+    p_cond_liq: 15,
+    p_max_liq: 5000,
+    p_vendedor_id: '8a9b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d',
+    p_despachador_id: '5c0a16e2-3344-6655-0011-ccddeeff3344',
+    p_id_ruta: '3a8f94c0-1122-4433-8899-aabbccdd1122',
+    p_activo: true
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Cliente actualizado exitosamente.",
+    "data": {
+      "id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+      "rif_nit": "J-12345678-9",
+      "razon_social": "Comercializadora Ejemplo C.A.",
+      "direccion_fiscal": "Av. Principal, Edf. LogiTrack, Piso 3",
+      "telefono": "+582121112233",
+      "movil1": "+584141234567",
+      "movil2": null,
+      "movil3": null,
+      "correo_e": "contacto@ejemplo.com",
+      "cond_liq": 15,
+      "max_liq": 5000,
+      "vendedor_id": "8a9b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d",
+      "despachador_id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
+      "id_ruta": "3a8f94c0-1122-4433-8899-aabbccdd1122",
+      "activo": true,
+      "created_at": "2026-08-01T10:00:00+00:00"
+    }
+  }
+  ```
+- **Respuesta esperada en `data` (Fallo - Cliente Inexistente):**
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "CLIENTE_INEXISTENTE",
+      "message": "No se encontró ningún cliente con el ID especificado."
+    }
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
@@ -540,11 +596,13 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 | Código de Error | Descripción | Acción recomendada en Frontend |
 |-----------------|-------------|--------------------------------|
 | `PARAMETRO_INVALIDO` | Algún parámetro requerido viene vacío o nulo. | Mostrar alerta de validación local. |
-| `CLIENTE_INEXISTENTE` | El cliente ingresado no existe o está inactivo. | Bloquear la creación de la orden. |
+| `CLIENTE_INEXISTENTE` | El cliente ingresado no existe o está inactivo. | Bloquear la creación de la orden o indicar error. |
+| `RIF_DUPLICADO` | El RIF/NIT especificado ya pertenece a otro cliente registrado. | Notificar al usuario para corregir el RIF/NIT. |
 | `RUTA_INEXISTENTE` | La ruta ingresada no existe en el sistema. | Notificar al usuario que la ruta no fue encontrada. |
 | `STOCK_INSUFICIENTE` | Uno o más productos no disponen de stock en almacén. | Mostrar cuáles productos fallaron y sus cantidades. |
 | `EXCEPCION_TASA_NO_ENCONTRADA` | No existe tasa de cambio registrada para la fecha. | Redirigir o solicitar registro en el Módulo de Mantenimiento de Tasas. |
 | `FECHA_TASA_DUPLICADA` | Se intentó registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
 | `ESTADO_INVALIDO` | La orden no está en el estado requerido para la acción. | Bloquear el botón o refrescar la pantalla. |
 | `SQL_ERROR` | Error interno inesperado en PostgreSQL. | Mostrar error genérico de base de datos e informar al administrador. |
+
 

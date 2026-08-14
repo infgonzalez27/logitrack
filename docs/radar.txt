@@ -1,0 +1,15 @@
+La tarea del despachador es despachar la mercancía a los clientes que le están asignados
+Es posible que despache menos de lo que diga la orden y también retira contenedores de los clientes y estos son rebajados del estado de cuenta del clientes
+Cuando el despachador entra a su sesión debe tener listo la lista de despachos que debe hacer, esa lista se llama "Radar". Creo que es conveniente crear dos tablas llamadas radar_res (tabla padre) radar_det (tabla hija)
+Con los siguientes campos:
+Tabla: radar_res
+id_radar UUID
+id_cliente FK a la tabla clientes
+id_ordendist FK a la tabla Ordenes de Distribucion
+total_unidades_desp numeric
+total_unidades_dev numeroc
+total_conten_desp int
+total_conten_dev int
+total_conten_retirados int
+
+
