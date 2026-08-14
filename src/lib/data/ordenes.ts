@@ -11,7 +11,7 @@ import type {
 
 const ORDEN_DETALLE_SELECT = `
   *,
-  clientes(razon_social, rif_nit, direccion_fiscal, vendedor_id),
+  clientes(razon_social, rif_nit, direccion_fiscal, vendedor_id, despachador_id),
   camiones(placa, modelo),
   choferes(perfil_id, cedula_licencia, perfiles_usuario(nombre_completo)),
   detalle_distribucion(*, productos(nombre, unidad_medida, codigo_producto))
@@ -19,7 +19,7 @@ const ORDEN_DETALLE_SELECT = `
 
 const ORDEN_LISTA_SELECT = `
   *,
-  clientes(razon_social),
+  clientes(razon_social, despachador_id),
   camiones(placa),
   choferes(perfil_id, perfiles_usuario(nombre_completo))
 `;
@@ -32,6 +32,12 @@ function puedeVerOrdenDetalle(
   if (isOrdenStaff(rol)) return true;
   if (userId && orden.creado_por === userId) return true;
   if (rol === "chofer" && userId && orden.chofer_id === userId) return true;
+  if (rol === "despachador" && userId) {
+    const cliente = Array.isArray(orden.clientes)
+      ? orden.clientes[0]
+      : orden.clientes;
+    return cliente?.despachador_id === userId;
+  }
   return false;
 }
 
@@ -73,13 +79,26 @@ async function listarOrdenesLegacy(opts: {
   estado?: OrdenEstado;
 }): Promise<OrdenListaRpc[]> {
   const supabase = await createClient();
+  const listaSelect =
+    opts.rol === "despachador"
+      ? `
+  *,
+  clientes!inner(razon_social, despachador_id),
+  camiones(placa),
+  choferes(perfil_id, perfiles_usuario(nombre_completo))
+`
+      : ORDEN_LISTA_SELECT;
+
   let query = supabase
     .from("ordenes_distribucion")
-    .select(ORDEN_LISTA_SELECT)
+    .select(listaSelect)
     .order("correlativo", { ascending: false });
 
   if (opts.estado) {
     query = query.eq("estado", opts.estado);
+  }
+  if (opts.rol === "despachador" && opts.userId) {
+    query = query.eq("clientes.despachador_id", opts.userId);
   }
 
   const { data, error } = await query;
@@ -94,7 +113,7 @@ async function listarOrdenesLegacy(opts: {
 
   let adminQuery = createAdminClient()
     .from("ordenes_distribucion")
-    .select(ORDEN_LISTA_SELECT)
+    .select(listaSelect)
     .order("correlativo", { ascending: false });
 
   if (opts.estado) {
@@ -104,6 +123,8 @@ async function listarOrdenesLegacy(opts: {
     adminQuery = adminQuery.eq("creado_por", opts.userId);
   } else if (opts.rol === "chofer" && opts.userId) {
     adminQuery = adminQuery.eq("chofer_id", opts.userId);
+  } else if (opts.rol === "despachador" && opts.userId) {
+    adminQuery = adminQuery.eq("clientes.despachador_id", opts.userId);
   }
 
   const { data: adminData, error: adminError } = await adminQuery;
@@ -185,7 +206,7 @@ export async function listarOrdenesDistribucion(opts: {
   const estadoFiltro =
     opts.estado && opts.estado !== "todos" ? opts.estado : undefined;
 
-  if (opts.rol === "chofer") {
+  if (opts.rol === "chofer" || opts.rol === "despachador") {
     return listarOrdenesLegacy({ ...opts, estado: estadoFiltro });
   }
 

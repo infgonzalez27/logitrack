@@ -16,6 +16,8 @@ export default async function HomePage() {
 
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
+  if (rol === "despachador") redirect("/radar");
+
   const supabase = await createClient();
   const [kpis, charts] = await Promise.all([
     fetchDashboardKpis(supabase, rol, user.id),

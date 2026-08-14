@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProductoCatalogo } from "../../nuevo/producto-catalogo";
 import type { ClienteOrdenOption } from "../../nuevo/nueva-orden-form";
+import { LogiImage } from "@/components/media/logi-image";
 import { resolveProductoImage } from "@/lib/product-images";
 import { formatDateOnly, formatNumber } from "@/lib/format";
 import type { ProductoListaRpc, TasaCambio } from "@/types/database";
@@ -200,7 +201,7 @@ export function EditarOrdenForm({
           <ul className="space-y-3">
             {lineas.map((linea) => {
               const producto = catalogo[linea.producto_id];
-              const img = producto
+              const fallback = producto
                 ? resolveProductoImage(producto.nombre)
                 : null;
               return (
@@ -209,14 +210,13 @@ export function EditarOrdenForm({
                   className="grid gap-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/40 p-3 sm:grid-cols-[72px_1fr_auto]"
                 >
                   <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-white">
-                    {img ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={img}
-                        alt=""
-                        className="max-h-full max-w-full object-contain"
-                      />
-                    ) : null}
+                    <LogiImage
+                      path={producto?.imagen_path}
+                      type="producto"
+                      alt={producto?.nombre ?? "Producto"}
+                      fallbackSrc={fallback}
+                      className="max-h-full max-w-full object-contain"
+                    />
                   </div>
                   <div className="min-w-0 space-y-2">
                     <p className="truncate text-sm font-medium text-lt-text">

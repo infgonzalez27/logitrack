@@ -9,10 +9,12 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
 export function DashboardShell({
   userName,
   navSections,
+  homeHref = "/",
   children,
 }: {
   userName: string;
   navSections: NavSection[];
+  homeHref?: string;
   children: React.ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -53,7 +55,7 @@ export function DashboardShell({
             />
           </svg>
         </button>
-        <Logo href="/" size="sm" showWordmark />
+        <Logo href={homeHref} size="sm" showWordmark />
         <p className="ml-auto max-w-[40%] truncate text-right text-xs font-medium text-lt-text-muted">
           {userName}
         </p>
@@ -74,6 +76,7 @@ export function DashboardShell({
             <SidebarNav
               userName={userName}
               navSections={navSections}
+              homeHref={homeHref}
               onNavigate={() => setMenuOpen(false)}
               showClose
               onClose={() => setMenuOpen(false)}
@@ -87,7 +90,11 @@ export function DashboardShell({
           className="lt-no-print hidden w-64 shrink-0 flex-col border-r border-lt-border-light bg-lt-surface lg:flex"
           style={{ boxShadow: "var(--lt-shadow-sidebar)" }}
         >
-          <SidebarNav userName={userName} navSections={navSections} />
+          <SidebarNav
+            userName={userName}
+            navSections={navSections}
+            homeHref={homeHref}
+          />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>

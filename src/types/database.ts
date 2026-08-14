@@ -3,6 +3,7 @@ export type OrdenEstado =
   | "aprobada"
   | "lista_para_carga" // legado pre-migración DB-000
   | "en_transito"
+  | "despachada"
   | "por_liquidar"
   | "liquidada"
   | "anulada";
@@ -57,6 +58,8 @@ export interface PerfilUsuario {
   nombre_completo: string;
   telefono: string | null;
   activo: boolean;
+  /** Ruta relativa en Storage (`/usuarios/...`). DB-025. */
+  imagen_path?: string | null;
   updated_at: string;
   roles?: Rol | null;
 }
@@ -161,6 +164,8 @@ export interface Producto {
   precio_lista1?: number | null;
   precio_lista2?: number | null;
   precio_lista3?: number | null;
+  /** Ruta relativa en Storage (`/productos/...`). DB-025. */
+  imagen_path?: string | null;
   created_at: string;
 }
 
@@ -365,6 +370,54 @@ export type ProductoListaRpc = {
   stock_disponible: number;
   contenedor_id?: string | null;
   unidades_por_contenedor?: number | null;
+  imagen_path?: string | null;
+};
+
+export type RadarCliente = {
+  id: string;
+  razon_social: string;
+  rif_nit: string;
+  direccion_fiscal: string | null;
+  telefono: string | null;
+  movil1: string | null;
+  nombre_ruta: string | null;
+};
+
+export type RadarDetalle = {
+  detalle_id: string;
+  producto_id: string;
+  codigo_producto: string | null;
+  nombre_producto: string;
+  imagen_path?: string | null;
+  cantidad_solicitada: number;
+  cantidad_despachada: number;
+  valor_unitario_recaudar: number | null;
+  subtotal_recaudar: number | null;
+  valor_unitario_usd: number | null;
+  subtotal_recaudar_usd: number | null;
+  estado_entrega: EstadoEntrega | string;
+  motivo_rechazo: string | null;
+  contenedores_retirados: number;
+  contenedor_id: string | null;
+};
+
+export type RadarSaldoContenedor = {
+  contenedor_id: string;
+  nombre_contenedor: string;
+  saldo_pendiente: number;
+};
+
+export type RadarOrden = {
+  orden_id: string;
+  correlativo: number;
+  estado: OrdenEstado | string;
+  fecha_despacho: string | null;
+  tasa_cambio: number | null;
+  total_recaudar_bs: number | null;
+  total_recaudar_usd: number | null;
+  cliente: RadarCliente;
+  detalles: RadarDetalle[];
+  saldo_contenedores: RadarSaldoContenedor[];
 };
 
 export type ContenedorListaRpc = {
@@ -578,6 +631,36 @@ export interface Database {
           success: boolean;
           message?: string;
           data: Cliente | null;
+          error?: { code: string; message: string; details?: string | null } | null;
+        };
+      };
+      retorna_radar_despachador: {
+        Args: Record<string, never>;
+        Returns: {
+          success: boolean;
+          total_ordenes?: number;
+          data: RadarOrden[] | null;
+          error?: { code: string; message: string; details?: string | null } | null;
+        };
+      };
+      registrar_despacho_cliente_radar: {
+        Args: {
+          p_orden_id: string;
+          p_detalles_json: unknown;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data: { orden_id: string; nuevo_estado_orden: string } | null;
+          error?: { code: string; message: string; details?: string | null } | null;
+        };
+      };
+      aprobar_despacho_orden_distribucion: {
+        Args: { p_orden_id: string };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data: { orden_id: string; nuevo_estado: string } | null;
           error?: { code: string; message: string; details?: string | null } | null;
         };
       };

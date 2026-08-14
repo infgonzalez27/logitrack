@@ -9,12 +9,14 @@ import { logoutAction } from "@/lib/actions/auth";
 export function SidebarNav({
   userName,
   navSections,
+  homeHref = "/",
   onNavigate,
   showClose,
   onClose,
 }: {
   userName: string;
   navSections: NavSection[];
+  homeHref?: string;
   onNavigate?: () => void;
   showClose?: boolean;
   onClose?: () => void;
@@ -26,7 +28,7 @@ export function SidebarNav({
       <div className="border-b border-lt-border-light px-4 py-4 sm:px-5 sm:py-5">
         <div className="flex items-start justify-between gap-3">
           <Logo
-            href="/"
+            href={homeHref}
             size="md"
             subtitle="Distribución"
             onNavigate={onNavigate}

@@ -59,12 +59,15 @@ export async function callDbProcedure<T>(
         total_registros?: number;
       };
       return {
-        success: response.success,
-        data: response.data ?? null,
-        error: response.error ?? null,
-        message: response.message,
-        total_registros: withTotal.total_registros,
-      };
+          success: response.success,
+          data: response.data ?? null,
+          error: response.error ?? null,
+          message: response.message,
+          total_registros:
+            withTotal.total_registros ??
+            (response as RpcResponse<T> & { total_ordenes?: number })
+              .total_ordenes,
+        };
     }
   }
 

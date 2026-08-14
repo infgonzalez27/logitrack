@@ -84,6 +84,7 @@ export default async function OrdenDetallePage({
   );
   const puedeRegistrarContenedores =
     canRegistrarContenedores(rol) &&
+    rol !== "despachador" &&
     (orden.estado === "en_transito" || orden.estado === "por_liquidar");
   const tiposContenedores = contenedoresResult.ok
     ? contenedoresResult.contenedores
@@ -229,7 +230,7 @@ export default async function OrdenDetallePage({
         <Card title="Registrar entregas en ruta" className="lt-no-print">
           <p className="mb-4 text-sm text-lt-text-muted">
             Registra la entrega en ruta. Cuando todas las líneas queden
-            registradas, la orden pasa a <strong>por liquidar</strong>.
+            registradas, la orden pasa a <strong>despachada</strong>.
           </p>
           <div className="space-y-4">
             {lineasPendientes.map((linea) => {

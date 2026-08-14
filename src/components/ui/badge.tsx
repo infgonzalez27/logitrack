@@ -31,6 +31,8 @@ export function ordenEstadoTone(estado: string): keyof typeof tones {
       return "info";
     case "en_transito":
       return "warning";
+    case "despachada":
+      return "info";
     case "por_liquidar":
       return "info";
     case "liquidada":

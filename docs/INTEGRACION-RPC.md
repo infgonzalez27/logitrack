@@ -587,6 +587,38 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.16. Consulta de Radar del Despachador (`retorna_radar_despachador`)
+- **Firma SQL:** `retorna_radar_despachador()`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_radar_despachador');
+  ```
+- **Filtro:** órdenes `en_transito` o `despachada` de clientes con `despachador_id = auth.uid()`. Incluye `imagen_path` por producto (DB-025).
+
+### 2.17. Registrar Despacho de Cliente en Radar (`registrar_despacho_cliente_radar`)
+- **Firma SQL:** `registrar_despacho_cliente_radar(p_orden_id UUID, p_detalles_json JSONB)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_despacho_cliente_radar', {
+    p_orden_id: 'UUID_ORDEN',
+    p_detalles_json: [
+      {
+        detalle_id: 'UUID_DETALLE',
+        cantidad_despachada: 8,
+        estado_entrega: 'entregado_parcial',
+        motivo_rechazo: 'Cliente no requería 2 unidades',
+        contenedores_retirados: 5,
+        contenedor_id: 'UUID_CONTENEDOR'
+      }
+    ]
+  });
+  ```
+- **Respuesta esperada:** `{ success: true, data: { orden_id, nuevo_estado_orden: "despachada" } }` cuando no quedan líneas pendientes.
+
+### 2.18. Aprobación de Despacho por Gerencia / Almacén (`aprobar_despacho_orden_distribucion`)
+- **Firma SQL:** `aprobar_despacho_orden_distribucion(p_orden_id UUID)`
+- **Efecto:** pasa la orden de `despachada` a `por_liquidar`.
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend

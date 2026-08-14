@@ -1,16 +1,15 @@
 import type { OrdenEstado } from "@/types/database";
 import type { RolNombre } from "@/lib/auth/roles";
 
-const STAFF_ROLES: RolNombre[] = ["admin", "gerente", "despachador"];
 const APROBADORES: RolNombre[] = ["admin", "gerente"];
-const DESPACHADORES: RolNombre[] = ["admin", "gerente", "despachador"];
-const ENTREGA_ROLES: RolNombre[] = ["admin", "gerente", "despachador", "chofer"];
+const ENTREGA_ROLES: RolNombre[] = ["admin", "gerente", "chofer"];
 
 export const ORDEN_ESTADOS_VALIDOS: OrdenEstado[] = [
   "borrador",
   "aprobada",
   "lista_para_carga", // legado (pre-migración)
   "en_transito",
+  "despachada",
   "por_liquidar",
   "liquidada",
   "anulada",
@@ -48,6 +47,13 @@ const TRANSICIONES_UI: Partial<
     { next: "anulada", label: "Anular", rpc: "anular_orden_distribucion" },
   ],
   en_transito: [],
+  despachada: [
+    {
+      next: "por_liquidar",
+      label: "Aprobar despacho",
+      rpc: "aprobar_despacho_orden_distribucion",
+    },
+  ],
   por_liquidar: [
     {
       next: "liquidada",
@@ -64,6 +70,7 @@ const LABELS: Record<OrdenEstado, string> = {
   aprobada: "Aprobada",
   lista_para_carga: "Lista para carga",
   en_transito: "En tránsito",
+  despachada: "Despachada",
   por_liquidar: "Por liquidar",
   liquidada: "Liquidada",
   anulada: "Anulada",
@@ -78,7 +85,7 @@ export function labelOrdenEstadoValue(estado: OrdenEstado): string {
 }
 
 export function isOrdenStaff(rol: RolNombre | null): boolean {
-  return rol !== null && STAFF_ROLES.includes(rol);
+  return rol !== null && APROBADORES.includes(rol);
 }
 
 export function canCreateOrden(rol: RolNombre | null): boolean {
@@ -102,7 +109,7 @@ export function canRegistrarEntrega(rol: RolNombre | null): boolean {
 }
 
 export function canRegistrarContenedores(rol: RolNombre | null): boolean {
-  return rol !== null && DESPACHADORES.includes(rol);
+  return rol !== null && APROBADORES.includes(rol);
 }
 
 export function canLiquidarOrden(rol: RolNombre | null): boolean {
@@ -126,7 +133,11 @@ function puedeEjecutarTransicion(
   }
 
   if (estadoDestino === "en_transito") {
-    return DESPACHADORES.includes(rol);
+    return APROBADORES.includes(rol);
+  }
+
+  if (estadoDestino === "por_liquidar") {
+    return canLiquidarOrden(rol);
   }
 
   if (estadoDestino === "liquidada") {
@@ -134,7 +145,7 @@ function puedeEjecutarTransicion(
   }
 
   if (estadoDestino === "anulada") {
-    if (APROBADORES.includes(rol) || rol === "despachador") {
+    if (APROBADORES.includes(rol)) {
       return estadoActual === "borrador" || estadoActual === "aprobada" || estadoActual === "lista_para_carga";
     }
     if (rol === "vendedor" && opts?.esCreador) {

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { LogiImage } from "@/components/media/logi-image";
 import {
   PRODUCTO_MARCAS,
   detectProductoMarca,
@@ -99,7 +100,7 @@ export function ProductoCatalogo({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtrados.map((p) => {
-            const img = resolveProductoImage(p.nombre);
+            const fallback = resolveProductoImage(p.nombre);
             const precio = p.precio_lista1 ?? p.precio ?? 0;
             const ya = selected.has(p.id);
             return (
@@ -108,19 +109,13 @@ export function ProductoCatalogo({
                 className="flex flex-col overflow-hidden rounded-xl border border-lt-border-light bg-lt-surface shadow-sm"
               >
                 <div className="flex aspect-square items-center justify-center bg-white p-4">
-                  {img ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={img}
-                      alt={p.nombre}
-                      className="max-h-full max-w-full object-contain"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center rounded-lg bg-lt-surface-muted text-center text-xs text-lt-text-muted">
-                      Sin imagen
-                    </div>
-                  )}
+                  <LogiImage
+                    path={p.imagen_path}
+                    type="producto"
+                    alt={p.nombre}
+                    fallbackSrc={fallback}
+                    className="max-h-full max-w-full object-contain"
+                  />
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-3">
                   <h3 className="line-clamp-2 text-sm font-semibold text-lt-text">

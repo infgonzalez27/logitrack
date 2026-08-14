@@ -327,6 +327,21 @@ export async function updateOrdenEstadoAction(
 
     // Al despachar: acreditar vacíos al cliente según productos con empaque.
     await registrarVaciosEntregaAlDespachar(ordenIdTrim, user.id);
+  } else if (estado === "por_liquidar") {
+    const response = await callDbProcedure<{
+      orden_id: string;
+      nuevo_estado: string;
+    }>("aprobar_despacho_orden_distribucion", { p_orden_id: ordenIdTrim });
+
+    if (!response.success) {
+      return {
+        error: rpcErrorMessage(
+          response,
+          "No se pudo aprobar el despacho.",
+        ),
+        code: response.error?.code,
+      };
+    }
   } else if (estado === "liquidada") {
     // DB-005: requiere rendición aprobada vinculada a la orden
     const response = await callDbProcedure<{

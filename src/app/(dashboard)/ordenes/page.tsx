@@ -46,7 +46,11 @@ export default async function OrdenesPage({
     <div className="space-y-6">
       <PageHeader
         title="Órdenes de distribución"
-        description="Despacho maestro-detalle"
+        description={
+          rol === "despachador"
+            ? "Consulta de órdenes de tus clientes"
+            : "Despacho maestro-detalle"
+        }
         action={
           puedeCrear ? (
             <Button href="/ordenes/nuevo">Nueva orden</Button>

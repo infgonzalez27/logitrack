@@ -96,29 +96,7 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
   ],
 
-  despachador: [
-
-    "/",
-
-    "/ordenes",
-
-    "/prueba-impresion",
-
-    "/clientes",
-
-    "/rutas",
-
-    "/camiones",
-
-    "/choferes",
-
-    "/productos",
-
-    "/inventario-almacen",
-
-    "/inventario-movil",
-
-  ],
+  despachador: ["/radar", "/ordenes"],
 
   vendedor: [
     "/",
@@ -179,50 +157,57 @@ export function labelRol(nombre: RolNombre | null): string {
 
 
 
+export function homeHrefForRole(rol: RolNombre | null): string {
+  if (rol === "despachador") return "/radar";
+  if (rol === "chofer") return "/ordenes";
+  if (rol === "cobrador") return "/rendiciones";
+  return "/";
+}
+
 export function getNavSectionsForRole(rol: RolNombre | null) {
+  if (rol === "despachador") {
+    return [
+      { title: "Ruta", items: [{ href: "/radar", label: "Radar" }] },
+      {
+        title: "Consulta",
+        items: [{ href: "/ordenes", label: "Órdenes de distribución" }],
+      },
+    ];
+  }
 
   const allowed = rol ? ROLE_ALLOWED_HREFS[rol] : ROLE_ALLOWED_HREFS.vendedor;
 
-
-
   if (allowed === "*") {
-
     return [...NAV_SECTIONS];
-
   }
-
-
 
   const allowedSet = new Set(allowed);
 
-
-
   return NAV_SECTIONS.map((section) => ({
-
     ...section,
-
     items: section.items.filter((item) => allowedSet.has(item.href)),
-
   })).filter((section) => section.items.length > 0);
-
 }
 
-
-
 export function canAccessHref(rol: RolNombre | null, href: string): boolean {
+  if (href === "/radar" || href.startsWith("/radar/")) {
+    return rol === "despachador";
+  }
 
-  const sections = getNavSectionsForRole(rol);
+  if (rol === "despachador") {
+    if (href === "/ordenes/nuevo" || href.startsWith("/ordenes/nuevo/")) {
+      return false;
+    }
+    if (/^\/ordenes\/[^/]+\/editar/.test(href)) return false;
+    return href === "/ordenes" || href.startsWith("/ordenes/");
+  }
 
-  return sections.some((section) =>
+  const allowed = rol ? ROLE_ALLOWED_HREFS[rol] : ROLE_ALLOWED_HREFS.vendedor;
+  if (allowed === "*") return true;
 
-    section.items.some(
-
-      (item) => href === item.href || href.startsWith(`${item.href}/`),
-
-    ),
-
+  return allowed.some(
+    (item) => href === item || href.startsWith(`${item}/`),
   );
-
 }
 
 
