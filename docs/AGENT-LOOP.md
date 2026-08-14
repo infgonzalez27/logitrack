@@ -252,6 +252,18 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Output:** JSON `{ success: boolean, message: TEXT, data: { id: UUID, rif_nit: TEXT, razon_social: TEXT, ... }, error: object }`.
   - **Documentación:** Actualizada en `docs/INTEGRACION-RPC.md` con instrucciones de llamado RPC en TypeScript/Next.js.
 
+- `[x]` **Tarea DB-024: Módulo Radar del Despachador (`retorna_radar_despachador`, `registrar_despacho_cliente_radar` y actualización de `liquidar_orden_distribucion`)**
+  - **Función:** Proporcionar la vista automática del Radar para el despachador logueado (`c.despachador_id = auth.uid()`), registrar atómicamente en ruta la entrega de mercancía y envases retirados provisionales (`detalle_distribucion`), y procesar la acreditación definitiva a `movimientos_contenedores` y `saldo_contenedores_clientes` al momento de la liquidación aprobada por la gerencia.
+  - **Inputs:**
+    - `retorna_radar_despachador`: Ninguno (toma `auth.uid()`).
+    - `registrar_despacho_cliente_radar`: `p_orden_id UUID`, `p_detalles_json JSONB` (`[{ detalle_id, cantidad_despachada, estado_entrega, motivo_rechazo, contenedores_retirados, contenedor_id }]`).
+  - **Comportamiento:**
+    - `retorna_radar_despachador` retorna las órdenes `en_transito` de los clientes asignados al despachador logueado.
+    - `registrar_despacho_cliente_radar` actualiza `detalle_distribucion` e `inventario_movil` y transiciona la orden a `por_liquidar`.
+    - `liquidar_orden_distribucion` toma los envases retirados provisionales al aprobar el cierre de día, genera el registro oficial en `movimientos_contenedores`, rebaja el `saldo_contenedores_clientes` y marca la orden como `liquidada`.
+  - **Output:** JSON `{ success: boolean, data: object, error: object }`.
+  - **Documentación:** Actualizada en `docs/INTEGRACION-RPC.md` con instrucciones de petición.
+
 
 ### Módulo Backend & Scraping Tasa BCV (Prioridad Media/Alta)
 

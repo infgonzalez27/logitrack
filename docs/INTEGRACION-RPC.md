@@ -587,6 +587,95 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.16. Consulta de Radar del Despachador (`retorna_radar_despachador`)
+- **Firma SQL:** `retorna_radar_despachador()`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_radar_despachador');
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "total_ordenes": 1,
+    "data": [
+      {
+        "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+        "correlativo": 1025,
+        "estado": "en_transito",
+        "fecha_despacho": "2026-08-14T08:00:00+00:00",
+        "tasa_cambio": 36.50,
+        "total_recaudar_bs": 1825.00,
+        "total_recaudar_usd": 50.00,
+        "cliente": {
+          "id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+          "razon_social": "Comercializadora Ejemplo C.A.",
+          "rif_nit": "J-12345678-9",
+          "direccion_fiscal": "Av. Principal, Edf. LogiTrack, Piso 3",
+          "telefono": "+582121112233",
+          "movil1": "+584141234567",
+          "nombre_ruta": "Ruta Centro"
+        },
+        "detalles": [
+          {
+            "detalle_id": "c3d4e5f6-a7b8-9012-cdef-34567890abcd",
+            "producto_id": "d4e5f6a7-b8c9-0123-def0-4567890abcde",
+            "codigo_producto": "PROD-001",
+            "nombre_producto": "Harina Pan 1kg",
+            "cantidad_solicitada": 10,
+            "cantidad_despachada": 0,
+            "valor_unitario_recaudar": 182.50,
+            "subtotal_recaudar": 1825.00,
+            "valor_unitario_usd": 5.00,
+            "subtotal_recaudar_usd": 50.00,
+            "estado_entrega": "pendiente",
+            "motivo_rechazo": null,
+            "contenedores_retirados": 0,
+            "contenedor_id": null
+          }
+        ],
+        "saldo_contenedores": [
+          {
+            "contenedor_id": "e5f6a7b8-c9d0-1234-ef01-567890abcdef",
+            "nombre_contenedor": "Cesta Plástica Estándar",
+            "saldo_pendiente": 5
+          }
+        ]
+      }
+    ]
+  }
+  ```
+
+### 2.17. Registrar Despacho de Cliente en Radar (`registrar_despacho_cliente_radar`)
+- **Firma SQL:** `registrar_despacho_cliente_radar(p_orden_id UUID, p_detalles_json JSONB)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_despacho_cliente_radar', {
+    p_orden_id: 'b2c3d4e5-f6a7-8901-bcde-234567890abc',
+    p_detalles_json: [
+      {
+        detalle_id: 'c3d4e5f6-a7b8-9012-cdef-34567890abcd',
+        cantidad_despachada: 8,
+        estado_entrega: 'entregado_parcial',
+        motivo_rechazo: 'Cliente no requería las 2 unidades sobrantes',
+        contenedores_retirados: 5,
+        contenedor_id: 'e5f6a7b8-c9d0-1234-ef01-567890abcdef'
+      }
+    ]
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Despacho registrado en radar exitosamente.",
+    "data": {
+      "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+      "nuevo_estado_orden": "por_liquidar"
+    }
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend

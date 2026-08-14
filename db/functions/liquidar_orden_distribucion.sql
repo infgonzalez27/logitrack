@@ -6,128 +6,113 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    v_estado_actual TEXT;
+    v_estado_orden TEXT;
+    v_cliente_id UUID;
     v_camion_id UUID;
     v_chofer_id UUID;
-    v_cliente_id UUID;
-    v_rendicion_id UUID;
-    v_rendicion_estado TEXT;
-    v_item RECORD;
-    v_mov RECORD;
-    v_devolucion INT;
+    v_rendicion_aprobada BOOLEAN := FALSE;
+    v_det RECORD;
 BEGIN
-    -- 1. Validaciones básicas
+    -- Validar parámetro
     IF p_orden_id IS NULL THEN
         RETURN json_build_object(
             'success', false,
-            'data', NULL,
             'error', json_build_object(
                 'code', 'PARAMETRO_INVALIDO',
-                'message', 'El ID de la orden es requerido.',
-                'details', NULL
+                'message', 'El ID de la orden es requerido.'
             )
         );
     END IF;
 
-    -- Obtener datos de la orden
-    SELECT estado, camion_id, chofer_id, cliente_id
-    INTO v_estado_actual, v_camion_id, v_chofer_id, v_cliente_id
+    -- Obtener orden
+    SELECT estado, cliente_id, camion_id, chofer_id
+    INTO v_estado_orden, v_cliente_id, v_camion_id, v_chofer_id
     FROM public.ordenes_distribucion
     WHERE id = p_orden_id;
 
     IF NOT FOUND THEN
         RETURN json_build_object(
             'success', false,
-            'data', NULL,
             'error', json_build_object(
                 'code', 'ORDEN_INEXISTENTE',
-                'message', 'La orden de distribución especificada no existe.',
-                'details', 'ID: ' || p_orden_id
+                'message', 'La orden de distribución especificada no existe.'
             )
         );
     END IF;
 
-    -- Validar que la orden esté en estado 'por_liquidar'
-    IF v_estado_actual != 'por_liquidar' THEN
+    IF v_estado_orden != 'por_liquidar' THEN
         RETURN json_build_object(
             'success', false,
-            'data', NULL,
             'error', json_build_object(
                 'code', 'ESTADO_INVALIDO',
-                'message', 'La orden debe estar en estado por_liquidar para poder ser liquidada.',
-                'details', 'Estado actual: ' || v_estado_actual
+                'message', 'Solo se pueden liquidar órdenes que estén en estado por_liquidar.'
             )
         );
     END IF;
 
-    -- 2. Validar rendición de cuentas (Módulo 4)
-    -- Buscar si hay un detalle de rendición asociado a esta orden
-    SELECT rendicion_id INTO v_rendicion_id
-    FROM public.detalle_rendicion_ordenes
-    WHERE orden_distribucion_id = p_orden_id;
+    -- Verificar que exista una rendición aprobada vinculada a esta orden
+    SELECT EXISTS (
+        SELECT 1 
+        FROM public.detalle_rendicion_ordenes dro
+        JOIN public.rendiciones_cuentas rc ON dro.rendicion_id = rc.id
+        WHERE dro.orden_distribucion_id = p_orden_id
+          AND rc.estado = 'aprobada'
+    ) INTO v_rendicion_aprobada;
 
-    IF NOT FOUND THEN
+    IF NOT v_rendicion_aprobada THEN
         RETURN json_build_object(
             'success', false,
-            'data', NULL,
             'error', json_build_object(
                 'code', 'COBRANZA_PENDIENTE',
-                'message', 'No se puede liquidar la orden porque no tiene ninguna rendición de cuentas registrada.',
-                'details', NULL
+                'message', 'La orden no tiene una rendición de cuentas aprobada vinculada.'
             )
         );
     END IF;
 
-    -- Obtener estado de la rendición
-    SELECT estado INTO v_rendicion_estado
-    FROM public.rendiciones_cuentas
-    WHERE id = v_rendicion_id;
-
-    -- Validar que la rendición esté aprobada
-    IF v_rendicion_estado != 'aprobada' THEN
-        RETURN json_build_object(
-            'success', false,
-            'data', NULL,
-            'error', json_build_object(
-                'code', 'COBRANZA_PENDIENTE',
-                'message', 'No se puede liquidar la orden porque la rendición de cuentas asociada no ha sido aprobada por el gerente.',
-                'details', 'Rendición ID: ' || v_rendicion_id || ' - Estado: ' || v_rendicion_estado
-            )
-        );
-    END IF;
-
-    -- 3. Conciliación Física de Inventario (Devoluciones al almacén principal)
-    FOR v_item IN 
-        SELECT producto_id, cantidad_solicitada, cantidad_despachada
+    -- A. Reingresar mercancía devuelta/rechazada de inventario móvil al almacén principal
+    FOR v_det IN 
+        SELECT producto_id, (cantidad_solicitada - COALESCE(cantidad_despachada, 0)) AS cantidad_devuelta
         FROM public.detalle_distribucion
-        WHERE orden_id = p_orden_id
+        WHERE orden_id = p_orden_id AND (cantidad_solicitada - COALESCE(cantidad_despachada, 0)) > 0
     LOOP
-        -- La cantidad despachada en detalle_distribucion es la que realmente recibió el cliente (se actualiza en registrar_entrega_detalle)
-        -- Por lo tanto, las devoluciones son: cantidad_solicitada (cargada) - cantidad_despachada (recibida)
-        v_devolucion := v_item.cantidad_solicitada - v_item.cantidad_despachada;
+        UPDATE public.inventario_almacen
+        SET stock_disponible = stock_disponible + v_det.cantidad_devuelta,
+            updated_at = NOW()
+        WHERE producto_id = v_det.producto_id;
 
-        IF v_devolucion > 0 THEN
-            -- Regresar la mercancía al stock disponible del almacén principal
-            UPDATE public.inventario_almacen
-            SET stock_disponible = stock_disponible + v_devolucion,
-                updated_at = NOW()
-            WHERE producto_id = v_item.producto_id;
-
-            -- Descontar del inventario móvil del camión (las devoluciones ya no están en el camión)
-            UPDATE public.inventario_movil
-            SET cantidad_devolucion = cantidad_devolucion - v_devolucion,
-                updated_at = NOW()
-            WHERE camion_id = v_camion_id AND producto_id = v_item.producto_id;
-        END IF;
+        UPDATE public.inventario_movil
+        SET cantidad_devolucion = GREATEST(0, cantidad_devolucion - v_det.cantidad_devuelta),
+            updated_at = NOW()
+        WHERE camion_id = v_camion_id AND producto_id = v_det.producto_id;
     END LOOP;
 
-    -- 4. Consolidación del Saldo de Contenedores del Cliente
-    FOR v_mov IN 
-        SELECT contenedor_id, cantidad_entregada, cantidad_retirada
-        FROM public.movimientos_contenedores
-        WHERE orden_id = p_orden_id
+    -- B. Trasladar envases retirados provisionales de detalle_distribucion a movimientos_contenedores y actualizar saldo
+    FOR v_det IN
+        SELECT contenedor_id, SUM(contenedores_retirados) AS total_retirados
+        FROM public.detalle_distribucion
+        WHERE orden_id = p_orden_id AND contenedor_id IS NOT NULL AND contenedores_retirados > 0
+        GROUP BY contenedor_id
     LOOP
-        -- Insertar o actualizar el saldo del cliente para este tipo de contenedor
+        -- Insertar auditoría oficial de movimiento de contenedores
+        INSERT INTO public.movimientos_contenedores (
+            cliente_id,
+            orden_id,
+            contenedor_id,
+            cantidad_entregada,
+            cantidad_retirada,
+            creado_por,
+            created_at
+        ) VALUES (
+            v_cliente_id,
+            p_orden_id,
+            v_det.contenedor_id,
+            0,
+            v_det.total_retirados,
+            auth.uid(),
+            NOW()
+        );
+
+        -- Rebajar el saldo del cliente
         INSERT INTO public.saldo_contenedores_clientes (
             cliente_id,
             contenedor_id,
@@ -135,31 +120,23 @@ BEGIN
             updated_at
         ) VALUES (
             v_cliente_id,
-            v_mov.contenedor_id,
-            GREATEST(0, v_mov.cantidad_entregada - v_mov.cantidad_retirada),
+            v_det.contenedor_id,
+            0,
             NOW()
         )
         ON CONFLICT (cliente_id, contenedor_id)
         DO UPDATE SET
-            saldo_pendiente = GREATEST(0, saldo_contenedores_clientes.saldo_pendiente + (v_mov.cantidad_entregada - v_mov.cantidad_retirada)),
+            saldo_pendiente = GREATEST(0, saldo_contenedores_clientes.saldo_pendiente - v_det.total_retirados),
             updated_at = NOW();
     END LOOP;
 
-    -- 5. Liberar recursos de transporte (Camión y Chofer a disponible)
-    UPDATE public.camiones
-    SET estado = 'disponible'
-    WHERE id = v_camion_id;
+    -- C. Liberar camión y chofer
+    UPDATE public.camiones SET estado = 'disponible' WHERE id = v_camion_id;
+    UPDATE public.choferes SET estado = 'disponible' WHERE perfil_id = v_chofer_id;
 
-    UPDATE public.choferes
-    SET estado = 'disponible'
-    WHERE perfil_id = v_chofer_id;
+    -- D. Transicionar orden a 'liquidada'
+    UPDATE public.ordenes_distribucion SET estado = 'liquidada' WHERE id = p_orden_id;
 
-    -- Cambiar estado de la orden a 'liquidada'
-    UPDATE public.ordenes_distribucion
-    SET estado = 'liquidada'
-    WHERE id = p_orden_id;
-
-    -- 6. Respuesta Exitosa
     RETURN json_build_object(
         'success', true,
         'data', json_build_object(
@@ -173,7 +150,6 @@ EXCEPTION
     WHEN OTHERS THEN
         RETURN json_build_object(
             'success', false,
-            'data', NULL,
             'error', json_build_object(
                 'code', 'SQL_ERROR',
                 'message', SQLERRM,
