@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   actualizarClienteAction,
@@ -25,6 +25,7 @@ export function ClienteEditarForm({
   despachadores: Option[];
 }) {
   const router = useRouter();
+  const rutaUnica = rutas.length === 1 ? rutas[0] : null;
   const [rifNit, setRifNit] = useState(cliente.rif_nit);
   const [razonSocial, setRazonSocial] = useState(cliente.razon_social);
   const [direccionFiscal, setDireccionFiscal] = useState(
@@ -34,13 +35,21 @@ export function ClienteEditarForm({
   const [movil1, setMovil1] = useState(cliente.movil1 ?? "");
   const [correoE, setCorreoE] = useState(cliente.correo_e ?? "");
   const [vendedorId, setVendedorId] = useState(cliente.vendedor_id ?? "");
-  const [idRuta, setIdRuta] = useState(cliente.id_ruta ?? "");
+  const [idRuta, setIdRuta] = useState(
+    () => cliente.id_ruta ?? rutaUnica?.value ?? "",
+  );
   const [despachadorId, setDespachadorId] = useState(
     cliente.despachador_id ?? "",
   );
   const [activo, setActivo] = useState(cliente.activo);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (rutaUnica) {
+      setIdRuta(rutaUnica.value);
+    }
+  }, [rutaUnica]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -119,6 +128,13 @@ export function ClienteEditarForm({
           <p className="text-sm text-amber-700">
             No hay rutas disponibles en la licencia.
           </p>
+        ) : rutaUnica ? (
+          <div className="space-y-1.5">
+            <Input label="Ruta" readOnly value={rutaUnica.label} />
+            <p className="text-xs text-lt-text-muted">
+              Asignada automáticamente (solo hay 1 ruta en la licencia).
+            </p>
+          </div>
         ) : (
           <Select
             label="Ruta"

@@ -12,17 +12,21 @@ import {
 import { formatNumber } from "@/lib/format";
 import type { ProductoListaRpc } from "@/types/database";
 
+const QTY_DEFAULT = 2;
+
 export function ProductoCatalogo({
   productos,
   onAdd,
   selectedIds = [],
 }: {
   productos: ProductoListaRpc[];
-  onAdd: (producto: ProductoListaRpc) => void;
+  onAdd: (producto: ProductoListaRpc, cantidad: number) => void;
   selectedIds?: string[];
 }) {
   const [q, setQ] = useState("");
   const [marca, setMarca] = useState<string>("");
+  const [activoId, setActivoId] = useState<string | null>(null);
+  const [cantidades, setCantidades] = useState<Record<string, number>>({});
 
   const filtrados = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -42,6 +46,21 @@ export function ProductoCatalogo({
   }, [productos, q, marca]);
 
   const selected = new Set(selectedIds);
+
+  function qtyOf(id: string) {
+    return cantidades[id] ?? QTY_DEFAULT;
+  }
+
+  function setQty(id: string, value: number) {
+    const next = Math.max(1, Math.floor(value) || 1);
+    setCantidades((prev) => ({ ...prev, [id]: next }));
+  }
+
+  function añadir(producto: ProductoListaRpc) {
+    const cantidad = qtyOf(producto.id);
+    onAdd(producto, cantidad);
+    setCantidades((prev) => ({ ...prev, [producto.id]: QTY_DEFAULT }));
+  }
 
   return (
     <div className="space-y-4">
@@ -86,7 +105,8 @@ export function ProductoCatalogo({
       </div>
 
       <p className="text-sm text-lt-text-muted">
-        Mostrando {filtrados.length} de {productos.length} productos
+        Mostrando {filtrados.length} de {productos.length} productos. Selecciona
+        uno y elige la cantidad antes de añadir.
       </p>
 
       {!productos.length ? (
@@ -103,12 +123,25 @@ export function ProductoCatalogo({
             const fallback = resolveProductoImage(p.nombre);
             const precio = p.precio_lista1 ?? p.precio ?? 0;
             const ya = selected.has(p.id);
+            const activo = activoId === p.id;
+            const qty = qtyOf(p.id);
+            const sinStock = p.stock_disponible <= 0;
+
             return (
               <article
                 key={p.id}
-                className="flex flex-col overflow-hidden rounded-xl border border-lt-border-light bg-lt-surface shadow-sm"
+                className={`flex flex-col overflow-hidden rounded-xl border bg-lt-surface shadow-sm transition ${
+                  activo
+                    ? "border-lt-primary ring-2 ring-lt-primary/25"
+                    : "border-lt-border-light"
+                }`}
               >
-                <div className="flex aspect-square items-center justify-center bg-white p-2.5 sm:p-4">
+                <button
+                  type="button"
+                  disabled={sinStock}
+                  onClick={() => setActivoId(activo ? null : p.id)}
+                  className="flex aspect-square items-center justify-center bg-white p-2.5 text-left sm:p-4 disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   <LogiImage
                     path={p.imagen_path}
                     type="producto"
@@ -116,7 +149,7 @@ export function ProductoCatalogo({
                     fallbackSrc={fallback}
                     className="max-h-full max-w-full object-contain"
                   />
-                </div>
+                </button>
                 <div className="flex flex-1 flex-col gap-1.5 p-2.5 sm:gap-2 sm:p-3">
                   <h3 className="line-clamp-2 text-xs font-semibold text-lt-text sm:text-sm">
                     {p.nombre}
@@ -128,30 +161,75 @@ export function ProductoCatalogo({
                   <p className="text-base font-bold text-lt-text sm:text-lg">
                     ${formatNumber(Number(precio))}
                   </p>
-                  <Button
-                    type="button"
-                    className="mt-auto w-full px-2 text-xs sm:text-sm"
-                    variant={ya ? "secondary" : "primary"}
-                    disabled={p.stock_disponible <= 0}
-                    onClick={() => onAdd(p)}
-                  >
-                    {p.stock_disponible <= 0
-                      ? "Sin stock"
-                      : ya
-                        ? "Agregar otra"
-                        : "Agregar"}
-                  </Button>
+
+                  {sinStock ? (
+                    <Button
+                      type="button"
+                      className="mt-auto w-full px-2 text-xs sm:text-sm"
+                      variant="secondary"
+                      disabled
+                    >
+                      Sin stock
+                    </Button>
+                  ) : !activo ? (
+                    <Button
+                      type="button"
+                      className="mt-auto w-full px-2 text-xs sm:text-sm"
+                      variant={ya ? "secondary" : "primary"}
+                      onClick={() => setActivoId(p.id)}
+                    >
+                      {ya ? "Añadir más" : "Seleccionar"}
+                    </Button>
+                  ) : (
+                    <div className="mt-auto space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          aria-label="Disminuir cantidad"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lt-surface-muted text-lg font-medium text-lt-text hover:bg-lt-primary-muted"
+                          onClick={() => setQty(p.id, qty - 1)}
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={p.stock_disponible}
+                          value={qty}
+                          onChange={(e) =>
+                            setQty(p.id, Number(e.target.value))
+                          }
+                          className="w-14 rounded-lg border border-lt-border bg-lt-surface px-1 py-1.5 text-center text-sm font-semibold tabular-nums outline-none focus:border-lt-primary focus:ring-2 focus:ring-lt-primary/25"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Aumentar cantidad"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lt-surface-muted text-lg font-medium text-lt-text hover:bg-lt-primary-muted"
+                          onClick={() =>
+                            setQty(
+                              p.id,
+                              Math.min(p.stock_disponible, qty + 1),
+                            )
+                          }
+                        >
+                          +
+                        </button>
+                      </div>
+                      <Button
+                        type="button"
+                        className="w-full px-2 text-xs sm:text-sm"
+                        onClick={() => añadir(p)}
+                      >
+                        Añadir al carrito
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </article>
             );
           })}
         </div>
       )}
-
-      <p className="text-[11px] text-lt-text-subtle">
-        Imágenes de producto: centro de descargas de Cervecería Regional (uso
-        comercial para clientes/distribuidores).
-      </p>
     </div>
   );
 }

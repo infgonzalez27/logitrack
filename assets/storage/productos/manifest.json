@@ -1,0 +1,85 @@
+{
+  "bucket": "productos",
+  "size": 1024,
+  "format": "webp",
+  "items": [
+    {
+      "etiqueta": "Cardenal Estilo Munich",
+      "archivo": "cardenal-estilo-munich.webp",
+      "imagen_path": "/productos/cardenal-estilo-munich.webp",
+      "matches": [
+        "cardenal estilo munich",
+        "estilo munich"
+      ]
+    },
+    {
+      "etiqueta": "Cardenal Ultra",
+      "archivo": "cardenal-ultra.webp",
+      "imagen_path": "/productos/cardenal-ultra.webp",
+      "matches": [
+        "cardenal ultra",
+        "ultra"
+      ]
+    },
+    {
+      "etiqueta": "Malta Morena",
+      "archivo": "malta-morena.webp",
+      "imagen_path": "/productos/malta-morena.webp",
+      "matches": [
+        "malta morena"
+      ]
+    },
+    {
+      "etiqueta": "Malta Regional",
+      "archivo": "malta-regional.webp",
+      "imagen_path": "/productos/malta-regional.webp",
+      "matches": [
+        "malta regional"
+      ]
+    },
+    {
+      "etiqueta": "Morena Tipo Lager",
+      "archivo": "morena-tipo-lager.webp",
+      "imagen_path": "/productos/morena-tipo-lager.webp",
+      "matches": [
+        "morena tipo lager",
+        "morena lager"
+      ]
+    },
+    {
+      "etiqueta": "Morena Tipo Pilsen",
+      "archivo": "morena-tipo-pilsen.webp",
+      "imagen_path": "/productos/morena-tipo-pilsen.webp",
+      "matches": [
+        "morena tipo pilsen",
+        "morena pilsen"
+      ]
+    },
+    {
+      "etiqueta": "Regional (clasica)",
+      "archivo": "regional-clasica.webp",
+      "imagen_path": "/productos/regional-clasica.webp",
+      "matches": [
+        "regional clasica",
+        "regional clásica",
+        "cerveza regional"
+      ]
+    },
+    {
+      "etiqueta": "Regional Light",
+      "archivo": "regional-light.webp",
+      "imagen_path": "/productos/regional-light.webp",
+      "matches": [
+        "regional light"
+      ]
+    },
+    {
+      "etiqueta": "Zulia",
+      "archivo": "zulia.webp",
+      "imagen_path": "/productos/zulia.webp",
+      "matches": [
+        "zulia"
+      ]
+    }
+  ]
+}

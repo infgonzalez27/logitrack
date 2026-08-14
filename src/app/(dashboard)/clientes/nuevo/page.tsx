@@ -32,6 +32,11 @@ export default async function NuevoClientePage() {
         label: r.nombre_ruta,
       }))
     : [];
+  const rutaUnica =
+    rutasResult.ok &&
+    (rutasResult.total_registros === 1 || rutas.length === 1)
+      ? rutas[0]
+      : null;
 
   const despachadores = despachadoresResult.ok
     ? despachadoresResult.despachadores.map((d) => ({
@@ -68,6 +73,14 @@ export default async function NuevoClientePage() {
               No hay rutas disponibles en la licencia. El administrador de BD
               debe provisionarlas antes de asignar.
             </p>
+          ) : rutaUnica ? (
+            <div className="space-y-1.5">
+              <input type="hidden" name="id_ruta" value={rutaUnica.value} />
+              <Input label="Ruta" readOnly value={rutaUnica.label} />
+              <p className="text-xs text-lt-text-muted">
+                Asignada automáticamente (solo hay 1 ruta en la licencia).
+              </p>
+            </div>
           ) : (
             <Select
               label="Ruta"

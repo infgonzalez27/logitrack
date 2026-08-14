@@ -38,7 +38,7 @@ export default async function NuevoProductoPage() {
           <Input
             label="URL / ruta de imagen"
             name="imagen_path"
-            placeholder="/productos/zulia-caja.webp o URL pública de Storage"
+            placeholder="/productos/zulia.webp"
           />
           <p className="text-xs text-lt-text-muted">
             Ruta relativa en Storage (ej.{" "}

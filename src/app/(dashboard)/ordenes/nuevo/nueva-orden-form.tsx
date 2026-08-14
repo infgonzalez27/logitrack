@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProductoCatalogo } from "./producto-catalogo";
+import { FechaDespachoField } from "@/components/ui/fecha-despacho-field";
 import { LogiImage } from "@/components/media/logi-image";
 import { resolveProductoImage } from "@/lib/product-images";
 import { fechaHoyCaracas } from "@/lib/dates";
@@ -67,14 +68,15 @@ export function NuevaOrdenForm({
     setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
   }
 
-  function agregarProducto(producto: ProductoListaRpc) {
+  function agregarProducto(producto: ProductoListaRpc, cantidad: number) {
+    const qty = Math.max(1, Math.floor(cantidad) || 1);
     registrarProducto(producto);
     setLineas((prev) => {
       const existente = prev.find((l) => l.producto_id === producto.id);
       if (existente) {
         return prev.map((l) =>
           l.producto_id === producto.id
-            ? { ...l, cantidad_solicitada: l.cantidad_solicitada + 1 }
+            ? { ...l, cantidad_solicitada: l.cantidad_solicitada + qty }
             : l,
         );
       }
@@ -82,7 +84,7 @@ export function NuevaOrdenForm({
         ...prev,
         {
           producto_id: producto.id,
-          cantidad_solicitada: 1,
+          cantidad_solicitada: qty,
           valor_unitario_recaudar: producto.precio_lista1 ?? producto.precio ?? 0,
         },
       ];
@@ -178,13 +180,11 @@ export function NuevaOrdenForm({
               value={camionId}
               onChange={(e) => setCamionId(e.target.value)}
             />
-            <Input
-              label="Fecha de despacho"
+            <FechaDespachoField
               name="fecha_despacho"
-              type="datetime-local"
               required
               value={fechaDespacho}
-              onChange={(e) => setFechaDespacho(e.target.value)}
+              onChange={setFechaDespacho}
             />
             <Input
               label="Despachador del cliente"

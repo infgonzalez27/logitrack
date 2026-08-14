@@ -53,3 +53,36 @@ Prioridad de foto de producto:
 ## 5. Server Action de subida
 
 Subir el archivo al bucket (`productos` o `usuarios`) y guardar **solo** la ruta relativa en `imagen_path`. No persistir bytes en PostgreSQL.
+
+---
+
+## 6. Catálogo canónico de cajas (listo para upload)
+
+Fuente de verdad local:
+
+| Carpeta | Uso |
+| :--- | :--- |
+| `assets/storage/productos/*.webp` | Archivos listos para el bucket público `productos` |
+| `assets/storage/productos/manifest.json` | Mapa etiqueta → `imagen_path` |
+| `assets/storage/_source/*.png` | Originales (no subir) |
+| `public/productos/*.webp` | Fallback local si `imagen_path` aún es null |
+
+Especificación de cada asset:
+
+- Formato: **WebP**
+- Lienzo: **1024×1024** (producto centrado, fondo blanco)
+- `imagen_path`: `/productos/<slug>.webp`
+
+| Etiqueta | Archivo | `imagen_path` |
+| :--- | :--- | :--- |
+| Cardenal Estilo Munich | `cardenal-estilo-munich.webp` | `/productos/cardenal-estilo-munich.webp` |
+| Cardenal Ultra | `cardenal-ultra.webp` | `/productos/cardenal-ultra.webp` |
+| Malta Morena | `malta-morena.webp` | `/productos/malta-morena.webp` |
+| Malta Regional | `malta-regional.webp` | `/productos/malta-regional.webp` |
+| Morena Tipo Lager | `morena-tipo-lager.webp` | `/productos/morena-tipo-lager.webp` |
+| Morena Tipo Pilsen | `morena-tipo-pilsen.webp` | `/productos/morena-tipo-pilsen.webp` |
+| Regional clásica | `regional-clasica.webp` | `/productos/regional-clasica.webp` |
+| Regional Light | `regional-light.webp` | `/productos/regional-light.webp` |
+| Zulia | `zulia.webp` | `/productos/zulia.webp` |
+
+Tras subir al bucket, actualizar `productos.imagen_path` con la ruta relativa (varios SKU pueden compartir la misma caja).

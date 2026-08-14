@@ -82,7 +82,7 @@ export function ProductoEditarForm({
             <Input
               label="URL / ruta de imagen"
               name="imagen_path"
-              placeholder="/productos/zulia-caja.webp o URL pública de Storage"
+              placeholder="/productos/zulia.webp"
               value={imagenPath}
               onChange={(e) => setImagenPath(e.target.value)}
             />

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProductoCatalogo } from "../../nuevo/producto-catalogo";
 import type { ClienteOrdenOption } from "../../nuevo/nueva-orden-form";
+import { FechaDespachoField } from "@/components/ui/fecha-despacho-field";
 import { LogiImage } from "@/components/media/logi-image";
 import { resolveProductoImage } from "@/lib/product-images";
 import { formatDateOnly, formatNumber } from "@/lib/format";
@@ -65,14 +66,15 @@ export function EditarOrdenForm({
     [clientes, clienteId],
   );
 
-  function agregarProducto(producto: ProductoListaRpc) {
+  function agregarProducto(producto: ProductoListaRpc, cantidad: number) {
+    const qty = Math.max(1, Math.floor(cantidad) || 1);
     setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
     setLineas((prev) => {
       const existente = prev.find((l) => l.producto_id === producto.id);
       if (existente) {
         return prev.map((l) =>
           l.producto_id === producto.id
-            ? { ...l, cantidad_solicitada: l.cantidad_solicitada + 1 }
+            ? { ...l, cantidad_solicitada: l.cantidad_solicitada + qty }
             : l,
         );
       }
@@ -80,7 +82,7 @@ export function EditarOrdenForm({
         ...prev,
         {
           producto_id: producto.id,
-          cantidad_solicitada: 1,
+          cantidad_solicitada: qty,
           valor_unitario_recaudar:
             producto.precio_lista1 ?? producto.precio ?? 0,
         },
@@ -169,12 +171,10 @@ export function EditarOrdenForm({
               "Sin despachador asignado"
             }
           />
-          <Input
-            label="Fecha de despacho"
-            type="datetime-local"
+          <FechaDespachoField
             required
             value={fechaDespacho}
-            onChange={(e) => setFechaDespacho(e.target.value)}
+            onChange={setFechaDespacho}
           />
           <p className="text-xs text-lt-text-muted sm:col-span-2">
             Clave para el Radar del despachador.
