@@ -556,6 +556,31 @@ export interface Database {
           error?: { code: string; message: string; details?: string | null } | null;
         };
       };
+      actualiza_registro_cliente_segun_uuid: {
+        Args: {
+          p_id: string;
+          p_rif_nit?: string | null;
+          p_razon_social?: string | null;
+          p_direccion_fiscal?: string | null;
+          p_telefono?: string | null;
+          p_movil1?: string | null;
+          p_movil2?: string | null;
+          p_movil3?: string | null;
+          p_correo_e?: string | null;
+          p_cond_liq?: number | null;
+          p_max_liq?: number | null;
+          p_vendedor_id?: string | null;
+          p_despachador_id?: string | null;
+          p_id_ruta?: string | null;
+          p_activo?: boolean | null;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data: Cliente | null;
+          error?: { code: string; message: string; details?: string | null } | null;
+        };
+      };
       retorna_lista_productos_segun_parametros: {
         Args: {
           p_parametro: string;

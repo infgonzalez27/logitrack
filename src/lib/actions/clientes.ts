@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
 import { createClient } from "@/lib/supabase/server";
 import type { Cliente } from "@/types/database";
 
@@ -67,9 +68,10 @@ export async function obtenerClienteParaEditarAction(
   };
 }
 
+/** INTEGRACION-RPC §2.15 — `actualiza_registro_cliente_segun_uuid` */
 export async function actualizarClienteAction(
   input: ClienteEditarInput,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; code?: string }> {
   const id = input.id?.trim();
   if (!id || !isUuid(id)) {
     return { ok: false, error: "ID de cliente inválido." };
@@ -104,25 +106,29 @@ export async function actualizarClienteAction(
     return { ok: false, error: "La ruta es obligatoria." };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("clientes")
-    .update({
-      rif_nit: rif,
-      razon_social: razon,
-      direccion_fiscal: direccion,
-      telefono: input.telefono?.trim() || null,
-      movil1: input.movil1?.trim() || null,
-      correo_e: input.correo_e?.trim() || null,
-      vendedor_id: vendedorId,
-      despachador_id: despachadorId,
-      id_ruta: idRuta,
-      activo: !!input.activo,
-    })
-    .eq("id", id);
+  const response = await callDbProcedure<Cliente>(
+    "actualiza_registro_cliente_segun_uuid",
+    {
+      p_id: id,
+      p_rif_nit: rif,
+      p_razon_social: razon,
+      p_direccion_fiscal: direccion,
+      p_telefono: input.telefono?.trim() || null,
+      p_movil1: input.movil1?.trim() || null,
+      p_correo_e: input.correo_e?.trim() || null,
+      p_vendedor_id: vendedorId,
+      p_despachador_id: despachadorId,
+      p_id_ruta: idRuta,
+      p_activo: !!input.activo,
+    },
+  );
 
-  if (error) {
-    return { ok: false, error: error.message };
+  if (!response.success || !response.data) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo actualizar el cliente."),
+      code: response.error?.code,
+    };
   }
 
   revalidatePath("/clientes");
