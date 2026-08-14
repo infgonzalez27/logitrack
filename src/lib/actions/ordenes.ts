@@ -176,6 +176,7 @@ async function resolveDespachadorIdDelCliente(
 export async function createOrdenAction(input: {
   cliente_id: string;
   camion_id: string;
+  fecha_despacho: string;
   lineas: LineaOrdenInput[];
   tasa_cambio?: number | null;
 }) {
@@ -204,6 +205,15 @@ export async function createOrdenAction(input: {
   );
   if (validationError) {
     return { error: validationError };
+  }
+
+  const fechaDespachoInput = input.fecha_despacho?.trim();
+  if (!fechaDespachoInput) {
+    return { error: "La fecha de despacho es obligatoria." };
+  }
+  const fechaDespachoDate = new Date(fechaDespachoInput);
+  if (Number.isNaN(fechaDespachoDate.getTime())) {
+    return { error: "Fecha de despacho inválida." };
   }
 
   const tasa =
@@ -241,6 +251,19 @@ export async function createOrdenAction(input: {
 
   if (!ordenId) {
     return { error: parseRpcError(data, "No se pudo crear la orden.") };
+  }
+
+  const fechaDespacho = input.fecha_despacho?.trim();
+  if (fechaDespacho) {
+    const { error: fechaError } = await supabase
+      .from("ordenes_distribucion")
+      .update({ fecha_despacho: fechaDespachoDate.toISOString() })
+      .eq("id", ordenId);
+    if (fechaError) {
+      return {
+        error: `Orden creada, pero no se pudo guardar la fecha de despacho: ${fechaError.message}`,
+      };
+    }
   }
 
   revalidatePath("/ordenes");

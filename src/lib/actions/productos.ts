@@ -25,6 +25,7 @@ type ProductoTablaRow = {
   precio_lista3: number | null;
   contenedor_id?: string | null;
   unidades_por_contenedor?: number | null;
+  imagen_path?: string | null;
 };
 
 function mapProductoTablaRow(
@@ -43,6 +44,7 @@ function mapProductoTablaRow(
     stock_disponible: stock,
     contenedor_id: row.contenedor_id ?? null,
     unidades_por_contenedor: row.unidades_por_contenedor ?? null,
+    imagen_path: row.imagen_path ?? null,
   };
 }
 
@@ -76,7 +78,7 @@ async function buscarProductosEnTabla(
   const { data: rows, error } = await createAdminClient()
     .from("productos")
     .select(
-      "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor",
+      "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor, imagen_path",
     )
     .or(
       `codigo_producto.ilike.${pattern},nombre.ilike.${pattern},codigo_barras.ilike.${pattern}`,
@@ -129,7 +131,7 @@ async function enriquecerProductosLista(
   const { data, error } = await createAdminClient()
     .from("productos")
     .select(
-      "id, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor",
+      "id, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor, imagen_path",
     )
     .in("id", ids);
 
@@ -155,6 +157,7 @@ async function enriquecerProductosLista(
         contenedor_id: p.contenedor_id ?? row.contenedor_id ?? null,
         unidades_por_contenedor:
           p.unidades_por_contenedor ?? row.unidades_por_contenedor ?? null,
+        imagen_path: p.imagen_path ?? row.imagen_path ?? null,
       };
     }),
   };
@@ -212,7 +215,7 @@ export async function obtenerProductoParaEditarAction(
   const { data, error } = await admin
     .from("productos")
     .select(
-      "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor",
+      "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor, imagen_path",
     )
     .eq("id", productoId)
     .single();
@@ -239,6 +242,7 @@ export async function obtenerProductoParaEditarAction(
       precio_lista3: data.precio_lista3 ?? 0,
       contenedor_id: data.contenedor_id ?? null,
       unidades_por_contenedor: data.unidades_por_contenedor ?? 1,
+      imagen_path: data.imagen_path ?? null,
       stock_disponible: inventario?.stock_disponible,
     },
   };
@@ -320,19 +324,21 @@ export async function actualizarProductoAction(
     contenedorId != null
       ? Math.max(1, Number(input.unidades_por_contenedor) || 1)
       : null;
+  const imagenPath = input.imagen_path?.trim() || null;
 
-  const { error: contenedorError } = await createAdminClient()
+  const { error: extraError } = await createAdminClient()
     .from("productos")
     .update({
       contenedor_id: contenedorId,
       unidades_por_contenedor: unidades,
+      imagen_path: imagenPath,
     })
     .eq("id", input.id.trim());
 
-  if (contenedorError) {
+  if (extraError) {
     return {
       ok: false,
-      error: `Producto actualizado, pero no se pudo guardar el empaque: ${contenedorError.message}`,
+      error: `Producto actualizado, pero no se pudieron guardar empaque/imagen: ${extraError.message}`,
     };
   }
 

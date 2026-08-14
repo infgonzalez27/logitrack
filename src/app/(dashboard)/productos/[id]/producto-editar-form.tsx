@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { actualizarProductoAction } from "@/lib/actions/productos";
+import { LogiImage } from "@/components/media/logi-image";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { resolveProductoImage } from "@/lib/product-images";
 import type { ActualizarProductoRpcInput } from "@/types/database";
 
 type ContenedorOption = { id: string; nombre: string };
@@ -31,6 +33,7 @@ export function ProductoEditarForm({
   const [unidadesPorContenedor, setUnidadesPorContenedor] = useState(
     producto.unidades_por_contenedor ?? 1,
   );
+  const [imagenPath, setImagenPath] = useState(producto.imagen_path ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -49,6 +52,7 @@ export function ProductoEditarForm({
       precio_lista3: precioLista3,
       contenedor_id: contenedorId || null,
       unidades_por_contenedor: contenedorId ? unidadesPorContenedor : null,
+      imagen_path: imagenPath.trim() || null,
     });
 
     if (!result.ok) {
@@ -64,6 +68,34 @@ export function ProductoEditarForm({
   return (
     <Card title="Ficha del producto">
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="mx-auto flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-lt-border-light bg-white p-3 sm:mx-0">
+            <LogiImage
+              path={imagenPath.trim() || null}
+              type="producto"
+              alt={nombre || "Producto"}
+              fallbackSrc={resolveProductoImage(nombre)}
+              className="max-h-full max-w-full object-contain"
+            />
+          </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <Input
+              label="URL / ruta de imagen"
+              name="imagen_path"
+              placeholder="/productos/zulia-caja.webp o URL pública de Storage"
+              value={imagenPath}
+              onChange={(e) => setImagenPath(e.target.value)}
+            />
+            <p className="text-xs text-lt-text-muted">
+              Guarda la ruta relativa en Storage (ej.{" "}
+              <code className="rounded bg-lt-surface-muted px-1">
+                /productos/nombre.webp
+              </code>
+              ) o la URL pública completa. Preferir fotos de caja/empaque.
+            </p>
+          </div>
+        </div>
+
         <Input
           label="Código de producto"
           name="codigo_producto"

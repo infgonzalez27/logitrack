@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ProductoCatalogo } from "./producto-catalogo";
 import { LogiImage } from "@/components/media/logi-image";
 import { resolveProductoImage } from "@/lib/product-images";
+import { fechaHoyCaracas } from "@/lib/dates";
 import { formatDateOnly, formatNumber } from "@/lib/format";
 import type { ProductoListaRpc, TasaCambio } from "@/types/database";
 
@@ -26,6 +27,10 @@ type Linea = {
   cantidad_solicitada: number;
   valor_unitario_recaudar: number;
 };
+
+function defaultFechaDespachoLocal(): string {
+  return `${fechaHoyCaracas()}T08:00`;
+}
 
 export function NuevaOrdenForm({
   clientes,
@@ -47,6 +52,7 @@ export function NuevaOrdenForm({
   const [pending, setPending] = useState(false);
   const [clienteId, setClienteId] = useState("");
   const [camionId, setCamionId] = useState("");
+  const [fechaDespacho, setFechaDespacho] = useState(defaultFechaDespachoLocal);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
     () => Object.fromEntries(productos.map((p) => [p.id, p])),
   );
@@ -110,10 +116,16 @@ export function NuevaOrdenForm({
       setPending(false);
       return;
     }
+    if (!fechaDespacho.trim()) {
+      setError("La fecha de despacho es obligatoria para el Radar.");
+      setPending(false);
+      return;
+    }
 
     const result = await createOrdenAction({
       cliente_id: clienteId,
       camion_id: camionId,
+      fecha_despacho: fechaDespacho,
       lineas,
       tasa_cambio: tasaActual?.tasa_cambio ?? null,
     });
@@ -167,6 +179,14 @@ export function NuevaOrdenForm({
               onChange={(e) => setCamionId(e.target.value)}
             />
             <Input
+              label="Fecha de despacho"
+              name="fecha_despacho"
+              type="datetime-local"
+              required
+              value={fechaDespacho}
+              onChange={(e) => setFechaDespacho(e.target.value)}
+            />
+            <Input
               label="Despachador del cliente"
               readOnly
               value={
@@ -186,6 +206,10 @@ export function NuevaOrdenForm({
               }
             />
           </div>
+          <p className="mt-2 text-xs text-lt-text-muted">
+            La fecha de despacho define cuándo aparece la orden en el Radar del
+            despachador.
+          </p>
           {clienteId && !clienteSeleccionado?.despachador_id ? (
             <p className="mt-2 text-sm text-amber-700">
               Este cliente no tiene despachador. Asígnalo en Clientes antes de

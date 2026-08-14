@@ -105,13 +105,18 @@ export function EditarOrdenForm({
       setPending(false);
       return;
     }
+    if (!fechaDespacho.trim()) {
+      setError("La fecha de despacho es obligatoria para el Radar.");
+      setPending(false);
+      return;
+    }
 
     const result = await actualizaOrdenDistribucionAction({
       correlativo,
       cliente_id: clienteId,
       camion_id: camionId,
       factura_origen_numero: factura,
-      fecha_despacho: fechaDespacho || null,
+      fecha_despacho: fechaDespacho,
       lineas,
     });
 
@@ -165,11 +170,15 @@ export function EditarOrdenForm({
             }
           />
           <Input
-            label="Fecha despacho"
+            label="Fecha de despacho"
             type="datetime-local"
+            required
             value={fechaDespacho}
             onChange={(e) => setFechaDespacho(e.target.value)}
           />
+          <p className="text-xs text-lt-text-muted sm:col-span-2">
+            Clave para el Radar del despachador.
+          </p>
           <Input
             label="Tasa de cambio"
             readOnly

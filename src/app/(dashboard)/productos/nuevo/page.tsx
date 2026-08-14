@@ -35,6 +35,18 @@ export default async function NuevoProductoPage() {
             type="number"
             defaultValue="0"
           />
+          <Input
+            label="URL / ruta de imagen"
+            name="imagen_path"
+            placeholder="/productos/zulia-caja.webp o URL pública de Storage"
+          />
+          <p className="text-xs text-lt-text-muted">
+            Ruta relativa en Storage (ej.{" "}
+            <code className="rounded bg-lt-surface-muted px-1">
+              /productos/nombre.webp
+            </code>
+            ) o URL pública. Preferir fotos de caja/empaque.
+          </p>
           <Select
             label="Empaque / contenedor (opcional)"
             name="contenedor_id"

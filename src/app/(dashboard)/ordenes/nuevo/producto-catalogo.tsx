@@ -98,7 +98,7 @@ export function ProductoCatalogo({
           Sin coincidencias para la búsqueda.
         </p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3 sm:gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
           {filtrados.map((p) => {
             const fallback = resolveProductoImage(p.nombre);
             const precio = p.precio_lista1 ?? p.precio ?? 0;
@@ -108,7 +108,7 @@ export function ProductoCatalogo({
                 key={p.id}
                 className="flex flex-col overflow-hidden rounded-xl border border-lt-border-light bg-lt-surface shadow-sm"
               >
-                <div className="flex aspect-square items-center justify-center bg-white p-4">
+                <div className="flex aspect-square items-center justify-center bg-white p-2.5 sm:p-4">
                   <LogiImage
                     path={p.imagen_path}
                     type="producto"
@@ -117,20 +117,20 @@ export function ProductoCatalogo({
                     className="max-h-full max-w-full object-contain"
                   />
                 </div>
-                <div className="flex flex-1 flex-col gap-2 p-3">
-                  <h3 className="line-clamp-2 text-sm font-semibold text-lt-text">
+                <div className="flex flex-1 flex-col gap-1.5 p-2.5 sm:gap-2 sm:p-3">
+                  <h3 className="line-clamp-2 text-xs font-semibold text-lt-text sm:text-sm">
                     {p.nombre}
                   </h3>
-                  <p className="text-xs text-lt-text-muted">
+                  <p className="text-[10px] text-lt-text-muted sm:text-xs">
                     {p.codigo_producto ? `${p.codigo_producto} · ` : ""}
                     Stock {p.stock_disponible}
                   </p>
-                  <p className="text-lg font-bold text-lt-text">
+                  <p className="text-base font-bold text-lt-text sm:text-lg">
                     ${formatNumber(Number(precio))}
                   </p>
                   <Button
                     type="button"
-                    className="mt-auto w-full"
+                    className="mt-auto w-full px-2 text-xs sm:text-sm"
                     variant={ya ? "secondary" : "primary"}
                     disabled={p.stock_disponible <= 0}
                     onClick={() => onAdd(p)}
@@ -138,8 +138,8 @@ export function ProductoCatalogo({
                     {p.stock_disponible <= 0
                       ? "Sin stock"
                       : ya
-                        ? "Agregar otra unidad"
-                        : "Agregar a la orden"}
+                        ? "Agregar otra"
+                        : "Agregar"}
                   </Button>
                 </div>
               </article>

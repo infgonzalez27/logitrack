@@ -12,10 +12,21 @@ export function resolveProductoImage(nombre: string): string | null {
     return "/productos/malta-regional.webp";
   }
 
-  if (n.includes("zulia")) return "/productos/zulia-lata.webp";
-  if (n.includes("morena")) return "/productos/morena-lata.webp";
-  if (n.includes("pilsen")) return "/productos/regional-pilsen-lata.webp";
-  if (n.includes("regional")) return "/productos/regional-lata.webp";
+  if (n.includes("zulia") && (n.includes("lata") || n.includes("295"))) {
+    return "/productos/zulia-lata.webp";
+  }
+  if (n.includes("zulia")) return "/productos/zulia-botella.webp";
+
+  if (n.includes("morena") && (n.includes("lata") || n.includes("355") || n.includes("250"))) {
+    return "/productos/morena-lata.webp";
+  }
+  if (n.includes("morena")) return "/productos/morena-botella.webp";
+
+  if (n.includes("light")) return "/productos/regional-botella.webp";
+  if (n.includes("pilsen") || (n.includes("regional") && (n.includes("lata") || n.includes("355")))) {
+    return "/productos/regional-pilsen-lata.webp";
+  }
+  if (n.includes("regional")) return "/productos/regional-botella.webp";
 
   return null;
 }

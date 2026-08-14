@@ -452,6 +452,8 @@ export type ActualizarProductoRpcInput = {
   precio_lista3: number;
   contenedor_id?: string | null;
   unidades_por_contenedor?: number | null;
+  /** Ruta relativa Storage o URL pública (`/productos/...`). */
+  imagen_path?: string | null;
 };
 
 export type ActualizarPerfilUsuarioRpcInput = {

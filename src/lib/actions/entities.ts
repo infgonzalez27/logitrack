@@ -145,6 +145,7 @@ export async function createProductoAction(
     cant_unidad_medida: Number(formData.get("cant_unidad_medida") || 0),
     contenedor_id: contenedorRaw || null,
     unidades_por_contenedor: contenedorRaw ? unidadesPorContenedor : null,
+    imagen_path: String(formData.get("imagen_path") || "").trim() || null,
   });
 
   if (error) return { error: error.message };

@@ -17,6 +17,7 @@ export default async function ProductosPage({
       <div className="lt-no-print">
         <PageHeader
           title="Productos"
+          description="Catálogo visual estilo tienda. Toca un producto para editarlo."
           action={
             <div className="flex flex-wrap gap-2">
               <PrintButton label="Imprimir listado" />
