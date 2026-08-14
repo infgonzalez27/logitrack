@@ -671,7 +671,27 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "message": "Despacho registrado en radar exitosamente.",
     "data": {
       "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
-      "nuevo_estado_orden": "por_liquidar"
+      "nuevo_estado_orden": "despachada"
+    }
+  }
+  ```
+
+### 2.18. Aprobación de Despacho por Gerencia / Almacén (`aprobar_despacho_orden_distribucion`)
+- **Firma SQL:** `aprobar_despacho_orden_distribucion(p_orden_id UUID)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('aprobar_despacho_orden_distribucion', {
+    p_orden_id: 'b2c3d4e5-f6a7-8901-bcde-234567890abc'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Despacho de orden aprobado exitosamente. Orden pasa a estado por_liquidar.",
+    "data": {
+      "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+      "nuevo_estado": "por_liquidar"
     }
   }
   ```

@@ -84,7 +84,7 @@ BEGIN
     JOIN public.clientes c ON o.cliente_id = c.id
     LEFT JOIN public.rutas r ON c.id_ruta = r.id_ruta
     WHERE c.despachador_id = v_despachador_id
-      AND o.estado IN ('en_transito', 'por_liquidar');
+      AND o.estado IN ('en_transito', 'despachada');
 
     RETURN v_resultado;
 
@@ -100,4 +100,4 @@ EXCEPTION
 END;
 $$;
 
-COMMENT ON FUNCTION public.retorna_radar_despachador() IS 'Retorna las órdenes en tránsito del despachador autenticado con detalles de mercancía y saldo de envases del cliente';
+COMMENT ON FUNCTION public.retorna_radar_despachador() IS 'Retorna las órdenes en tránsito o despachadas del despachador autenticado con detalles de mercancía y saldo de envases del cliente';

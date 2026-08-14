@@ -45,12 +45,12 @@ BEGIN
         );
     END IF;
 
-    IF v_estado_orden NOT IN ('en_transito', 'por_liquidar') THEN
+    IF v_estado_orden NOT IN ('en_transito', 'despachada') THEN
         RETURN jsonb_build_object(
             'success', FALSE,
             'error', jsonb_build_object(
                 'code', 'ESTADO_INVALIDO',
-                'message', 'Solo se pueden registrar entregas de órdenes en estado en_transito o por_liquidar.'
+                'message', 'Solo se pueden registrar entregas de órdenes en estado en_transito o despachada.'
             )
         );
     END IF;
@@ -92,16 +92,16 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- Verificar si todas las líneas están procesadas
+    -- Verificar si todas las líneas están procesadas para cambiar el estado a 'despachada'
     SELECT COUNT(*) INTO v_pendientes_count
     FROM public.detalle_distribucion
     WHERE orden_id = p_orden_id AND (estado_entrega IS NULL OR estado_entrega = 'pendiente');
 
     IF v_pendientes_count = 0 THEN
         UPDATE public.ordenes_distribucion
-        SET estado = 'por_liquidar'
+        SET estado = 'despachada'
         WHERE id = p_orden_id;
-        v_estado_orden := 'por_liquidar';
+        v_estado_orden := 'despachada';
     END IF;
 
     RETURN jsonb_build_object(
@@ -125,4 +125,4 @@ EXCEPTION
 END;
 $$;
 
-COMMENT ON FUNCTION public.registrar_despacho_cliente_radar(UUID, JSONB) IS 'Registra las entregas y el retiro provisional de envases del cliente desde la interfaz del despachador, cambiando la orden a por_liquidar';
+COMMENT ON FUNCTION public.registrar_despacho_cliente_radar(UUID, JSONB) IS 'Registra las entregas y el retiro provisional de envases del cliente desde la interfaz del despachador, cambiando la orden a despachada';
