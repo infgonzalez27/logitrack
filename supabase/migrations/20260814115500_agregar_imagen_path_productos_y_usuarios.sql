@@ -1,0 +1,167 @@
+-- Migración Tarea DB-025: Agregar campo imagen_path a productos y perfiles_usuario
+
+-- 1. Agregar columna imagen_path a productos
+ALTER TABLE public.productos
+ADD COLUMN IF NOT EXISTS imagen_path TEXT;
+
+COMMENT ON COLUMN public.productos.imagen_path IS 'Ruta relativa de la imagen del producto en el almacenamiento de archivos (ej: /productos/harina-pan.webp)';
+
+-- 2. Agregar columna imagen_path a perfiles_usuario
+ALTER TABLE public.perfiles_usuario
+ADD COLUMN IF NOT EXISTS imagen_path TEXT;
+
+COMMENT ON COLUMN public.perfiles_usuario.imagen_path IS 'Ruta relativa del avatar o fotografía del usuario en el almacenamiento de archivos (ej: /usuarios/avatar-001.webp)';
+
+-- 3. Actualizar RPC retorna_lista_productos_segun_parametros para incluir imagen_path
+CREATE OR REPLACE FUNCTION public.retorna_lista_productos_segun_parametros(
+    p_busqueda TEXT DEFAULT NULL,
+    p_activo BOOLEAN DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_resultado JSONB;
+BEGIN
+    SELECT jsonb_build_object(
+        'success', TRUE,
+        'total_registros', COUNT(p.id),
+        'data', COALESCE(
+            jsonb_agg(
+                jsonb_build_object(
+                    'id', p.id,
+                    'codigo_producto', p.codigo_producto,
+                    'nombre', p.nombre,
+                    'codigo_barras', p.codigo_barras,
+                    'precio_lista1', p.precio_lista1,
+                    'precio_lista2', p.precio_lista2,
+                    'precio_lista3', p.precio_lista3,
+                    'imagen_path', p.imagen_path,
+                    'created_at', p.created_at
+                )
+            ),
+            '[]'::jsonb
+        )
+    ) INTO v_resultado
+    FROM public.productos p
+    WHERE (p_busqueda IS NULL OR p.nombre ILIKE '%' || p_busqueda || '%' OR p.codigo_producto ILIKE '%' || p_busqueda || '%')
+      AND (p_activo IS NULL OR p.activo = p_activo);
+
+    RETURN v_resultado;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN jsonb_build_object(
+            'success', FALSE,
+            'error', jsonb_build_object(
+                'code', SQLSTATE,
+                'message', SQLERRM
+            )
+        );
+END;
+$$;
+
+-- 4. Actualizar RPC retorna_radar_despachador para incluir imagen_path en los productos
+CREATE OR REPLACE FUNCTION public.retorna_radar_despachador()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_despachador_id UUID;
+    v_resultado JSONB;
+BEGIN
+    v_despachador_id := auth.uid();
+
+    IF v_despachador_id IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', FALSE,
+            'error', jsonb_build_object(
+                'code', 'NO_AUTENTICADO',
+                'message', 'El usuario no está autenticado.'
+            )
+        );
+    END IF;
+
+    SELECT jsonb_build_object(
+        'success', TRUE,
+        'total_ordenes', COUNT(o.id),
+        'data', COALESCE(
+            jsonb_agg(
+                jsonb_build_object(
+                    'orden_id', o.id,
+                    'correlativo', o.correlativo,
+                    'estado', o.estado,
+                    'fecha_despacho', o.fecha_despacho,
+                    'tasa_cambio', o.tasa_cambio,
+                    'total_recaudar_bs', o.total_recaudar_bs,
+                    'total_recaudar_usd', o.total_recaudar_usd,
+                    'cliente', jsonb_build_object(
+                        'id', c.id,
+                        'razon_social', c.razon_social,
+                        'rif_nit', c.rif_nit,
+                        'direccion_fiscal', c.direccion_fiscal,
+                        'telefono', c.telefono,
+                        'movil1', c.movil1,
+                        'nombre_ruta', r.nombre_ruta
+                    ),
+                    'detalles', (
+                        SELECT COALESCE(jsonb_agg(
+                            jsonb_build_object(
+                                'detalle_id', d.id,
+                                'producto_id', p.id,
+                                'codigo_producto', p.codigo_producto,
+                                'nombre_producto', p.nombre,
+                                'imagen_path', p.imagen_path,
+                                'cantidad_solicitada', d.cantidad_solicitada,
+                                'cantidad_despachada', COALESCE(d.cantidad_despachada, 0),
+                                'valor_unitario_recaudar', d.valor_unitario_recaudar,
+                                'subtotal_recaudar', d.subtotal_recaudar,
+                                'valor_unitario_usd', d.valor_unitario_usd,
+                                'subtotal_recaudar_usd', d.subtotal_recaudar_usd,
+                                'estado_entrega', COALESCE(d.estado_entrega, 'pendiente'),
+                                'motivo_rechazo', d.motivo_rechazo,
+                                'contenedores_retirados', COALESCE(d.contenedores_retirados, 0),
+                                'contenedor_id', d.contenedor_id
+                            )
+                        ), '[]'::jsonb)
+                        FROM public.detalle_distribucion d
+                        JOIN public.productos p ON d.producto_id = p.id
+                        WHERE d.orden_id = o.id
+                    ),
+                    'saldo_contenedores', (
+                        SELECT COALESCE(jsonb_agg(
+                            jsonb_build_object(
+                                'contenedor_id', tc.id,
+                                'nombre_contenedor', tc.nombre,
+                                'saldo_pendiente', COALESCE(sc.saldo_pendiente, 0)
+                            )
+                        ), '[]'::jsonb)
+                        FROM public.tipos_contenedores tc
+                        LEFT JOIN public.saldo_contenedores_clientes sc ON sc.contenedor_id = tc.id AND sc.cliente_id = c.id
+                    )
+                )
+            ),
+            '[]'::jsonb
+        )
+    ) INTO v_resultado
+    FROM public.ordenes_distribucion o
+    JOIN public.clientes c ON o.cliente_id = c.id
+    LEFT JOIN public.rutas r ON c.id_ruta = r.id_ruta
+    WHERE c.despachador_id = v_despachador_id
+      AND o.estado IN ('en_transito', 'despachada');
+
+    RETURN v_resultado;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN jsonb_build_object(
+            'success', FALSE,
+            'error', jsonb_build_object(
+                'code', SQLSTATE,
+                'message', SQLERRM
+            )
+        );
+END;
+$$;

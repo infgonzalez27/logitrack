@@ -264,6 +264,14 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Output:** JSON `{ success: boolean, data: object, error: object }`.
   - **Documentación:** Actualizada en `docs/INTEGRACION-RPC.md` con instrucciones de petición.
 
+- `[x]` **Tarea DB-025: Incorporación de `imagen_path` en `productos` y `perfiles_usuario` y Estándar de Storage**
+  - **Función:** Agregar la columna `imagen_path TEXT` a las tablas `public.productos` y `public.perfiles_usuario` para almacenar las rutas relativas de fotografías y avatares, actualizar RPCs de consulta y documentar el estándar para el equipo de desarrollo Front/Backend.
+  - **DDL:**
+    - `ALTER TABLE public.productos ADD COLUMN IF NOT EXISTS imagen_path TEXT;`
+    - `ALTER TABLE public.perfiles_usuario ADD COLUMN IF NOT EXISTS imagen_path TEXT;`
+  - **Comportamiento:** Almacena rutas relativas (ej: `/productos/harina-pan.webp`, `/usuarios/avatar-001.webp`). Los RPCs de consulta de productos y radar retornan la propiedad `imagen_path`.
+  - **Documentación:** Creada la guía técnica [docs/ESTANDAR-IMAGENES-STORAGE.md](file:///d:/ProyectosWeb/LogiTrack/docs/ESTANDAR-IMAGENES-STORAGE.md) con componentes de Next.js, fallback de imágenes y Server Actions para subida de archivos.
+
 
 ### Módulo Backend & Scraping Tasa BCV (Prioridad Media/Alta)
 
