@@ -69,10 +69,11 @@ export async function submitCrearOrdenAction(formData: any) {
   const params = {
     p_cliente_id: formData.clienteId,
     p_camion_id: formData.camionId,
-    p_chofer_id: formData.choferId,
-    p_factura_origen_numero: formData.facturaNumero,
-    p_creado_por: formData.usuarioId,
-    p_detalles: JSON.stringify(formData.detalles) // Debe pasarse como string de JSON para ser leído como JSONB
+    p_vendedor_id: formData.usuarioId,
+    p_tasa_cambio: formData.tasaCambio ?? null,
+    p_despachador_id: formData.despachadorId ?? null, // Opcional — DB toma del cliente
+    p_id_ruta: formData.idRuta ?? null, // Opcional — DB toma del cliente
+    p_productos_json: formData.productos,
   };
 
   const response = await callDbProcedure<CrearOrdenData>('crear_orden_distribucion', params);
@@ -102,18 +103,19 @@ export async function submitCrearOrdenAction(formData: any) {
 A continuación se listan las firmas de los procedimientos almacenados que el equipo de base de datos implementará. Utiliza esta sección como referencia para preparar tus componentes de frontend.
 
 ### 2.1. Crear Orden de Distribución (`crear_orden_distribucion`)
-- **Firma SQL:** `crear_orden_distribucion(p_vendedor_id UUID, p_chofer_id UUID, p_cliente_id UUID, p_camion_id UUID, p_tasa_cambio NUMERIC DEFAULT NULL, p_productos_json JSONB DEFAULT '[]'::jsonb)`
-- **Campos multimoneda calculados automáticamente en DB:**
-  - `ordenes_distribucion`: `tasa_cambio`, `total_recaudar_bs` (suma de subtotales en Bs), `total_recaudar_usd` (suma de subtotales en USD).
+- **Firma SQL:** `crear_orden_distribucion(p_vendedor_id UUID, p_cliente_id UUID, p_camion_id UUID, p_tasa_cambio NUMERIC DEFAULT NULL, p_productos_json JSONB DEFAULT '[]'::jsonb, p_despachador_id UUID DEFAULT NULL, p_id_ruta UUID DEFAULT NULL)`
+- **Campos multimoneda y relaciones asociadas automáticamente en DB:**
+  - `ordenes_distribucion`: `tasa_cambio`, `total_recaudar_bs`, `total_recaudar_usd`, `vendedor_id`, `despachador_id` e `id_ruta` (se obtienen del perfil del cliente si no se pasan explícitamente).
   - `detalle_distribucion`: `valor_unitario_recaudar` (Bs), `subtotal_recaudar` (Bs), `valor_unitario_usd` (USD), `subtotal_recaudar_usd` (USD).
 - **Uso en Frontend (RPC) / Cursor Editor:**
   ```typescript
   const { data, error } = await supabase.rpc('crear_orden_distribucion', {
     p_vendedor_id: 'UUID_DEL_VENDEDOR',
-    p_chofer_id: 'UUID_DEL_CHOFER',
     p_cliente_id: 'UUID_DEL_CLIENTE',
     p_camion_id: 'UUID_DEL_CAMION',
     p_tasa_cambio: 50.25, // Opcional (si se omite/es null, toma la tasa oficial más reciente de la tabla tasa_cambio)
+    p_despachador_id: 'UUID_OPCIONAL_DESPACHADOR', // Opcional
+    p_id_ruta: 'UUID_OPCIONAL_RUTA', // Opcional
     p_productos_json: [
       {
         producto_id: 'UUID_PRODUCTO_1',
@@ -593,31 +595,108 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   ```typescript
   const { data, error } = await supabase.rpc('retorna_radar_despachador');
   ```
-- **Filtro:** órdenes `en_transito` o `despachada` de clientes con `despachador_id = auth.uid()`. Incluye `imagen_path` por producto (DB-025).
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "total_ordenes": 1,
+    "data": [
+      {
+        "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+        "correlativo": 1025,
+        "estado": "en_transito",
+        "fecha_despacho": "2026-08-14T08:00:00+00:00",
+        "tasa_cambio": 36.50,
+        "total_recaudar_bs": 1825.00,
+        "total_recaudar_usd": 50.00,
+        "cliente": {
+          "id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+          "razon_social": "Comercializadora Ejemplo C.A.",
+          "rif_nit": "J-12345678-9",
+          "direccion_fiscal": "Av. Principal, Edf. LogiTrack, Piso 3",
+          "telefono": "+582121112233",
+          "movil1": "+584141234567",
+          "nombre_ruta": "Ruta Centro"
+        },
+        "detalles": [
+          {
+            "detalle_id": "c3d4e5f6-a7b8-9012-cdef-34567890abcd",
+            "producto_id": "d4e5f6a7-b8c9-0123-def0-4567890abcde",
+            "codigo_producto": "PROD-001",
+            "nombre_producto": "Harina Pan 1kg",
+            "cantidad_solicitada": 10,
+            "cantidad_despachada": 0,
+            "valor_unitario_recaudar": 182.50,
+            "subtotal_recaudar": 1825.00,
+            "valor_unitario_usd": 5.00,
+            "subtotal_recaudar_usd": 50.00,
+            "estado_entrega": "pendiente",
+            "motivo_rechazo": null,
+            "contenedores_retirados": 0,
+            "contenedor_id": null
+          }
+        ],
+        "saldo_contenedores": [
+          {
+            "contenedor_id": "e5f6a7b8-c9d0-1234-ef01-567890abcdef",
+            "nombre_contenedor": "Cesta Plástica Estándar",
+            "saldo_pendiente": 5
+          }
+        ]
+      }
+    ]
+  }
+  ```
 
 ### 2.17. Registrar Despacho de Cliente en Radar (`registrar_despacho_cliente_radar`)
 - **Firma SQL:** `registrar_despacho_cliente_radar(p_orden_id UUID, p_detalles_json JSONB)`
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('registrar_despacho_cliente_radar', {
-    p_orden_id: 'UUID_ORDEN',
+    p_orden_id: 'b2c3d4e5-f6a7-8901-bcde-234567890abc',
     p_detalles_json: [
       {
-        detalle_id: 'UUID_DETALLE',
+        detalle_id: 'c3d4e5f6-a7b8-9012-cdef-34567890abcd',
         cantidad_despachada: 8,
         estado_entrega: 'entregado_parcial',
-        motivo_rechazo: 'Cliente no requería 2 unidades',
+        motivo_rechazo: 'Cliente no requería las 2 unidades sobrantes',
         contenedores_retirados: 5,
-        contenedor_id: 'UUID_CONTENEDOR'
+        contenedor_id: 'e5f6a7b8-c9d0-1234-ef01-567890abcdef'
       }
     ]
   });
   ```
-- **Respuesta esperada:** `{ success: true, data: { orden_id, nuevo_estado_orden: "despachada" } }` cuando no quedan líneas pendientes.
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Despacho registrado en radar exitosamente.",
+    "data": {
+      "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+      "nuevo_estado_orden": "despachada"
+    }
+  }
+  ```
 
 ### 2.18. Aprobación de Despacho por Gerencia / Almacén (`aprobar_despacho_orden_distribucion`)
 - **Firma SQL:** `aprobar_despacho_orden_distribucion(p_orden_id UUID)`
-- **Efecto:** pasa la orden de `despachada` a `por_liquidar`.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('aprobar_despacho_orden_distribucion', {
+    p_orden_id: 'b2c3d4e5-f6a7-8901-bcde-234567890abc'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Despacho de orden aprobado exitosamente. Orden pasa a estado por_liquidar.",
+    "data": {
+      "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+      "nuevo_estado": "por_liquidar"
+    }
+  }
+  ```
 
 ---
 
@@ -636,4 +715,5 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 | `FECHA_TASA_DUPLICADA` | Se intentó registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
 | `ESTADO_INVALIDO` | La orden no está en el estado requerido para la acción. | Bloquear el botón o refrescar la pantalla. |
 | `SQL_ERROR` | Error interno inesperado en PostgreSQL. | Mostrar error genérico de base de datos e informar al administrador. |
+
 

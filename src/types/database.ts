@@ -501,11 +501,12 @@ export interface Database {
       crear_orden_distribucion: {
         Args: {
           p_vendedor_id: string;
-          p_chofer_id: string;
           p_cliente_id: string;
           p_camion_id: string;
           p_tasa_cambio?: number | null;
-          p_productos_json: ProductoOrdenRpc[];
+          p_productos_json?: ProductoOrdenRpc[];
+          p_despachador_id?: string | null;
+          p_id_ruta?: string | null;
         };
         Returns: {
           success: boolean;

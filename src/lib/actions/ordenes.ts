@@ -89,7 +89,6 @@ function mapProductosJson(
 
 function validateCreateOrdenInput(
   input: {
-    chofer_id: string;
     cliente_id: string;
     camion_id: string;
     lineas: LineaOrdenInput[];
@@ -113,12 +112,6 @@ function validateCreateOrdenInput(
   }
   if (!isUuid(input.camion_id)) {
     return "Camión inválido.";
-  }
-  if (!input.chofer_id?.trim()) {
-    return "El cliente no tiene despachador asignado.";
-  }
-  if (!isUuid(input.chofer_id)) {
-    return "Despachador del cliente inválido.";
   }
   if (!input.lineas.length) {
     return "Agrega al menos una línea de producto.";
@@ -146,31 +139,50 @@ function validateCreateOrdenInput(
   return null;
 }
 
-/** Resuelve el despachador asignado al cliente (va como p_chofer_id del SP). */
-async function resolveDespachadorIdDelCliente(
+/**
+ * Lee despachador y ruta del cliente.
+ * El SP `crear_orden_distribucion` los asocia solos si no se pasan;
+ * igual los enviamos cuando existen (y validamos despachador para Radar).
+ */
+async function resolveClienteOrdenFields(
   clienteId: string,
 ): Promise<
-  { ok: true; despachador_id: string } | { ok: false; error: string }
+  | {
+      ok: true;
+      despachador_id: string | null;
+      id_ruta: string | null;
+    }
+  | { ok: false; error: string }
 > {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("clientes")
-    .select("despachador_id")
+    .select("despachador_id, id_ruta")
     .eq("id", clienteId)
     .maybeSingle();
 
   if (error) {
     return { ok: false, error: error.message };
   }
-  const despachadorId = data?.despachador_id?.trim();
-  if (!despachadorId || !isUuid(despachadorId)) {
-    return {
-      ok: false,
-      error:
-        "El cliente no tiene despachador asignado. Asígnalo en la ficha del cliente.",
-    };
+  if (!data) {
+    return { ok: false, error: "Cliente inexistente." };
   }
-  return { ok: true, despachador_id: despachadorId };
+
+  const despachadorId = data.despachador_id?.trim() || null;
+  const idRuta = data.id_ruta?.trim() || null;
+
+  if (despachadorId && !isUuid(despachadorId)) {
+    return { ok: false, error: "Despachador del cliente inválido." };
+  }
+  if (idRuta && !isUuid(idRuta)) {
+    return { ok: false, error: "Ruta del cliente inválida." };
+  }
+
+  return {
+    ok: true,
+    despachador_id: despachadorId,
+    id_ruta: idRuta,
+  };
 }
 
 export async function createOrdenAction(input: {
@@ -189,20 +201,18 @@ export async function createOrdenAction(input: {
     return { error: "No tienes permiso para crear órdenes de distribución." };
   }
 
-  const despachadorResult = await resolveDespachadorIdDelCliente(
-    input.cliente_id.trim(),
-  );
-  if (!despachadorResult.ok) {
-    return { error: despachadorResult.error };
+  const clienteFields = await resolveClienteOrdenFields(input.cliente_id.trim());
+  if (!clienteFields.ok) {
+    return { error: clienteFields.error };
+  }
+  if (!clienteFields.despachador_id) {
+    return {
+      error:
+        "El cliente no tiene despachador asignado. Asígnalo en la ficha del cliente.",
+    };
   }
 
-  const validationError = validateCreateOrdenInput(
-    {
-      ...input,
-      chofer_id: despachadorResult.despachador_id,
-    },
-    user?.id,
-  );
+  const validationError = validateCreateOrdenInput(input, user?.id);
   if (validationError) {
     return { error: validationError };
   }
@@ -228,14 +238,15 @@ export async function createOrdenAction(input: {
     return { error: "Agrega al menos una línea de producto." };
   }
 
-  // DB-016b: p_chofer_id = despachador asignado al cliente (sin selector de chofer).
+  // INTEGRACION-RPC §2.1 — sin p_chofer_id; despachador/ruta opcionales (DB los toma del cliente).
   const { data, error } = await supabase.rpc("crear_orden_distribucion", {
     p_vendedor_id: user!.id,
-    p_chofer_id: despachadorResult.despachador_id,
     p_cliente_id: input.cliente_id.trim(),
     p_camion_id: input.camion_id.trim(),
     p_tasa_cambio: tasa,
     p_productos_json: productosJson,
+    p_despachador_id: clienteFields.despachador_id,
+    p_id_ruta: clienteFields.id_ruta,
   });
 
   if (error) {
@@ -729,11 +740,15 @@ export async function actualizaOrdenDistribucionAction(input: {
     return { error: "Agrega al menos una línea de producto." };
   }
 
-  const despachadorResult = await resolveDespachadorIdDelCliente(
-    input.cliente_id.trim(),
-  );
-  if (!despachadorResult.ok) {
-    return { error: despachadorResult.error };
+  const clienteFields = await resolveClienteOrdenFields(input.cliente_id.trim());
+  if (!clienteFields.ok) {
+    return { error: clienteFields.error };
+  }
+  if (!clienteFields.despachador_id) {
+    return {
+      error:
+        "El cliente no tiene despachador asignado. Asígnalo en la ficha del cliente.",
+    };
   }
 
   const response = await callDbProcedure<{
@@ -747,7 +762,9 @@ export async function actualizaOrdenDistribucionAction(input: {
     p_header: {
       cliente_id: input.cliente_id.trim(),
       camion_id: input.camion_id.trim(),
-      chofer_id: despachadorResult.despachador_id,
+      chofer_id: clienteFields.despachador_id,
+      despachador_id: clienteFields.despachador_id,
+      id_ruta: clienteFields.id_ruta,
       fecha_despacho: input.fecha_despacho?.trim() || null,
       factura_origen_numero: input.factura_origen_numero?.trim() || null,
     },
