@@ -278,7 +278,7 @@ export async function createOrdenAction(input: {
   }
 
   revalidatePath("/ordenes");
-  redirect(`/ordenes/${ordenId}`);
+  redirect("/ordenes");
 }
 
 export async function updateOrdenEstadoAction(
@@ -787,9 +787,7 @@ export async function actualizaOrdenDistribucionAction(input: {
   revalidatePath("/ordenes");
   if (ordenId) {
     revalidatePath(`/ordenes/${ordenId}`);
-    redirect(`/ordenes/${ordenId}`);
   }
-
-  return { success: true, data: response.data };
+  redirect("/ordenes");
 }
 
