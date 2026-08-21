@@ -158,7 +158,10 @@ export interface OrdenDistribucion {
   correlativo: number;
   cliente_id: string;
   camion_id: string;
-  chofer_id: string;
+  chofer_id: string | null;
+  vendedor_id?: string | null;
+  despachador_id?: string | null;
+  id_ruta?: string | null;
   estado: OrdenEstado;
   fecha_despacho: string | null;
   peso_total_calculado: number;
@@ -179,9 +182,10 @@ export interface DetalleDistribucion {
   cantidad_despachada: number;
   valor_unitario_recaudar: number;
   subtotal_recaudar: number;
-  secuencia_entrega: number | null;
+  secuencia_entrega: number;
   estado_entrega: EstadoEntrega;
   motivo_rechazo: string | null;
+  created_at: string;
   productos?: Producto | null;
 }
 
@@ -364,10 +368,12 @@ export interface Database {
       crear_orden_distribucion: {
         Args: {
           p_vendedor_id: string;
-          p_chofer_id: string;
           p_cliente_id: string;
           p_camion_id: string;
+          p_tasa_cambio?: number | null;
           p_productos_json: ProductoOrdenRpc[];
+          p_despachador_id?: string | null;
+          p_id_ruta?: string | null;
         };
         Returns: {
           success: boolean;

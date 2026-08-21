@@ -1,3 +1,41 @@
+-- Migration: Quitar FK chofer_id y actualizar crear_orden_distribucion sin p_chofer_id
+
+-- 1. Quitar restricciones FK y UNIQUE de chofer_id en ordenes_distribucion
+ALTER TABLE public.ordenes_distribucion DROP CONSTRAINT IF EXISTS ordenes_distribucion_chofer_id_fkey;
+ALTER TABLE public.ordenes_distribucion DROP CONSTRAINT IF EXISTS ordenes_distribucion_chofer_id_key;
+DROP INDEX IF EXISTS public.ordenes_distribucion_chofer_id_key;
+ALTER TABLE public.ordenes_distribucion ALTER COLUMN chofer_id DROP NOT NULL;
+
+-- 2. Asegurar existencia de columnas y FKs para vendedor_id, despachador_id e id_ruta en ordenes_distribucion
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'ordenes_distribucion' AND column_name = 'vendedor_id'
+    ) THEN
+        ALTER TABLE public.ordenes_distribucion ADD COLUMN vendedor_id UUID REFERENCES public.perfiles_usuario(id) ON DELETE SET NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'ordenes_distribucion' AND column_name = 'despachador_id'
+    ) THEN
+        ALTER TABLE public.ordenes_distribucion ADD COLUMN despachador_id UUID REFERENCES public.perfiles_usuario(id) ON DELETE SET NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'ordenes_distribucion' AND column_name = 'id_ruta'
+    ) THEN
+        ALTER TABLE public.ordenes_distribucion ADD COLUMN id_ruta UUID REFERENCES public.rutas(id_ruta) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- 3. Eliminar firmas anteriores de la función crear_orden_distribucion
+DROP FUNCTION IF EXISTS public.crear_orden_distribucion(UUID, UUID, UUID, UUID, NUMERIC, JSONB);
+DROP FUNCTION IF EXISTS public.crear_orden_distribucion(UUID, UUID, UUID, NUMERIC, JSONB);
+
+-- 4. Recrear función crear_orden_distribucion sin p_chofer_id
 CREATE OR REPLACE FUNCTION public.crear_orden_distribucion(
     p_vendedor_id UUID,
     p_cliente_id UUID,

@@ -102,18 +102,19 @@ export async function submitCrearOrdenAction(formData: any) {
 A continuación se listan las firmas de los procedimientos almacenados que el equipo de base de datos implementará. Utiliza esta sección como referencia para preparar tus componentes de frontend.
 
 ### 2.1. Crear Orden de Distribución (`crear_orden_distribucion`)
-- **Firma SQL:** `crear_orden_distribucion(p_vendedor_id UUID, p_chofer_id UUID, p_cliente_id UUID, p_camion_id UUID, p_tasa_cambio NUMERIC DEFAULT NULL, p_productos_json JSONB DEFAULT '[]'::jsonb)`
-- **Campos multimoneda calculados automáticamente en DB:**
-  - `ordenes_distribucion`: `tasa_cambio`, `total_recaudar_bs` (suma de subtotales en Bs), `total_recaudar_usd` (suma de subtotales en USD).
+- **Firma SQL:** `crear_orden_distribucion(p_vendedor_id UUID, p_cliente_id UUID, p_camion_id UUID, p_tasa_cambio NUMERIC DEFAULT NULL, p_productos_json JSONB DEFAULT '[]'::jsonb, p_despachador_id UUID DEFAULT NULL, p_id_ruta UUID DEFAULT NULL)`
+- **Campos multimoneda y relaciones asociadas automáticamente en DB:**
+  - `ordenes_distribucion`: `tasa_cambio`, `total_recaudar_bs`, `total_recaudar_usd`, `vendedor_id`, `despachador_id` e `id_ruta` (se obtienen del perfil del cliente si no se pasan explícitamente).
   - `detalle_distribucion`: `valor_unitario_recaudar` (Bs), `subtotal_recaudar` (Bs), `valor_unitario_usd` (USD), `subtotal_recaudar_usd` (USD).
 - **Uso en Frontend (RPC) / Cursor Editor:**
   ```typescript
   const { data, error } = await supabase.rpc('crear_orden_distribucion', {
     p_vendedor_id: 'UUID_DEL_VENDEDOR',
-    p_chofer_id: 'UUID_DEL_CHOFER',
     p_cliente_id: 'UUID_DEL_CLIENTE',
     p_camion_id: 'UUID_DEL_CAMION',
     p_tasa_cambio: 50.25, // Opcional (si se omite/es null, toma la tasa oficial más reciente de la tabla tasa_cambio)
+    p_despachador_id: 'UUID_OPCIONAL_DESPACHADOR', // Opcional
+    p_id_ruta: 'UUID_OPCIONAL_RUTA', // Opcional
     p_productos_json: [
       {
         producto_id: 'UUID_PRODUCTO_1',

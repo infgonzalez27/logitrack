@@ -85,7 +85,7 @@ export function NuevaOrdenForm({
     const result = await createOrdenAction({
       cliente_id: clienteId,
       camion_id: camionId,
-      chofer_id: choferId,
+      chofer_id: choferId || undefined,
       lineas: lineas.filter((l) => l.producto_id),
     });
 
@@ -130,9 +130,8 @@ export function NuevaOrdenForm({
               onChange={(e) => setCamionId(e.target.value)}
             />
             <Select
-              label="Chofer"
+              label="Chofer (Opcional)"
               name="chofer_id"
-              required
               placeholder="Selecciona chofer"
               options={choferes}
               value={choferId}

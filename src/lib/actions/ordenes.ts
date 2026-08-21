@@ -67,7 +67,7 @@ function mapProductosJson(lineas: LineaOrdenInput[]): ProductoOrdenRpc[] {
 
 function validateCreateOrdenInput(
   input: {
-    chofer_id: string;
+    chofer_id?: string;
     cliente_id: string;
     camion_id: string;
     lineas: LineaOrdenInput[];
@@ -92,10 +92,7 @@ function validateCreateOrdenInput(
   if (!isUuid(input.camion_id)) {
     return "Camión inválido.";
   }
-  if (!input.chofer_id?.trim()) {
-    return "Selecciona un chofer.";
-  }
-  if (!isUuid(input.chofer_id)) {
+  if (input.chofer_id?.trim() && !isUuid(input.chofer_id)) {
     return "Chofer inválido.";
   }
   if (!input.lineas.length) {
@@ -127,7 +124,7 @@ function validateCreateOrdenInput(
 export async function createOrdenAction(input: {
   cliente_id: string;
   camion_id: string;
-  chofer_id: string;
+  chofer_id?: string;
   lineas: LineaOrdenInput[];
 }) {
   const supabase = await createClient();
@@ -151,7 +148,6 @@ export async function createOrdenAction(input: {
 
   const { data, error } = await supabase.rpc("crear_orden_distribucion", {
     p_vendedor_id: user!.id,
-    p_chofer_id: input.chofer_id.trim(),
     p_cliente_id: input.cliente_id.trim(),
     p_camion_id: input.camion_id.trim(),
     p_productos_json: productosJson,
