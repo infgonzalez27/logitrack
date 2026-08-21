@@ -46,15 +46,19 @@ export default async function OrdenDetallePage({
 
   const cliente = joinOne(orden.clientes);
   const camion = joinOne(orden.camiones);
-  const chofer = joinOne(orden.choferes);
-  const perfilChofer = joinOne(chofer?.perfiles_usuario);
-  const nombresPerfil = orden.chofer_id
-    ? await getNombresPerfilByIds([orden.chofer_id])
+  const perfilIds = [
+    orden.despachador_id,
+    orden.chofer_id,
+    orden.vendedor_id,
+  ].filter((id): id is string => !!id);
+  const nombresPerfil = perfilIds.length
+    ? await getNombresPerfilByIds(perfilIds)
     : {};
   const choferNombre =
-    perfilChofer?.nombre_completo ??
+    (orden.despachador_id
+      ? nombresPerfil[orden.despachador_id]
+      : null) ??
     (orden.chofer_id ? nombresPerfil[orden.chofer_id] : null) ??
-    chofer?.cedula_licencia ??
     null;
 
   const detalle = [...(orden.detalle_distribucion ?? [])].sort(
@@ -179,7 +183,7 @@ export default async function OrdenDetallePage({
               </dd>
             </div>
             <div>
-              <dt className="text-lt-text-muted">Chofer</dt>
+              <dt className="text-lt-text-muted">Despachador</dt>
               <dd className="font-medium">{choferNombre ?? "—"}</dd>
             </div>
           </dl>

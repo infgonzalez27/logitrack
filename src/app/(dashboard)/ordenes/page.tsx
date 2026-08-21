@@ -38,8 +38,10 @@ export default async function OrdenesPage({
     estado: estadoFiltro,
   });
 
-  const nombresChofer = await getNombresPerfilByIds(
-    ordenes.map((o) => o.chofer_id).filter(Boolean) as string[],
+  const nombresPerfil = await getNombresPerfilByIds(
+    ordenes
+      .flatMap((o) => [o.despachador_id, o.chofer_id])
+      .filter(Boolean) as string[],
   );
 
   return (
@@ -92,7 +94,7 @@ export default async function OrdenesPage({
             { key: "correlativo", label: "#" },
             { key: "factura", label: "Factura origen" },
             { key: "cliente", label: "Cliente" },
-            { key: "chofer", label: "Chofer" },
+            { key: "chofer", label: "Despachador" },
             { key: "estado", label: "Estado" },
             { key: "tasa", label: "Tasa" },
             { key: "total_bs", label: "Total Bs" },
@@ -105,9 +107,10 @@ export default async function OrdenesPage({
               correlativo: `#${o.correlativo}`,
               factura: o.factura_origen_numero,
               cliente: o.cliente_razon_social ?? "—",
-              chofer: o.chofer_id
-                ? (nombresChofer[o.chofer_id] ?? "—")
-                : "—",
+              chofer: (() => {
+                const id = o.despachador_id || o.chofer_id;
+                return id ? (nombresPerfil[id] ?? "—") : "—";
+              })(),
               estado: (
                 <Badge tone={ordenEstadoTone(o.estado)}>
                   {labelOrdenEstado(o.estado)}

@@ -196,7 +196,10 @@ export interface OrdenDistribucion {
   correlativo: number;
   cliente_id: string;
   camion_id: string;
-  chofer_id: string;
+  chofer_id: string | null;
+  vendedor_id?: string | null;
+  despachador_id?: string | null;
+  id_ruta?: string | null;
   estado: OrdenEstado;
   fecha_despacho: string | null;
   peso_total_calculado: number;
@@ -208,6 +211,7 @@ export interface OrdenDistribucion {
   created_at: string;
   clientes?: Cliente | null;
   camiones?: Camion | null;
+  /** @deprecated FK a choferes eliminada; usar despachador_id + perfiles. */
   choferes?: Chofer | null;
   detalle_distribucion?: DetalleDistribucion[];
 }
@@ -221,6 +225,7 @@ export type OrdenListaRpc = {
   cliente_vendedor_id: string | null;
   camion_id: string | null;
   chofer_id: string | null;
+  despachador_id?: string | null;
   estado: OrdenEstado;
   fecha_despacho: string | null;
   peso_total_calculado: number | null;

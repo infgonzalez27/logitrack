@@ -13,15 +13,13 @@ const ORDEN_DETALLE_SELECT = `
   *,
   clientes(razon_social, rif_nit, direccion_fiscal, vendedor_id, despachador_id),
   camiones(placa, modelo),
-  choferes(perfil_id, cedula_licencia, perfiles_usuario(nombre_completo)),
   detalle_distribucion(*, productos(nombre, unidad_medida, codigo_producto))
 `;
 
 const ORDEN_LISTA_SELECT = `
   *,
   clientes(razon_social, despachador_id),
-  camiones(placa),
-  choferes(perfil_id, perfiles_usuario(nombre_completo))
+  camiones(placa)
 `;
 
 function puedeVerOrdenDetalle(
@@ -31,8 +29,10 @@ function puedeVerOrdenDetalle(
 ): boolean {
   if (isOrdenStaff(rol)) return true;
   if (userId && orden.creado_por === userId) return true;
+  if (userId && orden.vendedor_id === userId) return true;
   if (rol === "chofer" && userId && orden.chofer_id === userId) return true;
   if (rol === "despachador" && userId) {
+    if (orden.despachador_id === userId) return true;
     const cliente = Array.isArray(orden.clientes)
       ? orden.clientes[0]
       : orden.clientes;
@@ -61,6 +61,7 @@ function mapOrdenTablaALista(orden: OrdenDistribucion): OrdenListaRpc {
     cliente_vendedor_id: cliente?.vendedor_id ?? null,
     camion_id: orden.camion_id,
     chofer_id: orden.chofer_id,
+    despachador_id: orden.despachador_id ?? null,
     estado: orden.estado,
     fecha_despacho: orden.fecha_despacho,
     peso_total_calculado: orden.peso_total_calculado,
@@ -84,8 +85,7 @@ async function listarOrdenesLegacy(opts: {
       ? `
   *,
   clientes!inner(razon_social, despachador_id),
-  camiones(placa),
-  choferes(perfil_id, perfiles_usuario(nombre_completo))
+  camiones(placa)
 `
       : ORDEN_LISTA_SELECT;
 
@@ -111,6 +111,7 @@ async function listarOrdenesLegacy(opts: {
     ).map(mapOrdenTablaALista);
   }
 
+  // Sin join a choferes: la FK se eliminó y PostgREST falla si el embed sigue activo.
   let adminQuery = createAdminClient()
     .from("ordenes_distribucion")
     .select(listaSelect)
@@ -160,8 +161,9 @@ async function listarPorEstadoRpc(
 
 /**
  * Detalle de orden para UI.
- * Tras crear, el redirect a `/ordenes/[id]` hacía 404 al vendedor: el SELECT con
- * joins a `camiones`/`choferes` no pasa RLS aunque la orden exista (RPC).
+ * No embebe `choferes`: la FK `ordenes_distribucion.chofer_id` → `choferes`
+ * se eliminó (migración 20260821); PostgREST rompe el SELECT y devolvía 404
+ * tras crear la orden.
  */
 export async function getOrdenDistribucionDetalle(
   id: string,
