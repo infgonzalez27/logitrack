@@ -272,6 +272,18 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Comportamiento:** Almacena rutas relativas (ej: `/productos/harina-pan.webp`, `/usuarios/avatar-001.webp`). Los RPCs de consulta de productos y radar retornan la propiedad `imagen_path`.
   - **Documentación:** Creada la guía técnica [docs/ESTANDAR-IMAGENES-STORAGE.md](file:///d:/ProyectosWeb/LogiTrack/docs/ESTANDAR-IMAGENES-STORAGE.md) con componentes de Next.js, fallback de imágenes y Server Actions para subida de archivos.
 
+- `[x]` **Tarea DB-026: Módulo de Control de Radares por Despachador (`radars`)**
+  - **Función:** Soporte para el control centralizado de radares por fecha y despachador (Sección 4 de `PROPOSICION-CAMBIOS-DB.md`), generación de reportes impresos/digitales, reasignación de órdenes no despachadas y registro atómico del resultado del despacho.
+  - **DDL & Estructura:**
+    - `CREATE TABLE public.radars (id, correlativo, despachador_id, fecha_despacho, total_cantidad_solicitada, total_cantidad_despachada, total_contenedores_retirados, status_radar, created_at);`
+    - `ALTER TABLE public.ordenes_distribucion ADD COLUMN radar_id UUID REFERENCES public.radars(id);`
+  - **RPCs Implementadas:**
+    - `crear_o_obtener_radar(p_despachador_id, p_fecha_despacho)`: Crea o recupera el radar y vincula órdenes.
+    - `retorna_radar_detalle_reporte(p_radar_id)`: Genera el JSON estructurado para el reporte global y detalle de órdenes.
+    - `reasignar_orden_a_radar(p_orden_id, p_nuevo_radar_id, p_nueva_fecha)`: Mueve una orden a otro radar o fecha.
+    - `guardar_resultado_despacho_radar(p_radar_id, p_despacho_json)`: Guarda atómicamente la hoja de ruta, `movimientos_contenedores`, actualiza estados a `por_liquidar` y marca `status_radar = true`.
+  - **Documentación:** Especificado en [docs/INTEGRACION-RPC.md](file:///d:/ProyectosWeb/LogiTrack/docs/INTEGRACION-RPC.md#L700).
+
 
 ### Módulo Backend & Scraping Tasa BCV (Prioridad Media/Alta)
 

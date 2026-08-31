@@ -1,0 +1,47 @@
+Cambios en el Radar.
+Se debe crear una tabla maestra para el control de los radares, tabla puede llamarse "radars"
+Los campos que debe tener la tabla son los siguientes:
+radar_id UUID
+despachador_id
+fecha_despacho DATE
+total_cantidad_solicitada numeric sin decimales
+total_cantidad_despachada numeric sin decimales
+total_contenedores_retirados numeric sin decimales
+status_radar boolean (.T. si el despacho salió asi no sea completo el mismo, .F. si no salió el despacho)
+created_at timestamptz
+
+Se me ocurre la idea de crear el campo radar_id FK en detalle_distribucion para identificarlo e incluirlo en el radar.
+La intención es que desde el Front se pueda imprimir el radar (reporte) al despachador asignado, el reporte debe tener los siguientes datos:
+radar_id
+fecha_despacho
+despachador_id
+perfiles_usuario.nombre_completo
+ordenes_distribucion.id
+detalle_distribucion.producto_id
+productos.nombre
+detalle_distribucion.cantidad_solicitada
+detalle_distribucion.cantidad_despachada (obviamente sin información)
+detalle_distribucion.motivo_rechazo (obviamente sin información)
+detalle_distribucion.contenedores_retirados (obviamente sin información)
+
+Importante, es posible que una ordenes_distribucion.id se cambie a un siguiente radar, porque no se pudo despachar ese día al igual que el campo radar_id FK en detalle_distribucion
+se debe permitir ese cambio.
+
+El Front debe mostrar electronicamente el radar para que sea editado por el despachador. los campos que el despachador puede editar son:
+cantidad_despachada
+motivo_rechazo
+contenedores_retirados
+
+Creo que eso depende del front y no de nosotros que somos la capa de datos.
+
+No quise usar tabla hija, creo que con las relaciones se pueden capturar los datos necesitados.
+Tienes permiso para asesorarme según tu experiencia
+
+Puntos importantes:
+la fecha_despacho viene de la tabla ordenes_distribucion.fecha_despacho.
+El PROCEDURE guardar_resultado_despacho_radar.sql debe llenar las tablas involucradas: detalle_distribucion y movimientos_contenedores (cantidad_entregada, cantidad_retirada)
+La cantidad entregada es automática si el producto tiene asignado un contenedor y es un contenedor por producto.
+Lo tienes contemplado así?
+
+Vamos agregar un nuevo campo a la tabla radars titulado aprobado tipo bollean, porque cuando el despachador entrege cuentas al gerente este gerente es quien aprueba
+y al aprobar se ejecutan los STORE PROCEDURE.
