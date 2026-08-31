@@ -66,6 +66,8 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/ordenes",
 
+    "/radar",
+
     "/prueba-impresion",
 
     "/clientes",
@@ -101,6 +103,7 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
   vendedor: [
     "/",
     "/ordenes",
+    "/radar",
     "/prueba-impresion",
     "/clientes",
     "/rutas",
@@ -191,7 +194,12 @@ export function getNavSectionsForRole(rol: RolNombre | null) {
 
 export function canAccessHref(rol: RolNombre | null, href: string): boolean {
   if (href === "/radar" || href.startsWith("/radar/")) {
-    return rol === "despachador";
+    return (
+      rol === "despachador" ||
+      rol === "gerente" ||
+      rol === "vendedor" ||
+      rol === "admin"
+    );
   }
 
   if (rol === "despachador") {

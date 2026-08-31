@@ -425,6 +425,59 @@ export type RadarOrden = {
   saldo_contenedores: RadarSaldoContenedor[];
 };
 
+/** Cabecera de `radars` — INTEGRACION-RPC §2.19 */
+export type RadarCabecera = {
+  id: string;
+  correlativo: number;
+  despachador_id: string;
+  fecha_despacho: string;
+  status_radar: boolean;
+  total_cantidad_solicitada: number;
+  total_cantidad_despachada: number;
+  total_contenedores_retirados: number;
+  total_ordenes?: number;
+  created_at?: string;
+};
+
+export type RadarReporteProducto = {
+  producto_id: string;
+  codigo_producto: string | null;
+  nombre_producto: string;
+  imagen_path?: string | null;
+  cantidad_solicitada: number;
+  cantidad_despachada: number;
+};
+
+export type RadarReporteDespachador = {
+  id: string;
+  nombre_completo: string;
+  telefono: string | null;
+  correo_e?: string | null;
+  ci_rif?: string | null;
+};
+
+/** Respuesta de `retorna_radar_detalle_reporte` — §2.20 */
+export type RadarDetalleReporte = {
+  radar: Omit<RadarCabecera, "despachador_id" | "total_ordenes"> & {
+    created_at?: string;
+  };
+  despachador: RadarReporteDespachador;
+  resumen_productos: RadarReporteProducto[];
+  ordenes: Array<{
+    orden_id?: string;
+    id?: string;
+    correlativo?: number;
+    estado?: string;
+    fecha_despacho?: string | null;
+    cliente?: Partial<RadarCliente> & {
+      razon_social?: string;
+      rif_nit?: string;
+    };
+    detalles?: RadarDetalle[];
+    [key: string]: unknown;
+  }>;
+};
+
 export type ContenedorListaRpc = {
   id: string;
   nombre: string;

@@ -177,7 +177,8 @@ export function EditarOrdenForm({
             onChange={setFechaDespacho}
           />
           <p className="text-xs text-lt-text-muted sm:col-span-2">
-            Clave para el Radar del despachador.
+            La fecha de entrega, junto con el despachador del cliente, es la
+            clave para agrupar la orden en el Radar.
           </p>
           <Input
             label="Tasa de cambio"

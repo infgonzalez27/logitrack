@@ -207,13 +207,13 @@ export function NuevaOrdenForm({
             />
           </div>
           <p className="mt-2 text-xs text-lt-text-muted">
-            La fecha de despacho define cuándo aparece la orden en el Radar del
-            despachador.
+            La fecha de entrega es la clave del Radar: junto con el despachador
+            del cliente agrupa la orden al crear el radar (gerente/vendedor).
           </p>
           {clienteId && !clienteSeleccionado?.despachador_id ? (
             <p className="mt-2 text-sm text-amber-700">
               Este cliente no tiene despachador. Asígnalo en Clientes antes de
-              crear la orden.
+              crear la orden; sin despachador no entra en ningún radar.
             </p>
           ) : null}
           {!tasaActual ? (

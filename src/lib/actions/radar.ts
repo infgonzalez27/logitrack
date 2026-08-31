@@ -3,8 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentProfile } from "@/lib/auth";
 import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
-import { getRoleNameFromProfile } from "@/lib/auth/roles";
-import type { RadarOrden } from "@/types/database";
+import { getRoleNameFromProfile, type RolNombre } from "@/lib/auth/roles";
+import type {
+  RadarCabecera,
+  RadarDetalleReporte,
+  RadarOrden,
+} from "@/types/database";
 
 export type RadarDetalleInput = {
   detalle_id: string;
@@ -15,6 +19,15 @@ export type RadarDetalleInput = {
   contenedor_id: string | null;
 };
 
+const ROLES_CREAR_RADAR: RolNombre[] = ["admin", "gerente", "vendedor"];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function canCreateRadar(rol: RolNombre | null): boolean {
+  return !!rol && ROLES_CREAR_RADAR.includes(rol);
+}
+
 /** INTEGRACION-RPC §2.16 — `retorna_radar_despachador` */
 export async function retornaRadarDespachadorAction(): Promise<
   { ok: true; ordenes: RadarOrden[] } | { ok: false; error: string }
@@ -22,7 +35,7 @@ export async function retornaRadarDespachadorAction(): Promise<
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
   if (rol !== "despachador") {
-    return { ok: false, error: "El radar solo está disponible para despachadores." };
+    return { ok: false, error: "El radar de ruta solo está disponible para despachadores." };
   }
 
   const response = await callDbProcedure<RadarOrden[]>("retorna_radar_despachador");
@@ -116,4 +129,99 @@ export async function registrarDespachoClienteRadarAction(input: {
   revalidatePath("/ordenes");
   revalidatePath(`/ordenes/${ordenId}`);
   return { ok: true, estado: response.data?.nuevo_estado_orden };
+}
+
+/** INTEGRACION-RPC §2.19 — `crear_o_obtener_radar` */
+export async function crearOObtenerRadarAction(input: {
+  despachador_id: string;
+  fecha_despacho: string;
+}): Promise<
+  { ok: true; radar: RadarCabecera } | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (!canCreateRadar(rol)) {
+    return {
+      ok: false,
+      error: "Solo gerente, vendedor o admin pueden crear el radar.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  const despachadorId = input.despachador_id?.trim();
+  const fecha = input.fecha_despacho?.trim().slice(0, 10);
+
+  if (!despachadorId || !UUID_RE.test(despachadorId)) {
+    return {
+      ok: false,
+      error: "Selecciona un despachador válido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+  if (!fecha || !DATE_RE.test(fecha)) {
+    return {
+      ok: false,
+      error: "Indica la fecha de entrega (AAAA-MM-DD).",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const response = await callDbProcedure<RadarCabecera>("crear_o_obtener_radar", {
+    p_despachador_id: despachadorId,
+    p_fecha_despacho: fecha,
+  });
+
+  if (!response.success || !response.data) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo crear u obtener el radar."),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/radar");
+  return { ok: true, radar: response.data };
+}
+
+/** INTEGRACION-RPC §2.20 — `retorna_radar_detalle_reporte` */
+export async function retornaRadarDetalleReporteAction(
+  radarId: string,
+): Promise<
+  | { ok: true; reporte: RadarDetalleReporte }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (
+    rol !== "despachador" &&
+    rol !== "gerente" &&
+    rol !== "vendedor" &&
+    rol !== "admin"
+  ) {
+    return { ok: false, error: "No tienes acceso al reporte de radar." };
+  }
+
+  const id = radarId?.trim();
+  if (!id || !UUID_RE.test(id)) {
+    return {
+      ok: false,
+      error: "Identificador de radar inválido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const response = await callDbProcedure<RadarDetalleReporte>(
+    "retorna_radar_detalle_reporte",
+    { p_radar_id: id },
+  );
+
+  if (!response.success || !response.data) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo cargar el reporte del radar."),
+      code: response.error?.code,
+    };
+  }
+
+  return { ok: true, reporte: response.data };
 }

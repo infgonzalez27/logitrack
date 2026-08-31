@@ -698,6 +698,144 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.19. Crear u Obtener Radar por Despachador y Fecha (`crear_o_obtener_radar`)
+- **Firma SQL:** `crear_o_obtener_radar(p_despachador_id UUID DEFAULT NULL, p_fecha_despacho DATE DEFAULT CURRENT_DATE)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('crear_o_obtener_radar', {
+    p_despachador_id: '5c0a16e2-3344-6655-0011-ccddeeff3344', // Opcional (toma auth.uid() si es null)
+    p_fecha_despacho: '2026-08-31' // Opcional (toma CURRENT_DATE si es null)
+  });
+  ```
+- **Respuesta esperada en `data` (??xito):**
+  ```json
+  {
+    "success": true,
+    "message": "Radar obtenido/creado exitosamente.",
+    "data": {
+      "id": "e1f2a3b4-c5d6-7890-ef01-234567890abc",
+      "correlativo": 1,
+      "despachador_id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
+      "fecha_despacho": "2026-08-31",
+      "status_radar": false,
+      "total_cantidad_solicitada": 150,
+      "total_cantidad_despachada": 0,
+      "total_contenedores_retirados": 0,
+      "total_ordenes": 3
+    }
+  }
+  ```
+
+### 2.20. Reporte Detallado del Radar (`retorna_radar_detalle_reporte`)
+- **Firma SQL:** `retorna_radar_detalle_reporte(p_radar_id UUID)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_radar_detalle_reporte', {
+    p_radar_id: 'e1f2a3b4-c5d6-7890-ef01-234567890abc'
+  });
+  ```
+- **Respuesta esperada en `data` (??xito):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "radar": {
+        "id": "e1f2a3b4-c5d6-7890-ef01-234567890abc",
+        "correlativo": 1,
+        "fecha_despacho": "2026-08-31",
+        "status_radar": false,
+        "total_cantidad_solicitada": 150,
+        "total_cantidad_despachada": 0,
+        "total_contenedores_retirados": 0,
+        "created_at": "2026-08-31T15:30:00+00:00"
+      },
+      "despachador": {
+        "id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
+        "nombre_completo": "Carlos P??rez",
+        "telefono": "+584141112233",
+        "correo_e": "carlos.perez@logitrack.com",
+        "ci_rif": "V-18234567"
+      },
+      "resumen_productos": [
+        {
+          "producto_id": "d4e5f6a7-b8c9-0123-def0-4567890abcde",
+          "codigo_producto": "PROD-001",
+          "nombre_producto": "Harina Pan 1kg",
+          "imagen_path": "/productos/harina-pan.webp",
+          "cantidad_solicitada": 100,
+          "cantidad_despachada": 0
+        }
+      ],
+      "ordenes": [...]
+    }
+  }
+  ```
+
+### 2.21. Reasignar Orden a un Nuevo Radar (`reasignar_orden_a_radar`)
+- **Firma SQL:** `reasignar_orden_a_radar(p_orden_id UUID, p_nuevo_radar_id UUID DEFAULT NULL, p_nueva_fecha DATE DEFAULT NULL)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('reasignar_orden_a_radar', {
+    p_orden_id: 'b2c3d4e5-f6a7-8901-bcde-234567890abc',
+    p_nuevo_radar_id: 'f2a3b4c5-d6e7-8901-2345-67890abcdef1',
+    p_nueva_fecha: '2026-09-01'
+  });
+  ```
+- **Respuesta esperada en `data` (??xito):**
+  ```json
+  {
+    "success": true,
+    "message": "Orden reasignada exitosamente.",
+    "data": {
+      "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+      "radar_id": "f2a3b4c5-d6e7-8901-2345-67890abcdef1",
+      "fecha_despacho": "2026-09-01"
+    }
+  }
+  ```
+
+### 2.22. Guardar Resultado del Despacho del Radar (`guardar_resultado_despacho_radar`)
+- **Firma SQL:** `guardar_resultado_despacho_radar(p_radar_id UUID, p_despacho_json JSONB)`
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('guardar_resultado_despacho_radar', {
+    p_radar_id: 'e1f2a3b4-c5d6-7890-ef01-234567890abc',
+    p_despacho_json: {
+      "ordenes": [
+        {
+          "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+          "detalles": [
+            {
+              "detalle_id": "c3d4e5f6-a7b8-9012-cdef-34567890abcd",
+              "cantidad_despachada": 10,
+              "estado_entrega": "entregado",
+              "motivo_rechazo": null,
+              "contenedores_retirados": 2,
+              "contenedor_id": "e5f6a7b8-c9d0-1234-ef01-567890abcdef"
+            }
+          ]
+        }
+      ]
+    }
+  });
+  ```
+- **Respuesta esperada en `data` (??xito):**
+  ```json
+  {
+    "success": true,
+    "message": "Resultado del despacho registrado en el radar exitosamente.",
+    "data": {
+      "radar_id": "e1f2a3b4-c5d6-7890-ef01-234567890abc",
+      "status_radar": true,
+      "total_cantidad_solicitada": 150,
+      "total_cantidad_despachada": 145,
+      "total_contenedores_retirados": 12
+    }
+  }
+  ```
+
+---
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
@@ -715,5 +853,3 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 | `FECHA_TASA_DUPLICADA` | Se intentó registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
 | `ESTADO_INVALIDO` | La orden no está en el estado requerido para la acción. | Bloquear el botón o refrescar la pantalla. |
 | `SQL_ERROR` | Error interno inesperado en PostgreSQL. | Mostrar error genérico de base de datos e informar al administrador. |
-
-
