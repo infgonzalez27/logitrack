@@ -194,22 +194,30 @@ BEGIN
     SELECT COALESCE(
         jsonb_agg(
             jsonb_build_object(
-                'producto_id', p.id,
-                'codigo_producto', p.codigo_producto,
-                'nombre_producto', p.nombre,
-                'imagen_path', p.imagen_path,
-                'cantidad_solicitada', SUM(d.cantidad_solicitada),
-                'cantidad_despachada', SUM(COALESCE(d.cantidad_despachada, 0))
+                'producto_id', sub.producto_id,
+                'codigo_producto', sub.codigo_producto,
+                'nombre_producto', sub.nombre_producto,
+                'imagen_path', sub.imagen_path,
+                'cantidad_solicitada', sub.cantidad_solicitada,
+                'cantidad_despachada', sub.cantidad_despachada
             )
         ),
         '[]'::jsonb
     )
     INTO v_resumen_productos
-    FROM public.ordenes_distribucion o
-    JOIN public.detalle_distribucion d ON d.orden_id = o.id
-    JOIN public.productos p ON d.producto_id = p.id
-    WHERE o.radar_id = p_radar_id
-    GROUP BY p.id, p.codigo_producto, p.nombre, p.imagen_path;
+    FROM (
+        SELECT p.id AS producto_id,
+               p.codigo_producto,
+               p.nombre AS nombre_producto,
+               p.imagen_path,
+               SUM(d.cantidad_solicitada) AS cantidad_solicitada,
+               SUM(COALESCE(d.cantidad_despachada, 0)) AS cantidad_despachada
+        FROM public.ordenes_distribucion o
+        JOIN public.detalle_distribucion d ON d.orden_id = o.id
+        JOIN public.productos p ON d.producto_id = p.id
+        WHERE o.radar_id = p_radar_id
+        GROUP BY p.id, p.codigo_producto, p.nombre, p.imagen_path
+    ) sub;
 
     -- 4. Detalle orden por orden
     SELECT COALESCE(
