@@ -439,6 +439,12 @@ export type RadarCabecera = {
   created_at?: string;
 };
 
+/** Fila del listado de radares (tabla `radars`). */
+export type RadarListaItem = RadarCabecera & {
+  despachador_nombre: string;
+  total_ordenes: number;
+};
+
 export type RadarReporteProducto = {
   producto_id: string;
   codigo_producto: string | null;

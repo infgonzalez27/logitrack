@@ -126,6 +126,7 @@ export async function registrarDespachoClienteRadarAction(input: {
   }
 
   revalidatePath("/radar");
+  revalidatePath("/radar/entrega");
   revalidatePath("/ordenes");
   revalidatePath(`/ordenes/${ordenId}`);
   return { ok: true, estado: response.data?.nuevo_estado_orden };
