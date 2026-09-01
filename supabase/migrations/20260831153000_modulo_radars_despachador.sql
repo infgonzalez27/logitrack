@@ -184,10 +184,11 @@ BEGIN
     END IF;
 
     -- 2. Obtener datos del despachador
-    SELECT id, nombre_completo, telefono, correo_e, ci_rif
+    SELECT pu.id, pu.nombre_completo, pu.telefono, u.email AS correo_e
     INTO v_despachador
-    FROM public.perfiles_usuario
-    WHERE id = v_radar.despachador_id;
+    FROM public.perfiles_usuario pu
+    LEFT JOIN auth.users u ON pu.id = u.id
+    WHERE pu.id = v_radar.despachador_id;
 
     -- 3. Consolidado de productos solicitados/despachados en este radar (Reporte global de carga)
     SELECT COALESCE(
@@ -281,8 +282,7 @@ BEGIN
                 'id', v_despachador.id,
                 'nombre_completo', v_despachador.nombre_completo,
                 'telefono', v_despachador.telefono,
-                'correo_e', v_despachador.correo_e,
-                'ci_rif', v_despachador.ci_rif
+                'correo_e', v_despachador.correo_e
             ),
             'resumen_productos', v_resumen_productos,
             'ordenes', v_ordenes

@@ -752,8 +752,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
         "id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
         "nombre_completo": "Carlos Pérez",
         "telefono": "+584141112233",
-        "correo_e": "carlos.perez@logitrack.com",
-        "ci_rif": "V-18234567"
+        "correo_e": "carlos.perez@logitrack.com"
       },
       "resumen_productos": [
         {
