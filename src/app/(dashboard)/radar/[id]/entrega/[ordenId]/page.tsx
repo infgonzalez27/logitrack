@@ -5,6 +5,7 @@ import {
   retornaRadarDespachadorAction,
   retornaRadarDetalleReporteAction,
 } from "@/lib/actions/radar";
+import { listarTiposContenedoresAction } from "@/lib/actions/ordenes";
 import { PageHeader } from "@/components/layout/page-header";
 import type { RadarDetalleReporte, RadarOrden } from "@/types/database";
 import { RadarEntregaForm } from "../../../radar-entrega-form";
@@ -53,9 +54,12 @@ export default async function RadarEntregaConRadarPage({
     redirect(`/radar/${id}`);
   }
 
-  const radarResult = await retornaRadarDespachadorAction();
-  let orden: RadarOrden | undefined;
+  const [radarResult, contenedoresResult] = await Promise.all([
+    retornaRadarDespachadorAction(),
+    listarTiposContenedoresAction(),
+  ]);
 
+  let orden: RadarOrden | undefined;
   if (radarResult.ok) {
     orden = radarResult.ordenes.find((o) => o.orden_id === ordenId);
   }
@@ -79,13 +83,21 @@ export default async function RadarEntregaConRadarPage({
     );
   }
 
+  const contenedores = contenedoresResult.ok
+    ? contenedoresResult.contenedores
+    : [];
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Detalle de entrega"
-        description="Registra productos entregados y envases retirados."
+        description="Confirma productos, retiros de envases y cierra la parada."
       />
-      <RadarEntregaForm orden={orden} backHref={`/radar/${id}`} />
+      <RadarEntregaForm
+        orden={orden}
+        contenedores={contenedores}
+        backHref={`/radar/${id}`}
+      />
     </div>
   );
 }

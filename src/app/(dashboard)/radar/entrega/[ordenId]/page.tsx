@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { retornaRadarDespachadorAction } from "@/lib/actions/radar";
+import { listarTiposContenedoresAction } from "@/lib/actions/ordenes";
 import { PageHeader } from "@/components/layout/page-header";
 import { RadarEntregaForm } from "../../radar-entrega-form";
 
@@ -18,7 +19,11 @@ export default async function RadarEntregaPage({
     redirect("/radar");
   }
 
-  const result = await retornaRadarDespachadorAction();
+  const [result, contenedoresResult] = await Promise.all([
+    retornaRadarDespachadorAction(),
+    listarTiposContenedoresAction(),
+  ]);
+
   if (!result.ok) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
@@ -40,13 +45,21 @@ export default async function RadarEntregaPage({
     );
   }
 
+  const contenedores = contenedoresResult.ok
+    ? contenedoresResult.contenedores
+    : [];
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Detalle de entrega"
-        description="Registra productos entregados y envases retirados."
+        description="Confirma productos, retiros de envases y cierra la parada."
       />
-      <RadarEntregaForm orden={orden} backHref="/radar" />
+      <RadarEntregaForm
+        orden={orden}
+        contenedores={contenedores}
+        backHref="/radar"
+      />
     </div>
   );
 }

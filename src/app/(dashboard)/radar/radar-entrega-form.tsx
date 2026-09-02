@@ -2,105 +2,174 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { registrarDespachoClienteRadarAction } from "@/lib/actions/radar";
+import {
+  finalizarEntregaRadarAction,
+  reportarIncidenciaRadarAction,
+} from "@/lib/actions/radar";
 import { LogiImage } from "@/components/media/logi-image";
 import { resolveProductoImage } from "@/lib/product-images";
-import { Badge, ordenEstadoTone } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { labelOrdenEstado } from "@/lib/constants";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
-import type { OrdenEstado, RadarOrden } from "@/types/database";
+import { formatNumber } from "@/lib/format";
+import type { RadarOrden } from "@/types/database";
 
-const ENTREGA_OPTIONS = [
-  { value: "entregado", label: "Entregado" },
-  { value: "entregado_parcial", label: "Parcial" },
-  { value: "rechazado", label: "Rechazado" },
-];
+type ContenedorOption = { id: string; codigo: string; nombre: string };
 
-type LineaForm = {
+type RetiroRow = {
+  key: string;
+  contenedor_id: string;
   cantidad: string;
-  estado: string;
-  motivo: string;
-  contenedores: string;
-  contenedorId: string;
 };
 
-function emptyLinea(orden: RadarOrden, detalleId: string): LineaForm {
-  const det = (orden.detalles ?? []).find((d) => d.detalle_id === detalleId);
-  const saldoDefault = (orden.saldo_contenedores ?? [])[0]?.contenedor_id ?? "";
-  return {
-    cantidad: String(det?.cantidad_solicitada ?? 0),
-    estado: "entregado",
-    motivo: "",
-    contenedores: "0",
-    contenedorId: det?.contenedor_id ?? saldoDefault,
-  };
+const INCIDENCIA_OPTIONS = [
+  { value: "Cliente cerrado", label: "Cliente cerrado" },
+  { value: "Dirección incorrecta", label: "Dirección incorrecta" },
+  { value: "Cliente no disponible", label: "Cliente no disponible" },
+  { value: "Otro", label: "Otro (especificar en notas)" },
+];
+
+function deriveLineaEstado(
+  asignada: number,
+  entregada: number,
+): { label: string; tone: "success" | "warning" | "danger" } {
+  if (entregada <= 0) return { label: "No entregado", tone: "danger" };
+  if (entregada >= asignada) return { label: "Completo", tone: "success" };
+  return { label: "Parcial", tone: "warning" };
+}
+
+function paradaEstadoLabel(detalles: RadarOrden["detalles"]): {
+  label: string;
+  tone: "success" | "warning" | "default" | "danger";
+} {
+  if (!detalles.length) return { label: "Sin líneas", tone: "default" };
+  const pendientes = detalles.filter(
+    (d) => (d.estado_entrega ?? "pendiente") === "pendiente",
+  );
+  if (pendientes.length === 0) return { label: "Completado", tone: "success" };
+  if (pendientes.length < detalles.length) {
+    return { label: "En proceso", tone: "warning" };
+  }
+  return { label: "Pendiente", tone: "warning" };
 }
 
 export function RadarEntregaForm({
   orden,
+  contenedores,
   backHref = "/radar",
 }: {
   orden: RadarOrden;
+  contenedores: ContenedorOption[];
   backHref?: string;
 }) {
   const router = useRouter();
-  const detalles = orden.detalles ?? [];
-  const saldos = orden.saldo_contenedores ?? [];
-  const pendientes = detalles.filter(
+  const pendientes = (orden.detalles ?? []).filter(
     (d) => (d.estado_entrega ?? "pendiente") === "pendiente",
   );
-  const [lineas, setLineas] = useState<Record<string, LineaForm>>(() => {
-    const init: Record<string, LineaForm> = {};
+
+  const [cantidades, setCantidades] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
     for (const det of pendientes) {
-      init[det.detalle_id] = emptyLinea(orden, det.detalle_id);
+      init[det.detalle_id] = String(det.cantidad_solicitada ?? 0);
     }
     return init;
   });
+  const [retiros, setRetiros] = useState<RetiroRow[]>([]);
+  const [notas, setNotas] = useState("");
+  const [incidenciaOpen, setIncidenciaOpen] = useState(false);
+  const [incidenciaTipo, setIncidenciaTipo] = useState(INCIDENCIA_OPTIONS[0].value);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const contenedorOptions = useMemo(
+  const estadoParada = paradaEstadoLabel(orden.detalles ?? []);
+
+  const totalEntregado = useMemo(
     () =>
-      saldos.map((c) => ({
-        value: c.contenedor_id,
-        label: `${c.nombre_contenedor} (saldo ${c.saldo_pendiente})`,
-      })),
-    [saldos],
+      pendientes.reduce(
+        (s, d) => s + (Number(cantidades[d.detalle_id]) || 0),
+        0,
+      ),
+    [pendientes, cantidades],
+  );
+  const totalAsignado = useMemo(
+    () =>
+      pendientes.reduce((s, d) => s + Number(d.cantidad_solicitada ?? 0), 0),
+    [pendientes],
+  );
+  const totalRetiros = useMemo(
+    () => retiros.reduce((s, r) => s + (Number(r.cantidad) || 0), 0),
+    [retiros],
   );
 
-  function patchLinea(id: string, patch: Partial<LineaForm>) {
-    setLineas((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], ...patch },
+  const mapsUrl = orden.cliente.direccion_fiscal
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orden.cliente.direccion_fiscal)}`
+    : null;
+
+  const contenedorOptions = useMemo(() => {
+    const fromCatalog = contenedores.map((c) => ({
+      value: c.id,
+      label: c.codigo ? `${c.codigo} — ${c.nombre}` : c.nombre,
     }));
+    if (fromCatalog.length) return fromCatalog;
+    return (orden.saldo_contenedores ?? []).map((c) => ({
+      value: c.contenedor_id,
+      label: `${c.nombre_contenedor} (saldo ${c.saldo_pendiente})`,
+    }));
+  }, [contenedores, orden.saldo_contenedores]);
+
+  function setCantidad(detalleId: string, value: number, max: number) {
+    const next = Math.max(0, Math.min(max, value));
+    setCantidades((prev) => ({ ...prev, [detalleId]: String(next) }));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function addRetiro() {
+    setRetiros((prev) => [
+      ...prev,
+      {
+        key: `r-${Date.now()}-${prev.length}`,
+        contenedor_id: contenedorOptions[0]?.value ?? "",
+        cantidad: "1",
+      },
+    ]);
+  }
+
+  function patchRetiro(key: string, patch: Partial<RetiroRow>) {
+    setRetiros((prev) =>
+      prev.map((r) => (r.key === key ? { ...r, ...patch } : r)),
+    );
+  }
+
+  function removeRetiro(key: string) {
+    setRetiros((prev) => prev.filter((r) => r.key !== key));
+  }
+
+  async function handleFinalizar(e: React.FormEvent) {
     e.preventDefault();
-    setPending(true);
     setError(null);
 
-    const payload = pendientes.map((det) => {
-      const form = lineas[det.detalle_id] ?? emptyLinea(orden, det.detalle_id);
-      const cantidad = Number(form.cantidad);
-      const contenedores = Number(form.contenedores || 0);
-      return {
-        detalle_id: det.detalle_id,
-        cantidad_despachada: form.estado === "rechazado" ? 0 : cantidad,
-        estado_entrega: form.estado,
-        motivo_rechazo: form.motivo.trim() || null,
-        contenedores_retirados: Number.isFinite(contenedores) ? contenedores : 0,
-        contenedor_id: form.contenedorId || null,
-      };
-    });
+    const resumen = `Entregado: ${formatNumber(totalEntregado)} de ${formatNumber(totalAsignado)} items.\nRetirado: ${formatNumber(totalRetiros)} contenedores.\n¿Desea confirmar?`;
+    if (typeof window !== "undefined" && !window.confirm(resumen)) {
+      return;
+    }
 
-    const result = await registrarDespachoClienteRadarAction({
+    setPending(true);
+    const result = await finalizarEntregaRadarAction({
       orden_id: orden.orden_id,
-      detalles: payload,
+      cliente_id: orden.cliente.id,
+      entregas: pendientes.map((det) => ({
+        detalle_id: det.detalle_id,
+        cantidad_asignada: Number(det.cantidad_solicitada ?? 0),
+        cantidad_entregada: Number(cantidades[det.detalle_id] ?? 0),
+      })),
+      retiros: retiros
+        .filter((r) => r.contenedor_id && Number(r.cantidad) > 0)
+        .map((r) => ({
+          contenedor_id: r.contenedor_id,
+          cantidad: Number(r.cantidad),
+        })),
+      notas,
     });
 
     if (!result.ok) {
@@ -111,170 +180,346 @@ export function RadarEntregaForm({
 
     router.push(backHref);
     router.refresh();
-    setPending(false);
   }
 
-  const mapsUrl = orden.cliente.direccion_fiscal
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orden.cliente.direccion_fiscal)}`
-    : null;
+  async function handleIncidencia() {
+    setError(null);
+    const motivo =
+      incidenciaTipo === "Otro"
+        ? notas.trim() || "Otro"
+        : notas.trim()
+          ? `${incidenciaTipo}. ${notas.trim()}`
+          : incidenciaTipo;
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+    if (incidenciaTipo === "Otro" && !notas.trim()) {
+      setError("Especifica el motivo de la incidencia en notas.");
+      return;
+    }
+
+    const ok = window.confirm(
+      `Reportar incidencia: "${motivo}".\nSe marcará la parada como no entregada. ¿Continuar?`,
+    );
+    if (!ok) return;
+
+    setPending(true);
+    const result = await reportarIncidenciaRadarAction({
+      orden_id: orden.orden_id,
+      detalle_ids: pendientes.map((d) => d.detalle_id),
+      motivo,
+    });
+
+    if (!result.ok) {
+      setError(result.error);
+      setPending(false);
+      return;
+    }
+
+    router.push(backHref);
+    router.refresh();
+  }
+
+  if (pendientes.length === 0) {
+    return (
+      <div className="space-y-4">
         <Button variant="secondary" href={backHref}>
           Volver a paradas
         </Button>
-        {mapsUrl ? (
-          <a
-            href={mapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="lt-btn inline-flex items-center rounded-xl border border-lt-border px-4 py-2.5 text-sm font-medium text-lt-text hover:bg-lt-surface-muted"
-          >
-            Navegar
-          </a>
-        ) : null}
-      </div>
-
-      <Card>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="font-display text-lg text-lt-text">
-              #{orden.correlativo} · {orden.cliente.razon_social}
-            </p>
-            <p className="mt-1 text-sm text-lt-text-muted">
-              {orden.cliente.nombre_ruta ?? "Sin ruta"} · {orden.cliente.rif_nit}
-            </p>
-            <p className="mt-1 text-sm text-lt-text-muted">
-              {orden.cliente.direccion_fiscal ?? "Sin dirección"}
-            </p>
-            <p className="mt-1 text-sm text-lt-text-muted">
-              {orden.cliente.movil1 || orden.cliente.telefono || "Sin teléfono"}
-            </p>
-          </div>
-          <Badge tone={ordenEstadoTone(String(orden.estado))}>
-            {labelOrdenEstado(orden.estado as OrdenEstado)}
-          </Badge>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-4 text-sm text-lt-text-muted">
-          <span>Despacho: {formatDate(orden.fecha_despacho)}</span>
-          <span>
-            Total: {formatCurrency(Number(orden.total_recaudar_usd ?? 0))} / Bs{" "}
-            {formatNumber(Number(orden.total_recaudar_bs ?? 0))}
-          </span>
-        </div>
-
-        {pendientes.length === 0 ? (
-          <p className="mt-4 text-sm text-lt-success-text">
+        <Card className="p-4">
+          <p className="text-lg font-semibold text-lt-text">
+            {orden.cliente.razon_social}
+          </p>
+          <p className="mt-2 text-sm text-lt-success-text">
             Entrega registrada. Pendiente de aprobación en almacén.
           </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-            <h3 className="font-medium text-lt-text">Productos a entregar</h3>
-            {pendientes.map((det) => {
-              const form =
-                lineas[det.detalle_id] ?? emptyLinea(orden, det.detalle_id);
-              const fallback = resolveProductoImage(det.nombre_producto);
-              return (
-                <div
-                  key={det.detalle_id}
-                  className="rounded-2xl border border-lt-border-light p-3 sm:p-4"
-                >
-                  <div className="flex gap-3">
-                    <LogiImage
-                      path={det.imagen_path}
-                      type="producto"
-                      alt={det.nombre_producto}
-                      fallbackSrc={fallback}
-                      width={72}
-                      height={72}
-                      className="h-[72px] w-[72px] shrink-0 rounded-xl object-contain bg-lt-surface-muted"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-lt-text">
-                        {det.nombre_producto}
-                      </p>
-                      <p className="text-xs text-lt-text-subtle">
-                        {det.codigo_producto ?? "Sin código"} · Pedido{" "}
-                        {formatNumber(det.cantidad_solicitada)}
-                      </p>
-                    </div>
-                  </div>
+        </Card>
+      </div>
+    );
+  }
 
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <Input
-                      label="Cantidad entregada"
-                      type="number"
-                      min={0}
-                      max={det.cantidad_solicitada}
-                      required
-                      value={form.cantidad}
-                      onChange={(e) =>
-                        patchLinea(det.detalle_id, { cantidad: e.target.value })
-                      }
-                    />
-                    <Select
-                      label="Resultado"
-                      options={ENTREGA_OPTIONS}
-                      value={form.estado}
-                      onChange={(e) =>
-                        patchLinea(det.detalle_id, { estado: e.target.value })
-                      }
-                    />
-                  </div>
-
-                  {form.estado !== "entregado" ? (
-                    <div className="mt-3">
-                      <Input
-                        label="Motivo"
-                        required
-                        value={form.motivo}
-                        onChange={(e) =>
-                          patchLinea(det.detalle_id, { motivo: e.target.value })
-                        }
-                      />
-                    </div>
-                  ) : null}
-
-                  {contenedorOptions.length > 0 ? (
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <Select
-                        label="Envase a retirar"
-                        placeholder="Sin retiro"
-                        options={contenedorOptions}
-                        value={form.contenedorId}
-                        onChange={(e) =>
-                          patchLinea(det.detalle_id, {
-                            contenedorId: e.target.value,
-                          })
-                        }
-                      />
-                      <Input
-                        label="Cantidad retirada"
-                        type="number"
-                        min={0}
-                        value={form.contenedores}
-                        onChange={(e) =>
-                          patchLinea(det.detalle_id, {
-                            contenedores: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-
-            {error ? <p className="lt-alert-error">{error}</p> : null}
-
-            <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-              {pending ? "Registrando…" : "Finalizar entrega"}
-            </Button>
-          </form>
-        )}
+  return (
+    <form onSubmit={handleFinalizar} className="space-y-4">
+      {/* Encabezado */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-2xl leading-tight text-lt-text">
+              {orden.cliente.razon_social}
+            </p>
+            <p className="mt-1 text-sm text-lt-text-muted">
+              Orden #{orden.correlativo}
+              {orden.cliente.nombre_ruta ? ` · ${orden.cliente.nombre_ruta}` : ""}
+            </p>
+            {orden.cliente.direccion_fiscal ? (
+              <p className="mt-1 text-sm text-lt-text-muted">
+                {orden.cliente.direccion_fiscal}
+              </p>
+            ) : null}
+          </div>
+          <Badge tone={estadoParada.tone}>{estadoParada.label}</Badge>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" href={backHref}>
+            Volver
+          </Button>
+          {mapsUrl ? (
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="lt-btn inline-flex items-center rounded-xl border border-lt-border px-4 py-2.5 text-sm font-medium text-lt-text hover:bg-lt-surface-muted"
+            >
+              Navegar
+            </a>
+          ) : null}
+        </div>
       </Card>
-    </div>
+
+      {/* Sección A */}
+      <Card className="space-y-3 p-4">
+        <div>
+          <h3 className="text-base font-semibold text-lt-text">
+            Productos a entregar
+          </h3>
+          <p className="mt-1 text-sm text-lt-text-muted">
+            Asignado vs entregado. Por defecto coincide con la salida.
+          </p>
+        </div>
+
+        {pendientes.map((det) => {
+          const asignada = Number(det.cantidad_solicitada ?? 0);
+          const entregada = Number(cantidades[det.detalle_id] ?? 0);
+          const lineaEstado = deriveLineaEstado(asignada, entregada);
+          const fallback = resolveProductoImage(det.nombre_producto);
+
+          return (
+            <div
+              key={det.detalle_id}
+              className="rounded-2xl border border-lt-border-light p-3 sm:p-4"
+            >
+              <div className="flex gap-3">
+                <LogiImage
+                  path={det.imagen_path}
+                  type="producto"
+                  alt={det.nombre_producto}
+                  fallbackSrc={fallback}
+                  width={72}
+                  height={72}
+                  className="h-[72px] w-[72px] shrink-0 rounded-xl bg-lt-surface-muted object-contain"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="font-medium text-lt-text">
+                      {det.nombre_producto}
+                    </p>
+                    <Badge tone={lineaEstado.tone}>{lineaEstado.label}</Badge>
+                  </div>
+                  <p className="text-xs text-lt-text-subtle">
+                    {det.codigo_producto ?? "Sin código"} · Asignado{" "}
+                    {formatNumber(asignada)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <p className="mb-1.5 text-sm font-medium text-lt-text">
+                  Cantidad entregada
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-lt-border text-lg font-semibold text-lt-text hover:bg-lt-surface-muted"
+                    onClick={() =>
+                      setCantidad(det.detalle_id, entregada - 1, asignada)
+                    }
+                    aria-label="Disminuir"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={0}
+                    max={asignada}
+                    required
+                    value={cantidades[det.detalle_id] ?? "0"}
+                    onChange={(e) =>
+                      setCantidad(
+                        det.detalle_id,
+                        Number(e.target.value) || 0,
+                        asignada,
+                      )
+                    }
+                    className="lt-input w-full max-w-[7rem] text-center text-lg font-semibold"
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-lt-border text-lg font-semibold text-lt-text hover:bg-lt-surface-muted"
+                    onClick={() =>
+                      setCantidad(det.detalle_id, entregada + 1, asignada)
+                    }
+                    aria-label="Aumentar"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    className="ml-1 text-sm font-medium text-lt-primary"
+                    onClick={() =>
+                      setCantidad(det.detalle_id, asignada, asignada)
+                    }
+                  >
+                    Todo
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </Card>
+
+      {/* Sección B */}
+      <Card className="space-y-3 p-4">
+        <div>
+          <h3 className="text-base font-semibold text-lt-text">
+            Contenedores a retirar
+          </h3>
+          <p className="mt-1 text-sm text-lt-text-muted">
+            Devoluciones de envases del cliente (independiente de productos).
+          </p>
+        </div>
+
+        {(orden.saldo_contenedores ?? []).length > 0 ? (
+          <p className="rounded-xl bg-lt-surface-muted px-3 py-2 text-sm text-lt-text-muted">
+            Saldo pendiente:{" "}
+            {(orden.saldo_contenedores ?? [])
+              .map((s) => `${s.nombre_contenedor} (${s.saldo_pendiente})`)
+              .join(" · ")}
+          </p>
+        ) : null}
+
+        {retiros.map((row) => (
+          <div
+            key={row.key}
+            className="grid gap-2 rounded-2xl border border-lt-border-light p-3 sm:grid-cols-[1fr_7rem_auto]"
+          >
+            <Select
+              label="Tipo de contenedor"
+              options={contenedorOptions}
+              value={row.contenedor_id}
+              onChange={(e) =>
+                patchRetiro(row.key, { contenedor_id: e.target.value })
+              }
+              required
+            />
+            <Input
+              label="Cantidad"
+              type="number"
+              min={1}
+              required
+              value={row.cantidad}
+              onChange={(e) =>
+                patchRetiro(row.key, { cantidad: e.target.value })
+              }
+            />
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => removeRetiro(row.key)}
+              >
+                Eliminar
+              </Button>
+            </div>
+          </div>
+        ))}
+
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={addRetiro}
+          disabled={!contenedorOptions.length}
+          className="w-full sm:w-auto"
+        >
+          Añadir retiro
+        </Button>
+
+        {!contenedorOptions.length ? (
+          <p className="text-sm text-lt-warning-text">
+            No hay tipos de contenedores en catálogo.
+          </p>
+        ) : null}
+
+        <p className="text-sm font-medium text-lt-text">
+          Total retiro: {formatNumber(totalRetiros)} contenedores
+        </p>
+      </Card>
+
+      {/* Sección C */}
+      <Card className="space-y-3 p-4">
+        <h3 className="text-base font-semibold text-lt-text">
+          Finalización de entrega
+        </h3>
+        <div className="space-y-1.5">
+          <label
+            htmlFor="notas_entrega"
+            className="block text-sm font-medium text-lt-text"
+          >
+            Notas / observaciones
+          </label>
+          <textarea
+            id="notas_entrega"
+            rows={3}
+            value={notas}
+            onChange={(e) => setNotas(e.target.value)}
+            placeholder="Ej. dejó en puerta, cliente pidió parcial…"
+            className="lt-input w-full resize-y"
+          />
+        </div>
+
+        {error ? <p className="lt-alert-error text-sm">{error}</p> : null}
+
+        <Button type="submit" disabled={pending} className="w-full sm:w-auto">
+          {pending ? "Guardando…" : "Finalizar entrega y retiro"}
+        </Button>
+
+        <div className="border-t border-lt-border pt-3">
+          {!incidenciaOpen ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending}
+              onClick={() => setIncidenciaOpen(true)}
+            >
+              Reportar incidencia
+            </Button>
+          ) : (
+            <div className="space-y-3">
+              <Select
+                label="Motivo de incidencia"
+                options={INCIDENCIA_OPTIONS}
+                value={incidenciaTipo}
+                onChange={(e) => setIncidenciaTipo(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  disabled={pending}
+                  onClick={handleIncidencia}
+                >
+                  {pending ? "Reportando…" : "Confirmar incidencia"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() => setIncidenciaOpen(false)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+    </form>
   );
 }
