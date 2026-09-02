@@ -28,7 +28,7 @@ const INCIDENCIA_OPTIONS = [
   { value: "Cliente cerrado", label: "Cliente cerrado" },
   { value: "Dirección incorrecta", label: "Dirección incorrecta" },
   { value: "Cliente no disponible", label: "Cliente no disponible" },
-  { value: "Otro", label: "Otro (especificar en notas)" },
+  { value: "Otro", label: "Otro" },
 ];
 
 function deriveLineaEstado(
@@ -77,9 +77,9 @@ export function RadarEntregaForm({
     return init;
   });
   const [retiros, setRetiros] = useState<RetiroRow[]>([]);
-  const [notas, setNotas] = useState("");
   const [incidenciaOpen, setIncidenciaOpen] = useState(false);
   const [incidenciaTipo, setIncidenciaTipo] = useState(INCIDENCIA_OPTIONS[0].value);
+  const [incidenciaOtro, setIncidenciaOtro] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -169,7 +169,6 @@ export function RadarEntregaForm({
           contenedor_id: r.contenedor_id,
           cantidad: Number(r.cantidad),
         })),
-      notas,
     });
 
     if (!result.ok) {
@@ -185,14 +184,10 @@ export function RadarEntregaForm({
   async function handleIncidencia() {
     setError(null);
     const motivo =
-      incidenciaTipo === "Otro"
-        ? notas.trim() || "Otro"
-        : notas.trim()
-          ? `${incidenciaTipo}. ${notas.trim()}`
-          : incidenciaTipo;
+      incidenciaTipo === "Otro" ? incidenciaOtro.trim() : incidenciaTipo;
 
-    if (incidenciaTipo === "Otro" && !notas.trim()) {
-      setError("Especifica el motivo de la incidencia en notas.");
+    if (!motivo) {
+      setError("Indica el motivo de la incidencia.");
       return;
     }
 
@@ -458,22 +453,6 @@ export function RadarEntregaForm({
         <h3 className="text-base font-semibold text-lt-text">
           Finalización de entrega
         </h3>
-        <div className="space-y-1.5">
-          <label
-            htmlFor="notas_entrega"
-            className="block text-sm font-medium text-lt-text"
-          >
-            Notas / observaciones
-          </label>
-          <textarea
-            id="notas_entrega"
-            rows={3}
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            placeholder="Ej. dejó en puerta, cliente pidió parcial…"
-            className="lt-input w-full resize-y"
-          />
-        </div>
 
         {error ? <p className="lt-alert-error text-sm">{error}</p> : null}
 
@@ -499,6 +478,15 @@ export function RadarEntregaForm({
                 value={incidenciaTipo}
                 onChange={(e) => setIncidenciaTipo(e.target.value)}
               />
+              {incidenciaTipo === "Otro" ? (
+                <Input
+                  label="Describe el motivo"
+                  required
+                  value={incidenciaOtro}
+                  onChange={(e) => setIncidenciaOtro(e.target.value)}
+                  placeholder="Motivo de la incidencia"
+                />
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"

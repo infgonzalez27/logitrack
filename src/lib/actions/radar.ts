@@ -162,14 +162,13 @@ export async function registrarDespachoClienteRadarAction(input: {
  * Productos → `registrar_despacho_cliente_radar` (estado derivado de cantidades).
  * Retiros → se adjuntan a líneas cuando cabe; el excedente usa
  * `registrar_movimiento_contenedores` (§2.7) hasta que DB soporte `retiros[]` a nivel orden.
- * `notas` aún no tiene columna/RPC: se usa como motivo cuando hay parcial/rechazo.
+ * motivo_rechazo automático si parcial/rechazo (no hay columna de observaciones).
  */
 export async function finalizarEntregaRadarAction(input: {
   orden_id: string;
   cliente_id: string;
   entregas: RadarEntregaLineaInput[];
   retiros: RadarRetiroInput[];
-  notas?: string | null;
 }): Promise<{ ok: true; estado?: string } | { ok: false; error: string; code?: string }> {
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
@@ -179,7 +178,6 @@ export async function finalizarEntregaRadarAction(input: {
 
   const ordenId = input.orden_id?.trim();
   const clienteId = input.cliente_id?.trim();
-  const notas = input.notas?.trim() || "";
 
   if (!ordenId || !UUID_RE.test(ordenId)) {
     return { ok: false, error: "Orden inválida.", code: "PARAMETRO_INVALIDO" };
@@ -238,15 +236,6 @@ export async function finalizarEntregaRadarAction(input: {
         code: "PARAMETRO_INVALIDO",
       };
     }
-    const estado = deriveEstadoEntrega(asignada, entregada);
-    if (estado !== "entregado" && !notas) {
-      return {
-        ok: false,
-        error:
-          "Agrega una nota u observación: hay productos parciales o no entregados.",
-        code: "PARAMETRO_INVALIDO",
-      };
-    }
   }
 
   const detalles: RadarDetalleInput[] = input.entregas.map((linea, idx) => {
@@ -254,11 +243,17 @@ export async function finalizarEntregaRadarAction(input: {
     const entregada = Math.min(Number(linea.cantidad_entregada), asignada);
     const estado = deriveEstadoEntrega(asignada, entregada);
     const retiro = retirosValidos[idx];
+    const motivo =
+      estado === "entregado_parcial"
+        ? "Entrega parcial"
+        : estado === "rechazado"
+          ? "No entregado"
+          : null;
     return {
       detalle_id: linea.detalle_id,
       cantidad_despachada: estado === "rechazado" ? 0 : entregada,
       estado_entrega: estado,
-      motivo_rechazo: estado === "entregado" ? null : notas || null,
+      motivo_rechazo: motivo,
       contenedores_retirados: retiro?.cantidad ?? 0,
       contenedor_id: retiro?.contenedor_id ?? null,
     };
