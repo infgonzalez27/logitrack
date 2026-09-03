@@ -6,6 +6,7 @@ import {
   getNavSectionsForRole,
   getRoleNameFromProfile,
   homeHrefForRole,
+  labelRol,
 } from "@/lib/auth/roles";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { InstallPwaPrompt } from "@/components/pwa/install-prompt";
@@ -28,6 +29,7 @@ export default async function DashboardLayout({
   return (
     <DashboardShell
       userName={profile?.nombre_completo ?? "Usuario"}
+      roleLabel={labelRol(rol)}
       navSections={navSections}
       homeHref={homeHref}
     >

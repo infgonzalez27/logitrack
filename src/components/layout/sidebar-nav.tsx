@@ -4,17 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import type { NavSection } from "@/lib/constants";
-import { logoutAction } from "@/lib/actions/auth";
 
 export function SidebarNav({
-  userName,
   navSections,
   homeHref = "/",
   onNavigate,
   showClose,
   onClose,
 }: {
-  userName: string;
   navSections: NavSection[];
   homeHref?: string;
   onNavigate?: () => void;
@@ -56,9 +53,6 @@ export function SidebarNav({
             </button>
           ) : null}
         </div>
-        <p className="mt-4 truncate text-sm font-medium text-lt-text">
-          {userName}
-        </p>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -92,15 +86,6 @@ export function SidebarNav({
           </div>
         ))}
       </nav>
-
-      <form action={logoutAction} className="border-t border-lt-border-light p-3">
-        <button
-          type="submit"
-          className="w-full cursor-pointer rounded-xl px-3 py-2.5 text-left text-sm text-lt-text-muted transition-colors duration-200 hover:bg-lt-primary-muted hover:text-lt-text"
-        >
-          Cerrar sesión
-        </button>
-      </form>
     </>
   );
 }

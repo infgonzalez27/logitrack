@@ -92,9 +92,29 @@ export async function POST(request: Request) {
 
     console.info("[LogiTrack Auth API] login OK:", data.user?.id);
 
+    let redirectTo = "/";
+    const userId = data.user?.id;
+    if (userId) {
+      const { data: profile } = await supabase
+        .from("perfiles_usuario")
+        .select("roles(nombre)")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const rolesRaw = profile?.roles as unknown;
+      const rolNombre = Array.isArray(rolesRaw)
+        ? (rolesRaw[0] as { nombre?: string } | undefined)?.nombre
+        : (rolesRaw as { nombre?: string } | null | undefined)?.nombre;
+
+      if (rolNombre === "despachador") redirectTo = "/radar";
+      else if (rolNombre === "chofer") redirectTo = "/ordenes";
+      else if (rolNombre === "cobrador") redirectTo = "/rendiciones";
+    }
+
     return NextResponse.json({
       ok: true,
-      userId: data.user?.id,
+      userId,
+      redirectTo,
     });
   } catch (err) {
     const debug = serializeErrorForLog(err);

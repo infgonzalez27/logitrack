@@ -5,14 +5,17 @@ import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import type { NavSection } from "@/lib/constants";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { UserMenu } from "@/components/layout/user-menu";
 
 export function DashboardShell({
   userName,
+  roleLabel,
   navSections,
   homeHref = "/",
   children,
 }: {
   userName: string;
+  roleLabel?: string;
   navSections: NavSection[];
   homeHref?: string;
   children: React.ReactNode;
@@ -33,13 +36,13 @@ export function DashboardShell({
 
   return (
     <div className="min-h-screen bg-lt-bg">
-      <header className="lt-no-print sticky top-0 z-40 flex items-center gap-3 border-b border-lt-border-light bg-lt-surface/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm lg:hidden">
+      <header className="lt-no-print sticky top-0 z-40 flex items-center gap-3 border-b border-lt-border-light bg-lt-surface/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm lg:px-6">
         <button
           type="button"
           onClick={() => setMenuOpen(true)}
           aria-label="Abrir menú"
           aria-expanded={menuOpen}
-          className="cursor-pointer rounded-xl border border-lt-border-light p-2.5 text-lt-text transition-colors hover:bg-lt-primary-muted"
+          className="cursor-pointer rounded-xl border border-lt-border-light p-2.5 text-lt-text transition-colors hover:bg-lt-primary-muted lg:hidden"
         >
           <svg
             viewBox="0 0 24 24"
@@ -55,10 +58,10 @@ export function DashboardShell({
             />
           </svg>
         </button>
-        <Logo href={homeHref} size="sm" showWordmark />
-        <p className="ml-auto max-w-[40%] truncate text-right text-xs font-medium text-lt-text-muted">
-          {userName}
-        </p>
+        <Logo href={homeHref} size="sm" showWordmark className="lg:hidden" />
+        <div className="ml-auto">
+          <UserMenu userName={userName} roleLabel={roleLabel} />
+        </div>
       </header>
 
       {menuOpen ? (
@@ -74,7 +77,6 @@ export function DashboardShell({
             style={{ boxShadow: "var(--lt-shadow-sidebar)" }}
           >
             <SidebarNav
-              userName={userName}
               navSections={navSections}
               homeHref={homeHref}
               onNavigate={() => setMenuOpen(false)}
@@ -85,16 +87,12 @@ export function DashboardShell({
         </div>
       ) : null}
 
-      <div className="flex min-h-[calc(100dvh-3.5rem)] lg:min-h-screen">
+      <div className="flex min-h-[calc(100dvh-3.75rem)]">
         <aside
-          className="lt-no-print hidden w-64 shrink-0 flex-col border-r border-lt-border-light bg-lt-surface lg:flex"
+          className="lt-no-print sticky top-[3.75rem] hidden h-[calc(100dvh-3.75rem)] w-64 shrink-0 flex-col border-r border-lt-border-light bg-lt-surface lg:flex"
           style={{ boxShadow: "var(--lt-shadow-sidebar)" }}
         >
-          <SidebarNav
-            userName={userName}
-            navSections={navSections}
-            homeHref={homeHref}
-          />
+          <SidebarNav navSections={navSections} homeHref={homeHref} />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>

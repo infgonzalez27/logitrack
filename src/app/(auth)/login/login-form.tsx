@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toDisplayError } from "@/lib/errors";
 import { isDevDebug, logAuthDebug, serializeErrorForLog } from "@/lib/debug";
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 
 export default function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
   const registered = searchParams.get("registered") === "1";
@@ -58,6 +57,7 @@ export default function LoginForm() {
         error?: string;
         debug?: Record<string, unknown>;
         userId?: string;
+        redirectTo?: string;
       };
 
       logAuthDebug("login:response", {
@@ -65,6 +65,7 @@ export default function LoginForm() {
         ok: payload.ok,
         error: payload.error,
         debug: payload.debug,
+        redirectTo: payload.redirectTo,
       });
 
       if (!res.ok || payload.error) {
@@ -80,8 +81,15 @@ export default function LoginForm() {
         return;
       }
 
-      router.replace(redirectTo.startsWith("/") ? redirectTo : "/");
-      router.refresh();
+      // Navegación dura: evita pantalla en blanco tras setSession (cookies + RSC).
+      const requested = redirectTo.startsWith("/") ? redirectTo : "/";
+      const destination =
+        requested !== "/"
+          ? requested
+          : payload.redirectTo?.startsWith("/")
+            ? payload.redirectTo
+            : "/";
+      window.location.assign(destination);
     } catch (err) {
       const serialized = serializeErrorForLog(err);
       logAuthDebug("login:exception", serialized);

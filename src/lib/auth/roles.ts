@@ -198,6 +198,7 @@ export function canAccessHref(rol: RolNombre | null, href: string): boolean {
   }
 
   if (rol === "despachador") {
+    if (href === "/" || href === "") return true;
     if (href === "/ordenes/nuevo" || href.startsWith("/ordenes/nuevo/")) {
       return false;
     }
