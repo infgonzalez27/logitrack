@@ -21,21 +21,14 @@ export const ORDEN_ESTADOS_VALIDOS: OrdenEstado[] = [
 const TRANSICIONES_UI: Partial<
   Record<OrdenEstado, { next: OrdenEstado; label: string; rpc: string }[]>
 > = {
-  borrador: [
-    {
-      next: "aprobada",
-      label: "Aprobar orden",
-      rpc: "aprobar_orden_distribucion",
-    },
-    { next: "anulada", label: "Anular", rpc: "anular_orden_distribucion" },
-  ],
+  // Crear orden ya deja aprobada (DB); no exponer Aprobar / Anular en UI.
+  borrador: [],
   aprobada: [
     {
       next: "en_transito",
       label: "Cargar y despachar",
       rpc: "cargar_inventario_movil",
     },
-    { next: "anulada", label: "Anular", rpc: "anular_orden_distribucion" },
   ],
   // Compatibilidad si la BD aún tiene lista_para_carga
   lista_para_carga: [
@@ -44,7 +37,6 @@ const TRANSICIONES_UI: Partial<
       label: "Cargar y despachar",
       rpc: "cargar_inventario_movil",
     },
-    { next: "anulada", label: "Anular", rpc: "anular_orden_distribucion" },
   ],
   en_transito: [],
   despachada: [

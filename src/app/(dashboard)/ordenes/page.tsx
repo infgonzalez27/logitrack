@@ -71,7 +71,11 @@ export default async function OrdenesPage({
         >
           Todas
         </Link>
-        {ORDEN_ESTADOS.filter((e) => e.value !== "lista_para_carga").map(
+        {ORDEN_ESTADOS.filter(
+          (e) =>
+            e.value !== "lista_para_carga" &&
+            e.value !== "borrador",
+        ).map(
           (e) => (
             <Link
               key={e.value}
@@ -99,12 +103,18 @@ export default async function OrdenesPage({
             { key: "tasa", label: "Tasa" },
             { key: "total_bs", label: "Total Bs" },
             { key: "fecha", label: "Despacho" },
-            { key: "acciones", label: "" },
           ]}
           rows={ordenes.map((o) => ({
             id: o.id,
             cells: {
-              correlativo: `#${o.correlativo}`,
+              correlativo: (
+                <Link
+                  href={`/ordenes/${o.id}`}
+                  className="font-medium text-lt-primary underline hover:text-lt-primary-hover"
+                >
+                  #{o.correlativo}
+                </Link>
+              ),
               factura: o.factura_origen_numero,
               cliente: o.cliente_razon_social ?? "—",
               chofer: (() => {
@@ -123,22 +133,6 @@ export default async function OrdenesPage({
                   ? formatNumber(Number(o.total_recaudar_bs))
                   : "—",
               fecha: formatDate(o.fecha_despacho),
-              acciones: (
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    href={`/ordenes/${o.id}`}
-                    className="text-sm font-medium text-lt-primary underline hover:text-lt-primary-hover"
-                  >
-                    Ver
-                  </Link>
-                  <Link
-                    href={`/ordenes/${o.id}/imprimir`}
-                    className="lt-no-print text-sm font-medium text-lt-primary underline hover:text-lt-primary-hover"
-                  >
-                    Imprimir ticket
-                  </Link>
-                </div>
-              ),
             },
           }))}
           emptyMessage="No hay órdenes para este filtro."
