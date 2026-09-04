@@ -1,0 +1,6 @@
+Cuando se crea una orden, la misma se registra bajo el status 'aprobada'
+pero al momento del despacho, si el cliente tiene deudas, el despachador no puede editar o entrar al detalle de la orden en el radar.
+Es necesario crear políticas de crédito en la tabla de clientes, estas políticas puede ser por límite de crédito y/o por cantidad de facturas vencidas y 
+según esa política, un permiso de poder ser despachado.
+A su vez, la gerencia puede otorgar el permiso de ser despachado pero una vez despachado que se vuelva a negar el permiso para una próxima vez.
+Analiza la propuesta y crea la proposición de cambios y registralo como tarea

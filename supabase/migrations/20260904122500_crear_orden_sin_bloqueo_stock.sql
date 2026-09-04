@@ -1,3 +1,5 @@
+-- Migration: Ajustar crear_orden_distribucion para registrar como aprobada sin bloquear por stock ni modificar inventario en almacén
+
 CREATE OR REPLACE FUNCTION public.crear_orden_distribucion(
     p_vendedor_id UUID,
     p_cliente_id UUID,

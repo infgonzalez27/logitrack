@@ -128,4 +128,41 @@ ADD COLUMN IF NOT EXISTS radar_id UUID REFERENCES public.radars(id) ON DELETE SE
      - **`cantidad_retirada`**: Registra los envases retirados ingresados por el despachador en el reporte.
    - **`radars`**: Actualiza `total_cantidad_solicitada`, `total_cantidad_despachada`, `total_contenedores_retirados` y marca `status_radar = true` (.T.).
 
+---
+
+## 5. Módulo de Políticas de Crédito del Cliente y Permisos de Despacho
+
+Para restringir que el despachador pueda editar o acceder al detalle de las órdenes de clientes morosos en el Radar, y permitir excepciones de despacho de uso único por parte de la Gerencia:
+
+### 5.1. Nuevas Columnas en la Tabla `clientes`
+```sql
+ALTER TABLE public.clientes
+ADD COLUMN IF NOT EXISTS limite_credito NUMERIC(14,2) DEFAULT 0.00 CHECK (limite_credito >= 0.00),
+ADD COLUMN IF NOT EXISTS max_facturas_vencidas INT DEFAULT 0 CHECK (max_facturas_vencidas >= 0),
+ADD COLUMN IF NOT EXISTS permiso_despacho_manual BOOLEAN DEFAULT TRUE,
+ADD COLUMN IF NOT EXISTS excepcion_despacho_gerencia BOOLEAN DEFAULT FALSE;
+
+COMMENT ON COLUMN public.clientes.limite_credito IS 'Monto máximo de saldo deudor permitido para el cliente en Bs/USD';
+COMMENT ON COLUMN public.clientes.max_facturas_vencidas IS 'Cantidad máxima de facturas o solicitudes vencidas pendientes sin pago';
+COMMENT ON COLUMN public.clientes.permiso_despacho_manual IS 'Habilitación manual de despacho para el cliente (.T. / .F.)';
+COMMENT ON COLUMN public.clientes.excepcion_despacho_gerencia IS 'Permiso especial de un solo uso otorgado por Gerencia para permitir el despacho en morosidad';
+```
+
+### 5.2. Reglas de Validación de Despacho
+Un cliente es clasificado como **Bloqueado por Crédito** si se cumple alguna de las siguientes condiciones:
+1. `saldo_deudor_total > limite_credito` (cuando `limite_credito > 0`).
+2. `facturas_vencidas_count > max_facturas_vencidas` (cuando `max_facturas_vencidas > 0`).
+3. `permiso_despacho_manual = FALSE`.
+
+**Excepción de Gerencia:**
+Si `excepcion_despacho_gerencia = TRUE`, se **ignora el bloqueo** y se autoriza la edición y despacho en el Radar por esa única ocasión.
+
+### 5.3. Restricción en el Radar y Reseteo Automático de Excepción
+1. **Consulta del Radar (`retorna_radar_despachador` / `retorna_radar_detalle_reporte`)**:
+   - Evalúa las políticas de crédito para cada cliente con órdenes asignadas.
+   - Retorna la bandera `despacho_permitido` (`BOOLEAN`) y `motivo_bloqueo` (`TEXT`). Si `despacho_permitido = FALSE`, el despachador **no puede abrir el detalle ni editar la orden en el Radar**.
+2. **Procesamiento de Despacho (`guardar_resultado_despacho_radar` / `registrar_despacho_cliente_radar`)**:
+   - Al ejecutarse la confirmación del despacho de la orden, si el cliente tenía `excepcion_despacho_gerencia = TRUE`, el SP **reestablece automáticamente `excepcion_despacho_gerencia = FALSE`**, de modo que en el siguiente viaje vuelva a estar denegado hasta un nuevo pago o nueva autorización gerencial.
+
+
 

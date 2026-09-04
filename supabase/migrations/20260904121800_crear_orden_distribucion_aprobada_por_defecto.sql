@@ -1,3 +1,5 @@
+-- Migration: Registrar las órdenes de distribución bajo estado 'aprobada' por defecto al crearlas sin bloquear por stock ni modificar inventario en almacén
+
 CREATE OR REPLACE FUNCTION public.crear_orden_distribucion(
     p_vendedor_id UUID,
     p_cliente_id UUID,

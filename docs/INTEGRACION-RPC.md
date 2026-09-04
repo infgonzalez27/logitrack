@@ -832,6 +832,28 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.23. Otorgar Excepción Gerencial de Despacho (`otorgar_excepcion_despacho_gerencia`)
+- **Firma SQL:** `otorgar_excepcion_despacho_gerencia(p_cliente_id UUID)`
+- **Permisos:** Exclusivo para usuarios autenticados con rol `gerente` o `admin`.
+- **Descripción:** Permite a la Gerencia autorizar de manera extraordinaria un **único despacho** para un cliente que se encuentra bloqueado por política de crédito. Una vez completado el despacho en el Radar, el permiso se consume y desactiva automáticamente.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('otorgar_excepcion_despacho_gerencia', {
+    p_cliente_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Excepción de despacho otorgada exitosamente por gerencia (Válida por 1 despacho).",
+    "data": {
+      "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+      "excepcion_despacho_gerencia": true
+    }
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
@@ -843,6 +865,8 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 | `PARAMETRO_INVALIDO` | Algún parámetro requerido viene vacío o nulo. | Mostrar alerta de validación local. |
 | `CLIENTE_INEXISTENTE` | El cliente ingresado no existe o está inactivo. | Bloquear la creación de la orden o indicar error. |
 | `RIF_DUPLICADO` | El RIF/NIT especificado ya pertenece a otro cliente registrado. | Notificar al usuario para corregir el RIF/NIT. |
+| `DESPACHO_BLOQUEADO_CREDITO` | El cliente está bloqueado por morosidad/política de crédito y no posee excepción gerencial. | Deshabilitar botón de edición en Radar o solicitar excepción a Gerencia. |
+| `ACCESO_DENEGADO` | El usuario no cuenta con el rol requerido (ej. gerente/admin) para ejecutar la acción. | Mostrar mensaje de permisos insuficientes. |
 | `RUTA_INEXISTENTE` | La ruta ingresada no existe en el sistema. | Notificar al usuario que la ruta no fue encontrada. |
 | `STOCK_INSUFICIENTE` | Uno o más productos no disponen de stock en almacén. | Mostrar cuáles productos fallaron y sus cantidades. |
 | `EXCEPCION_TASA_NO_ENCONTRADA` | No existe tasa de cambio registrada para la fecha. | Redirigir o solicitar registro en el Módulo de Mantenimiento de Tasas. |

@@ -20,6 +20,9 @@ DECLARE
     v_cantidad_solicitada INT;
     v_devolucion INT;
     v_pendientes_count INT;
+    v_cliente_id UUID;
+    v_despacho_permitido BOOLEAN;
+    v_excepcion_gerencia BOOLEAN;
 BEGIN
     IF p_orden_id IS NULL THEN
         RETURN jsonb_build_object(
@@ -31,9 +34,16 @@ BEGIN
         );
     END IF;
 
-    SELECT estado, camion_id INTO v_estado_orden, v_camion_id
-    FROM public.ordenes_distribucion
-    WHERE id = p_orden_id;
+    SELECT o.estado, o.camion_id, o.cliente_id,
+           COALESCE(c.excepcion_despacho_gerencia, FALSE),
+           (COALESCE(c.excepcion_despacho_gerencia, FALSE) = TRUE OR (
+               COALESCE(c.permiso_despacho_manual, TRUE) = TRUE
+               AND (COALESCE(c.limite_credito, 0.00) = 0.00 OR COALESCE(o.total_recaudar_bs, 0.00) <= COALESCE(c.limite_credito, 0.00))
+           ))
+    INTO v_estado_orden, v_camion_id, v_cliente_id, v_excepcion_gerencia, v_despacho_permitido
+    FROM public.ordenes_distribucion o
+    JOIN public.clientes c ON o.cliente_id = c.id
+    WHERE o.id = p_orden_id;
 
     IF NOT FOUND THEN
         RETURN jsonb_build_object(
@@ -41,6 +51,16 @@ BEGIN
             'error', jsonb_build_object(
                 'code', 'ORDEN_INEXISTENTE',
                 'message', 'No se encontró la orden especificada.'
+            )
+        );
+    END IF;
+
+    IF NOT v_despacho_permitido THEN
+        RETURN jsonb_build_object(
+            'success', FALSE,
+            'error', jsonb_build_object(
+                'code', 'DESPACHO_BLOQUEADO_CREDITO',
+                'message', 'No se puede despachar la orden: El cliente se encuentra bloqueado por política de crédito y no posee una excepción gerencial activa.'
             )
         );
     END IF;
@@ -102,6 +122,13 @@ BEGIN
         SET estado = 'despachada'
         WHERE id = p_orden_id;
         v_estado_orden := 'despachada';
+
+        -- Si el cliente estaba utilizando una excepción gerencial, se consume y desactiva
+        IF v_excepcion_gerencia THEN
+            UPDATE public.clientes
+            SET excepcion_despacho_gerencia = FALSE
+            WHERE id = v_cliente_id;
+        END IF;
     END IF;
 
     RETURN jsonb_build_object(

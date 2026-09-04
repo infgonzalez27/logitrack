@@ -105,7 +105,7 @@ export function NuevaOrdenForm({
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Nueva orden de distribución"
-        description="Estado inicial: borrador"
+        description="Estado inicial: aprobada"
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">

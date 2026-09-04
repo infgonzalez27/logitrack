@@ -35,7 +35,6 @@ BEGIN
             'cliente_razon_social', c.razon_social,
             'cliente_vendedor_id', c.vendedor_id,
             'camion_id', o.camion_id,
-            'chofer_id', o.chofer_id,
             'estado', o.estado,
             'fecha_despacho', o.fecha_despacho,
             'peso_total_calculado', o.peso_total_calculado,

@@ -13,7 +13,11 @@ CREATE OR REPLACE FUNCTION public.actualiza_registro_cliente_segun_uuid(
     p_vendedor_id UUID DEFAULT NULL,
     p_despachador_id UUID DEFAULT NULL,
     p_id_ruta UUID DEFAULT NULL,
-    p_activo BOOLEAN DEFAULT NULL
+    p_activo BOOLEAN DEFAULT NULL,
+    p_limite_credito NUMERIC DEFAULT NULL,
+    p_max_facturas_vencidas INT DEFAULT NULL,
+    p_permiso_despacho_manual BOOLEAN DEFAULT NULL,
+    p_excepcion_despacho_gerencia BOOLEAN DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -73,10 +77,15 @@ BEGIN
         vendedor_id = COALESCE(p_vendedor_id, vendedor_id),
         despachador_id = COALESCE(p_despachador_id, despachador_id),
         id_ruta = COALESCE(p_id_ruta, id_ruta),
-        activo = COALESCE(p_activo, activo)
+        activo = COALESCE(p_activo, activo),
+        limite_credito = COALESCE(p_limite_credito, limite_credito),
+        max_facturas_vencidas = COALESCE(p_max_facturas_vencidas, max_facturas_vencidas),
+        permiso_despacho_manual = COALESCE(p_permiso_despacho_manual, permiso_despacho_manual),
+        excepcion_despacho_gerencia = COALESCE(p_excepcion_despacho_gerencia, excepcion_despacho_gerencia)
     WHERE id = p_id
     RETURNING id, rif_nit, razon_social, direccion_fiscal, telefono, movil1, movil2, movil3, 
-              correo_e, cond_liq, max_liq, vendedor_id, despachador_id, id_ruta, activo, created_at
+              correo_e, cond_liq, max_liq, vendedor_id, despachador_id, id_ruta, activo, created_at,
+              limite_credito, max_facturas_vencidas, permiso_despacho_manual, excepcion_despacho_gerencia
     INTO v_cliente_actualizado;
 
     -- Retornar éxito
@@ -99,6 +108,10 @@ BEGIN
             'despachador_id', v_cliente_actualizado.despachador_id,
             'id_ruta', v_cliente_actualizado.id_ruta,
             'activo', v_cliente_actualizado.activo,
+            'limite_credito', v_cliente_actualizado.limite_credito,
+            'max_facturas_vencidas', v_cliente_actualizado.max_facturas_vencidas,
+            'permiso_despacho_manual', v_cliente_actualizado.permiso_despacho_manual,
+            'excepcion_despacho_gerencia', v_cliente_actualizado.excepcion_despacho_gerencia,
             'created_at', v_cliente_actualizado.created_at
         )
     );

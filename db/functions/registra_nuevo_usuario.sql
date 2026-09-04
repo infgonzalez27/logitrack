@@ -36,9 +36,6 @@ BEGIN
     -- Validar y obtener el rol
     -- Normalizar nombre del rol
     v_rol_normalizado := LOWER(TRIM(p_rol_nombre));
-    IF v_rol_normalizado = 'chofer_cobrador' THEN
-        v_rol_normalizado := 'chofer';
-    END IF;
 
     SELECT id INTO v_rol_id FROM public.roles WHERE nombre = v_rol_normalizado;
     IF v_rol_id IS NULL THEN
@@ -132,24 +129,6 @@ BEGIN
         nombre_completo = EXCLUDED.nombre_completo,
         telefono = EXCLUDED.telefono,
         updated_at = NOW();
-
-    -- 4. Si el rol es Chofer, insertar en la tabla choferes
-    IF v_rol_normalizado = 'chofer' THEN
-        INSERT INTO public.choferes (
-            perfil_id,
-            cedula_licencia,
-            movil1,
-            estado,
-            created_at
-        ) VALUES (
-            v_user_id,
-            'LIC-' || UPPER(substring(v_user_id::text, 1, 8)),
-            p_telefono,
-            'disponible',
-            NOW()
-        )
-        ON CONFLICT (perfil_id) DO NOTHING;
-    END IF;
 
     RETURN jsonb_build_object(
         'success', true,

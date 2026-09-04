@@ -140,8 +140,6 @@ FOR SELECT
 USING (
     -- Si es administrador, gerente o despachador, puede ver todas las órdenes
     public.user_has_role(ARRAY['admin', 'gerente', 'despachador'])
-    -- Si es chofer, solo puede ver las asignadas a él
-    OR (public.user_has_role(ARRAY['chofer_cobrador']) AND chofer_id = auth.uid())
 );
 
 -- Crear política de modificación para personal administrativo y vendedores (para sus propias órdenes)

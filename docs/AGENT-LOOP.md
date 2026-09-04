@@ -296,4 +296,18 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Backend Scraping:**
     - Servicio backend que consulta https://www.bcv.org.ve/ para obtener la tasa del día e insertarla en `tasa_cambio`.
 
+- `[x]` **Tarea DB-027: Módulo de Políticas de Crédito y Permisos de Despacho Gerenciales (`clientes` y Radar)**
+  - **Función:** Incorporar políticas de crédito en `public.clientes`, controlar el acceso y edición de órdenes en el Radar del despachador según estado crediticio, y permitir otorgar/consumir excepciones de despacho de uso único por parte de la Gerencia.
+  - **DDL:**
+    - `ALTER TABLE public.clientes ADD COLUMN IF NOT EXISTS limite_credito NUMERIC(14,2) DEFAULT 0.00;`
+    - `ALTER TABLE public.clientes ADD COLUMN IF NOT EXISTS max_facturas_vencidas INT DEFAULT 0;`
+    - `ALTER TABLE public.clientes ADD COLUMN IF NOT EXISTS permiso_despacho_manual BOOLEAN DEFAULT TRUE;`
+    - `ALTER TABLE public.clientes ADD COLUMN IF NOT EXISTS excepcion_despacho_gerencia BOOLEAN DEFAULT FALSE;`
+  - **RPCs / Lógica:**
+    1. **`retorna_radar_despachador` & `retorna_radar_detalle_reporte`**: Calcular la mora del cliente (deuda acumulada vs `limite_credito` y cantidad de facturas pendientes vs `max_facturas_vencidas`). Si excede los límites y `excepcion_despacho_gerencia = FALSE`, retornar `despacho_permitido = FALSE`.
+    2. **`otorgar_excepcion_despacho_gerencia(p_cliente_id UUID)`**: RPC exclusivo para rol `gerente` o `admin` que activa `excepcion_despacho_gerencia = TRUE`.
+    3. **`guardar_resultado_despacho_radar` & `registrar_despacho_cliente_radar`**: Al procesar el despacho de la orden, si el cliente estaba bajo excepción gerencial (`excepcion_despacho_gerencia = TRUE`), resetear automáticamente el campo a `FALSE`.
+  - **Documentación:** [docs/PROPOSICION-CAMBIOS-DB.md](file:///d:/ProyectosWeb/LogiTrack/docs/PROPOSICION-CAMBIOS-DB.md#L130).
+
+
 

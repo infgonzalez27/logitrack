@@ -1,3 +1,5 @@
+-- Migration: Quitar validación y actualización de chofer en cargar_inventario_movil
+
 CREATE OR REPLACE FUNCTION public.cargar_inventario_movil(
     p_orden_id UUID
 )

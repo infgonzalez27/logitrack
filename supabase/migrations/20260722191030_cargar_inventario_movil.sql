@@ -8,7 +8,6 @@ AS $$
 DECLARE
     v_estado_actual TEXT;
     v_camion_id UUID;
-    v_chofer_id UUID;
     v_item RECORD;
 BEGIN
     -- 1. Validaciones básicas
@@ -25,8 +24,8 @@ BEGIN
     END IF;
 
     -- Obtener datos de la orden
-    SELECT estado, camion_id, chofer_id
-    INTO v_estado_actual, v_camion_id, v_chofer_id
+    SELECT estado, camion_id
+    INTO v_estado_actual, v_camion_id
     FROM public.ordenes_distribucion
     WHERE id = p_orden_id;
 
@@ -55,7 +54,7 @@ BEGIN
         );
     END IF;
 
-    -- Validar que camión y chofer estén asignados
+    -- Validar que el camión esté asignado
     IF v_camion_id IS NULL THEN
         RETURN json_build_object(
             'success', false,
@@ -63,18 +62,6 @@ BEGIN
             'error', json_build_object(
                 'code', 'CAMION_NO_ASIGNADO',
                 'message', 'No se puede despachar la orden porque no tiene un camión asignado.',
-                'details', NULL
-            )
-        );
-    END IF;
-
-    IF v_chofer_id IS NULL THEN
-        RETURN json_build_object(
-            'success', false,
-            'data', NULL,
-            'error', json_build_object(
-                'code', 'CHOFER_NO_ASIGNADO',
-                'message', 'No se puede despachar la orden porque no tiene un chofer asignado.',
                 'details', NULL
             )
         );
@@ -124,11 +111,6 @@ BEGIN
     UPDATE public.camiones
     SET estado = 'en_ruta'
     WHERE id = v_camion_id;
-
-    -- Cambiar chofer a estado 'en_ruta'
-    UPDATE public.choferes
-    SET estado = 'en_ruta'
-    WHERE perfil_id = v_chofer_id;
 
     -- Cambiar orden a estado 'en_transito'
     UPDATE public.ordenes_distribucion

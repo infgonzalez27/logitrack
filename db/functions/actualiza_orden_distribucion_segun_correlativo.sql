@@ -15,7 +15,6 @@ DECLARE
     v_user_id UUID := auth.uid();
     
     v_cliente_id UUID;
-    v_chofer_id UUID;
     v_camion_id UUID;
     v_fecha_despacho TIMESTAMPTZ;
     v_factura_origen TEXT;
@@ -97,7 +96,6 @@ BEGIN
 
     -- Extract header values
     v_cliente_id := (p_header->>'cliente_id')::UUID;
-    v_chofer_id := (p_header->>'chofer_id')::UUID;
     v_camion_id := (p_header->>'camion_id')::UUID;
     v_fecha_despacho := (p_header->>'fecha_despacho')::TIMESTAMPTZ;
     v_factura_origen := p_header->>'factura_origen_numero';
@@ -150,7 +148,6 @@ BEGIN
     -- Actualizar Cabecera de la Orden
     UPDATE public.ordenes_distribucion
     SET cliente_id = COALESCE(v_cliente_id, cliente_id),
-        chofer_id = COALESCE(v_chofer_id, chofer_id),
         camion_id = COALESCE(v_camion_id, camion_id),
         fecha_despacho = COALESCE(v_fecha_despacho, fecha_despacho),
         factura_origen_numero = COALESCE(v_factura_origen, factura_origen_numero),

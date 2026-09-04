@@ -9,7 +9,6 @@ AS $$
 DECLARE
     v_estado_actual TEXT;
     v_camion_id UUID;
-    v_chofer_id UUID;
     v_creado_por UUID;
     v_user_id UUID := auth.uid();
     v_item RECORD;
@@ -32,8 +31,8 @@ BEGIN
     END IF;
 
     -- Obtener datos de la orden
-    SELECT estado, camion_id, chofer_id, creado_por 
-    INTO v_estado_actual, v_camion_id, v_chofer_id, v_creado_por
+    SELECT estado, camion_id, creado_por 
+    INTO v_estado_actual, v_camion_id, v_creado_por
     FROM public.ordenes_distribucion
     WHERE id = p_orden_id;
 
@@ -129,24 +128,15 @@ BEGIN
 
     -- 3. De LISTA_PARA_CARGA a EN_TRANSITO
     ELSIF v_estado_actual = 'lista_para_carga' AND p_estado = 'en_transito' THEN
-        -- Validar camión y chofer asignados
+        -- Validar camión asignado
         IF v_camion_id IS NULL THEN
             RAISE EXCEPTION 'No se puede despachar la orden porque no tiene un camión asignado.';
-        END IF;
-
-        IF v_chofer_id IS NULL THEN
-            RAISE EXCEPTION 'No se puede despachar la orden porque no tiene un chofer asignado.';
         END IF;
 
         -- Actualizar camión a estado 'en_ruta'
         UPDATE public.camiones
         SET estado = 'en_ruta'
         WHERE id = v_camion_id;
-
-        -- Actualizar chofer a estado 'en_ruta'
-        UPDATE public.choferes
-        SET estado = 'en_ruta'
-        WHERE perfil_id = v_chofer_id;
 
         -- Carga de mercancía al inventario móvil del camión
         FOR v_item IN 
@@ -195,14 +185,10 @@ BEGIN
 
     -- 4. De EN_TRANSITO a LIQUIDADA
     ELSIF v_estado_actual = 'en_transito' AND p_estado = 'liquidada' THEN
-        -- Retornar camión y chofer a estado 'disponible'
+        -- Retornar camión a estado 'disponible'
         UPDATE public.camiones
         SET estado = 'disponible'
         WHERE id = v_camion_id;
-
-        UPDATE public.choferes
-        SET estado = 'disponible'
-        WHERE perfil_id = v_chofer_id;
 
         -- Procesar entregas y devoluciones en base a estado_entrega
         FOR v_item IN 
@@ -211,8 +197,6 @@ BEGIN
             WHERE orden_id = p_orden_id
         LOOP
             -- Caso 1: Entregado (o pendiente que por defecto se liquida como entregado) o Entregado Parcial
-            -- Nota: Como no existe columna de cantidad entregada parcial en detalle_distribucion,
-            -- asumimos para efectos de inventario móvil que lo despachado fue entregado.
             IF v_item.estado_entrega IN ('entregado', 'pendiente', 'entregado_parcial') THEN
                 UPDATE public.inventario_movil
                 SET cantidad_cargada = cantidad_cargada - v_item.cantidad_despachada,
@@ -263,16 +247,12 @@ BEGIN
                 WHERE producto_id = v_item.producto_id;
             END LOOP;
 
-        -- Si estaba en 'en_transito', liberar camión, chofer y retornar stock cargado al almacén
+        -- Si estaba en 'en_transito', liberar camión y retornar stock cargado al almacén
         ELSIF v_estado_actual = 'en_transito' THEN
-            -- Liberar camión y chofer
+            -- Liberar camión
             UPDATE public.camiones
             SET estado = 'disponible'
             WHERE id = v_camion_id;
-
-            UPDATE public.choferes
-            SET estado = 'disponible'
-            WHERE perfil_id = v_chofer_id;
 
             FOR v_item IN 
                 SELECT producto_id, cantidad_despachada 

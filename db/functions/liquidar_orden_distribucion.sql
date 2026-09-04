@@ -9,7 +9,6 @@ DECLARE
     v_estado_orden TEXT;
     v_cliente_id UUID;
     v_camion_id UUID;
-    v_chofer_id UUID;
     v_rendicion_aprobada BOOLEAN := FALSE;
 BEGIN
     -- Validar parámetro
@@ -24,8 +23,8 @@ BEGIN
     END IF;
 
     -- Obtener orden
-    SELECT estado, cliente_id, camion_id, chofer_id
-    INTO v_estado_orden, v_cliente_id, v_camion_id, v_chofer_id
+    SELECT estado, cliente_id, camion_id
+    INTO v_estado_orden, v_cliente_id, v_camion_id
     FROM public.ordenes_distribucion
     WHERE id = p_orden_id;
 
@@ -68,9 +67,8 @@ BEGIN
         );
     END IF;
 
-    -- C. Liberar camión y chofer
+    -- C. Liberar camión
     UPDATE public.camiones SET estado = 'disponible' WHERE id = v_camion_id;
-    UPDATE public.choferes SET estado = 'disponible' WHERE perfil_id = v_chofer_id;
 
     -- D. Transicionar orden a 'liquidada'
     UPDATE public.ordenes_distribucion SET estado = 'liquidada' WHERE id = p_orden_id;

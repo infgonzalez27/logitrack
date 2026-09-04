@@ -39,7 +39,23 @@ BEGIN
                         'direccion_fiscal', c.direccion_fiscal,
                         'telefono', c.telefono,
                         'movil1', c.movil1,
-                        'nombre_ruta', r.nombre_ruta
+                        'nombre_ruta', r.nombre_ruta,
+                        'limite_credito', COALESCE(c.limite_credito, 0.00),
+                        'max_facturas_vencidas', COALESCE(c.max_facturas_vencidas, 0),
+                        'permiso_despacho_manual', COALESCE(c.permiso_despacho_manual, TRUE),
+                        'excepcion_despacho_gerencia', COALESCE(c.excepcion_despacho_gerencia, FALSE),
+                        'despacho_permitido', (
+                            COALESCE(c.excepcion_despacho_gerencia, FALSE) = TRUE OR (
+                                COALESCE(c.permiso_despacho_manual, TRUE) = TRUE
+                                AND (COALESCE(c.limite_credito, 0.00) = 0.00 OR COALESCE(o.total_recaudar_bs, 0.00) <= COALESCE(c.limite_credito, 0.00))
+                            )
+                        ),
+                        'motivo_bloqueo', CASE
+                            WHEN COALESCE(c.excepcion_despacho_gerencia, FALSE) = TRUE THEN NULL
+                            WHEN COALESCE(c.permiso_despacho_manual, TRUE) = FALSE THEN 'Despacho bloqueado manualmente por política de crédito'
+                            WHEN COALESCE(c.limite_credito, 0.00) > 0.00 AND COALESCE(o.total_recaudar_bs, 0.00) > COALESCE(c.limite_credito, 0.00) THEN 'Monto de la orden supera el límite de crédito del cliente'
+                            ELSE NULL
+                        END
                     ),
                     'detalles', (
                         SELECT COALESCE(jsonb_agg(
