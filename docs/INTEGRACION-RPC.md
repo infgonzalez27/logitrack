@@ -534,7 +534,8 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   ```
 
 ### 2.15. Actualizar Registro de Cliente por UUID (`actualiza_registro_cliente_segun_uuid`)
-- **Firma SQL:** `actualiza_registro_cliente_segun_uuid(p_id UUID, p_rif_nit TEXT DEFAULT NULL, p_razon_social TEXT DEFAULT NULL, p_direccion_fiscal TEXT DEFAULT NULL, p_telefono TEXT DEFAULT NULL, p_movil1 TEXT DEFAULT NULL, p_movil2 TEXT DEFAULT NULL, p_movil3 TEXT DEFAULT NULL, p_correo_e TEXT DEFAULT NULL, p_cond_liq NUMERIC DEFAULT NULL, p_max_liq NUMERIC DEFAULT NULL, p_vendedor_id UUID DEFAULT NULL, p_despachador_id UUID DEFAULT NULL, p_id_ruta UUID DEFAULT NULL, p_activo BOOLEAN DEFAULT NULL)`
+- **Firma SQL:** `actualiza_registro_cliente_segun_uuid(p_id UUID, p_rif_nit TEXT DEFAULT NULL, p_razon_social TEXT DEFAULT NULL, p_direccion_fiscal TEXT DEFAULT NULL, p_telefono TEXT DEFAULT NULL, p_movil1 TEXT DEFAULT NULL, p_movil2 TEXT DEFAULT NULL, p_movil3 TEXT DEFAULT NULL, p_correo_e TEXT DEFAULT NULL, p_cond_liq NUMERIC DEFAULT NULL, p_max_liq NUMERIC DEFAULT NULL, p_vendedor_id UUID DEFAULT NULL, p_despachador_id UUID DEFAULT NULL, p_id_ruta UUID DEFAULT NULL, p_activo BOOLEAN DEFAULT NULL, p_limite_credito NUMERIC DEFAULT NULL, p_max_facturas_vencidas INT DEFAULT NULL, p_permiso_despacho_manual BOOLEAN DEFAULT NULL)`
+- **Notas (DB-027):** permite actualizar políticas de crédito del cliente desde el formulario UI (`limite_credito`, `max_facturas_vencidas`, `permiso_despacho_manual`). `excepcion_despacho_gerencia` **no** se edita aquí: solo vía `otorgar_excepcion_despacho_gerencia` (§2.23).
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('actualiza_registro_cliente_segun_uuid', {
@@ -550,7 +551,10 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_vendedor_id: '8a9b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d',
     p_despachador_id: '5c0a16e2-3344-6655-0011-ccddeeff3344',
     p_id_ruta: '3a8f94c0-1122-4433-8899-aabbccdd1122',
-    p_activo: true
+    p_activo: true,
+    p_limite_credito: 1500.00,
+    p_max_facturas_vencidas: 2,
+    p_permiso_despacho_manual: true
   });
   ```
 - **Respuesta esperada en `data` (Éxito):**
@@ -574,6 +578,10 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
       "despachador_id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
       "id_ruta": "3a8f94c0-1122-4433-8899-aabbccdd1122",
       "activo": true,
+      "limite_credito": 1500.00,
+      "max_facturas_vencidas": 2,
+      "permiso_despacho_manual": true,
+      "excepcion_despacho_gerencia": false,
       "created_at": "2026-08-01T10:00:00+00:00"
     }
   }
@@ -591,6 +599,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.16. Consulta de Radar del Despachador (`retorna_radar_despachador`)
 - **Firma SQL:** `retorna_radar_despachador()`
+- **Notas (DB-027):** evalúa morosidad del cliente. Si excede `limite_credito` / `max_facturas_vencidas` y no tiene `excepcion_despacho_gerencia`, retorna `despacho_permitido: false` y `motivo_bloqueo`.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('retorna_radar_despachador');
@@ -609,6 +618,8 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
         "tasa_cambio": 36.50,
         "total_recaudar_bs": 1825.00,
         "total_recaudar_usd": 50.00,
+        "despacho_permitido": false,
+        "motivo_bloqueo": "Cliente excede límite de crédito o facturas vencidas. Requiere autorización de gerencia.",
         "cliente": {
           "id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
           "razon_social": "Comercializadora Ejemplo C.A.",
@@ -616,7 +627,11 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
           "direccion_fiscal": "Av. Principal, Edf. LogiTrack, Piso 3",
           "telefono": "+582121112233",
           "movil1": "+584141234567",
-          "nombre_ruta": "Ruta Centro"
+          "nombre_ruta": "Ruta Centro",
+          "limite_credito": 1500.00,
+          "max_facturas_vencidas": 2,
+          "permiso_despacho_manual": true,
+          "excepcion_despacho_gerencia": false
         },
         "detalles": [
           {
@@ -647,9 +662,12 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     ]
   }
   ```
-
+- **UI recomendada:** si `despacho_permitido === false`, bloquear “Iniciar entrega” / formulario de captura y mostrar `motivo_bloqueo`. Gerencia libera con §2.23.
 ### 2.17. Registrar Despacho de Cliente en Radar (`registrar_despacho_cliente_radar`)
 - **Firma SQL:** `registrar_despacho_cliente_radar(p_orden_id UUID, p_detalles_json JSONB)`
+- **Notas (DB-027):**
+  - Rechaza con `DESPACHO_BLOQUEADO_CREDITO` si el cliente está bloqueado por crédito y no tiene excepción gerencial.
+  - Al completar la entrega, si `excepcion_despacho_gerencia = TRUE`, se desactiva automáticamente a `FALSE` (un solo uso).
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('registrar_despacho_cliente_radar', {
@@ -674,6 +692,16 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "data": {
       "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
       "nuevo_estado_orden": "despachada"
+    }
+  }
+  ```
+- **Respuesta esperada en `data` (Fallo - crédito / morosidad):**
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "DESPACHO_BLOQUEADO_CREDITO",
+      "message": "El cliente tiene restricciones de crédito. Solicite autorización de gerencia."
     }
   }
   ```
@@ -834,7 +862,38 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
----
+### 2.23. Otorgar Excepción de Despacho por Gerencia (`otorgar_excepcion_despacho_gerencia`)
+- **Migración:** `20260904125200_modulo_politicas_credito_y_despacho.sql` (DB-027)
+- **Firma SQL:** `otorgar_excepcion_despacho_gerencia(p_cliente_id UUID)`
+- **Roles:** solo `gerente` o `admin`. Otros roles → `ACCESO_DENEGADO`.
+- **Efecto:** asigna `clientes.excepcion_despacho_gerencia = TRUE` (permiso de un solo uso). Tras un despacho exitoso en radar, el RPC §2.17 la vuelve a `FALSE`.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('otorgar_excepcion_despacho_gerencia', {
+    p_cliente_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Excepción de despacho otorgada al cliente.",
+    "data": {
+      "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+      "excepcion_despacho_gerencia": true
+    }
+  }
+  ```
+- **Respuesta esperada en `data` (Fallo - sin permiso):**
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "ACCESO_DENEGADO",
+      "message": "Solo el personal gerencial o administrador puede otorgar excepciones de despacho."
+    }
+  }
+  ```
 
 ---
 
@@ -852,4 +911,17 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 | `EXCEPCION_TASA_NO_ENCONTRADA` | No existe tasa de cambio registrada para la fecha. | Redirigir o solicitar registro en el Módulo de Mantenimiento de Tasas. |
 | `FECHA_TASA_DUPLICADA` | Se intentó registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
 | `ESTADO_INVALIDO` | La orden no está en el estado requerido para la acción. | Bloquear el botón o refrescar la pantalla. |
+| `DESPACHO_BLOQUEADO_CREDITO` | Cliente moroso / supera políticas de crédito sin excepción gerencial. | Mostrar bloqueo al despachador y CTA para que gerencia autorice (§2.23). |
+| `ACCESO_DENEGADO` | El rol autenticado no puede ejecutar la acción. | Ocultar botón o mostrar “sin permiso”. |
 | `SQL_ERROR` | Error interno inesperado en PostgreSQL. | Mostrar error genérico de base de datos e informar al administrador. |
+
+### Columnas de crédito en `public.clientes` (DB-027)
+
+| Columna | Tipo | Uso |
+|---------|------|-----|
+| `limite_credito` | `NUMERIC(14,2)` | Monto máximo de crédito / saldo deudor permitido |
+| `max_facturas_vencidas` | `INT` | Máximo de facturas/solicitudes vencidas sin pagar |
+| `permiso_despacho_manual` | `BOOLEAN` | Control de despacho manual por cliente |
+| `excepcion_despacho_gerencia` | `BOOLEAN` | Permiso de un solo uso otorgado por gerencia |
+
+**Backlog:** DB-027 políticas de crédito y despacho — completada `[x]` (migración aplicada en Supabase).
