@@ -854,6 +854,74 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.24. Consulta de Abonos u Órdenes Pendientes del Cliente (`solicita_abonos_orden_distribucion`)
+- **Firma SQL:** `solicita_abonos_orden_distribucion(p_cliente_id UUID)`
+- **Descripción:** Obtiene el saldo a favor actual del cliente y la lista de sus órdenes en estado `por_liquidar` con el total de abonos acumulados aprobados a la fecha y el saldo pendiente.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_abonos_orden_distribucion', {
+    p_cliente_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+      "saldo_favor": 150.00,
+      "ordenes": [
+        {
+          "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+          "correlativo": 1025,
+          "fecha_despacho": "2026-08-14",
+          "monto_total_orden": 500.00,
+          "abonos_acumulados": 200.00,
+          "saldo_pendiente": 300.00
+        }
+      ]
+    },
+    "error": null
+  }
+  ```
+
+### 2.25. Reporte Gerencial de Recaudaciones (`reporte_recaudaciones_gerenciales`)
+- **Firma SQL:** `reporte_recaudaciones_gerenciales(p_fecha_desde DATE DEFAULT NULL, p_fecha_hasta DATE DEFAULT NULL)`
+- **Descripción:** Genera el reporte consolidado de rendiciones de cuentas procesadas en un rango de fechas con desglose por cliente, vendedor/auditor, método de pago y órdenes abonadas.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('reporte_recaudaciones_gerenciales', {
+    p_fecha_desde: '2026-09-01',
+    p_fecha_hasta: '2026-09-30'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "rendicion_id": "c1d2e3f4-a5b6-7890-cdef-1234567890ab",
+        "fecha_rendicion": "2026-09-08T11:00:00Z",
+        "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+        "cliente_nombre": "Comercializadora Ejemplo C.A.",
+        "cliente_rif": "J-12345678-9",
+        "estado": "aprobada",
+        "total_efectivo_recaudado": 100.00,
+        "total_transferencias_recaudado": 200.00,
+        "observaciones": "Cobranza ruta centro",
+        "detalle_fpagos": [
+          { "fpago_id": "...", "concepto": "Pago movil", "monto": 200.00, "referencia_bancaria": "123456" }
+        ],
+        "detalle_ordenes": [
+          { "orden_id": "...", "correlativo": 1025, "recaudado": 300.00 }
+        ]
+      }
+    ],
+    "error": null
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend

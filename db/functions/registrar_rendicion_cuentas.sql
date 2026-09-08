@@ -2,8 +2,8 @@ CREATE OR REPLACE FUNCTION public.registrar_rendicion_cuentas(
     p_cliente_id UUID,
     p_observaciones TEXT,
     p_creado_por UUID,
-    p_ordenes JSONB,  -- Array de objetos: [{"orden_id": "...", "monto_recaudado": 150.00}]
-    p_pagos JSONB      -- Array de objetos: [{"fpago_id": "...", "monto": 200.00, "referencia_bancaria": "...", "cuenta_bancaria": "...", "capture_url": "..."}]
+    p_ordenes JSONB,  -- Array: [{"orden_id": "...", "monto_recaudado": 150.00}]
+    p_pagos JSONB      -- Array: [{"fpago_id": "...", "monto": 200.00, "referencia_bancaria": "...", "cuenta_bancaria": "...", "capture_url": "..."}]
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -15,9 +15,12 @@ DECLARE
     v_total_pagos NUMERIC(12, 2) := 0.00;
     v_total_efectivo NUMERIC(12, 2) := 0.00;
     v_total_transferencias NUMERIC(12, 2) := 0.00;
+    v_saldo_favor_usado NUMERIC(12, 2) := 0.00;
+    v_cliente_saldo_favor NUMERIC(12, 2) := 0.00;
     v_item RECORD;
     v_pago RECORD;
     v_exceso NUMERIC(12, 2) := 0.00;
+    v_fpago_concepto TEXT;
     v_fpago_info BOOLEAN;
 BEGIN
     -- 1. Validaciones básicas
@@ -33,8 +36,13 @@ BEGIN
         );
     END IF;
 
-    -- Validar que el cliente exista
-    IF NOT EXISTS (SELECT 1 FROM public.clientes WHERE id = p_cliente_id) THEN
+    -- Validar que el cliente exista y obtener saldo a favor actual
+    SELECT COALESCE(saldo_favor, 0.00) 
+    INTO v_cliente_saldo_favor 
+    FROM public.clientes 
+    WHERE id = p_cliente_id;
+
+    IF NOT FOUND THEN
         RETURN json_build_object(
             'success', false,
             'data', NULL,
@@ -73,17 +81,20 @@ BEGIN
 
     -- 2. Calcular totales de órdenes
     FOR v_item IN SELECT * FROM jsonb_to_recordset(p_ordenes) AS x(orden_id UUID, monto_recaudado NUMERIC(12,2)) LOOP
-        v_total_ordenes := v_total_ordenes + v_item.monto_recaudado;
+        v_total_ordenes := v_total_ordenes + COALESCE(v_item.monto_recaudado, 0.00);
     END LOOP;
 
-    -- 3. Calcular totales y clasificar según formas de pago (fpagos.fpago_info)
+    -- 3. Validar y clasificar formas de pago
     FOR v_pago IN SELECT * FROM jsonb_to_recordset(p_pagos) AS y(fpago_id UUID, monto NUMERIC(12,2), referencia_bancaria TEXT, cuenta_bancaria TEXT, capture_url TEXT) LOOP
-        v_total_pagos := v_total_pagos + v_pago.monto;
+        v_total_pagos := v_total_pagos + COALESCE(v_pago.monto, 0.00);
         
-        -- Obtener fpago_info para saber si es transferencia/digital (true) o efectivo (false)
-        SELECT fpago_info INTO v_fpago_info FROM public.fpagos WHERE fpago_id = v_pago.fpago_id;
+        -- Obtener información de la forma de pago
+        SELECT fpago_concepto, fpago_info 
+        INTO v_fpago_concepto, v_fpago_info 
+        FROM public.fpagos 
+        WHERE fpago_id = v_pago.fpago_id;
         
-        IF v_fpago_info IS NULL THEN
+        IF v_fpago_concepto IS NULL THEN
             RETURN json_build_object(
                 'success', false,
                 'data', NULL,
@@ -95,12 +106,28 @@ BEGIN
             );
         END IF;
 
-        IF v_fpago_info = FALSE THEN
-            v_total_efectivo := v_total_efectivo + v_pago.monto;
+        -- Verificar si es uso de Saldo a Favor
+        IF v_fpago_concepto ILIKE '%saldo%favor%' THEN
+            v_saldo_favor_usado := v_saldo_favor_usado + COALESCE(v_pago.monto, 0.00);
+        ELSIF v_fpago_info = FALSE THEN
+            v_total_efectivo := v_total_efectivo + COALESCE(v_pago.monto, 0.00);
         ELSE
-            v_total_transferencias := v_total_transferencias + v_pago.monto;
+            v_total_transferencias := v_total_transferencias + COALESCE(v_pago.monto, 0.00);
         END IF;
     END LOOP;
+
+    -- Validar si el saldo a favor usado excede el disponible del cliente
+    IF v_saldo_favor_usado > v_cliente_saldo_favor THEN
+        RETURN json_build_object(
+            'success', false,
+            'data', NULL,
+            'error', json_build_object(
+                'code', 'SALDO_FAVOR_INSUFICIENTE',
+                'message', 'El saldo a favor utilizado (' || v_saldo_favor_usado || ') supera el saldo a favor disponible del cliente (' || v_cliente_saldo_favor || ').',
+                'details', NULL
+            )
+        );
+    END IF;
 
     -- 4. Crear el registro principal (Cabecera) en rendiciones_cuentas
     INSERT INTO public.rendiciones_cuentas (
@@ -155,7 +182,32 @@ BEGIN
         );
     END LOOP;
 
-    -- 7. Manejo de Crédito a Favor del Cliente
+    -- 7. Procesar uso de Saldo a Favor si aplica
+    IF v_saldo_favor_usado > 0 THEN
+        UPDATE public.clientes
+        SET saldo_favor = saldo_favor - v_saldo_favor_usado
+        WHERE id = p_cliente_id;
+
+        INSERT INTO public.movimientos_saldo_favor (
+            cliente_id,
+            rendicion_id,
+            orden_id,
+            monto,
+            tipo,
+            observaciones,
+            created_at
+        ) VALUES (
+            p_cliente_id,
+            v_rendicion_id,
+            NULL,
+            -v_saldo_favor_usado,
+            'cargo_pago_orden',
+            'Uso de saldo a favor en rendición de cuentas ID: ' || v_rendicion_id,
+            NOW()
+        );
+    END IF;
+
+    -- 8. Manejo de Excedente de Pago (Crédito a Favor Generado)
     IF v_total_pagos > v_total_ordenes THEN
         v_exceso := v_total_pagos - v_total_ordenes;
 
@@ -182,13 +234,14 @@ BEGIN
         WHERE id = p_cliente_id;
     END IF;
 
-    -- 8. Retorno Exitoso
+    -- 9. Retorno Exitoso
     RETURN json_build_object(
         'success', true,
         'data', json_build_object(
             'rendicion_id', v_rendicion_id,
             'total_ordenes', v_total_ordenes,
             'total_pagos', v_total_pagos,
+            'saldo_favor_usado', v_saldo_favor_usado,
             'saldo_favor_generado', v_exceso
         ),
         'error', NULL

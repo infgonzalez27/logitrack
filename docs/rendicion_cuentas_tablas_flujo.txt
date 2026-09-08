@@ -1,6 +1,20 @@
     Vendedor->>Cliente: Visita y cobra órdenes anteriores (recaudación parcial/total)
     Cliente->>Vendedor: Envía capture de Pago Móvil/Transferencia
     Vendedor->>Vendedor: Registra Recaudación (asocia N órdenes) -> Estado: Pendiente
+
+La lógica a seguir en un  proceso de recaudación es que en el módulo se solicite el cliente. Debemos darle una lista de clientes
+al front para que la muestre al usuario y este escoja al cliente a quien le va hacer la recaudación.
+Debe existir búsqueda por criterio para ubicar mas rapidamente al cliente
+Al seleccionar al cliente se le debe informar monto por concepto de créditos a favor de recaudaciones anteriores (suma de créditos)
+Luego se le debe suministrar las ordenes de distribución del cliente seleccionado que estén por liquidar con la suma de recaudaciones
+anteriores
+Por cada orden de distribución darle la opción para que registre la cantidad de la recaudación
+Ya cuando estén las ordenes con su recaudación, darle una lista de formas de pago, este pago puede ser en una o mas de una forma
+de pago.
+Ya de allí crear el procedimiento para guardar los registros en las tablas involucradas
+Cambiar el status de la orden a 'liquidada' en el caso de que la suma de las recaudaciones anteriores a una orden mas la del actual 
+proceso, cuvra la totalidad de la orden
+Procesar si se usó el crédito a favor para que ya no esté disponible
 	
 Como se puede observar, la rendición de cuentas la registra como pendiente de aprobación el vendedor y el gerente lo aprueba	
 
@@ -10,11 +24,16 @@ una tabla hija: detalle_rendicion_ordenes, para el registro de las ordenes de di
 otra tabla hija: detalle_rendicion_fpagos, para el registro de las formas de pago del total a recaudar,
 Ya que en una rendicion de cuentas se pueden recaudar mas de una orden con mas de una forma de pago.
 
+Cuando se crea un proceso de rendición de cuentas, debe haber un Store Procedure cuyo nombre podría ser Solicita_abonos_orden_distribución
+cuya finalidad es traer las recaudaciones o abonos hechos a la orden a la fecha como también un campo para registrar cuanto se está recaudando 
+por cada Orden que entra en el proceso
 Las tablas ya existen, necesitamos una funcion para el registro con las siguientes reglas:
 Ningún registro en las tablas hijas puede quedar huerfano
 Por cada tabla hija, por lo menos debe existir un registro relacionado con el Id de la tabla padre
+Cuando la recaudación de una orden es completa, la orden pasa al estado de "Liquidada" en caso de que sea parcial, se mantiene en "Por liquidar"
 
 El total de la forma de pago puede exceder el total recaudado de las ordenes de distribucion
 
 Si el lo recaudado es mayor al total de las ordenes de distribucion se crea un crédito a favor del cliente el cual se rebaja dándole la diferencia o se toma en cuenta como otra rendición de cuentas para una futura orden de distribucion.
 Allí si te autorizo a que me asesores como manejar eso.
+Se necesita un reporte para la gerencia de todo lo recaudado según rango de fechas, sencillo, fecha, referencia, monto, forma de pago
