@@ -37,3 +37,20 @@ El total de la forma de pago puede exceder el total recaudado de las ordenes de 
 Si el lo recaudado es mayor al total de las ordenes de distribucion se crea un crédito a favor del cliente el cual se rebaja dándole la diferencia o se toma en cuenta como otra rendición de cuentas para una futura orden de distribucion.
 Allí si te autorizo a que me asesores como manejar eso.
 Se necesita un reporte para la gerencia de todo lo recaudado según rango de fechas, sencillo, fecha, referencia, monto, forma de pago
+
+## Nuevas observaciones
+Se debe registrar la tasa de cambio según la fecha de rendición, ya que existen pagos en bolívares y para eso se debe hacer el cálculo
+Asesórame donde se debería registrar la tasa, yo pienso que debería ser en la tabla padre o de encabezado.
+Asesórame para el registro de los montos en bolívares. agregamos un nuevo campo  para esto, en que tabla se agregaría?
+En la tabla detalle_rendicion_fpagos hay un campo titulado cuenta_bancaria, este campo en el front es de selección ya que allí se registrar 
+la cuenta bancaria destino que pertenece a la empresa. Si maneja una sola cuenta pues esa sería por defecto, para esto es necesario
+crear una tabla para el manejo de las cuentas bancarias que maneja la empresa. Crea la tabla con los campos:
+cuenta_bancaria TEXT(20),
+Entidad_bancaria TEXT(100)
+status_cuenta BOOLEAN (.T. Activo, .F. Suspendida)
+
+Crea procedimientos para:
+registrar una nueva cuenta bancaria, 
+editar/actualizar una cuenta bancaria
+dar de baja o suspender una cuenta bancaria
+Eso hasta los momentos, si mas adelante se quiere llevar un consolidado esperemos el momento de su solicitud.

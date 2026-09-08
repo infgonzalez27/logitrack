@@ -903,23 +903,67 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
       {
         "rendicion_id": "c1d2e3f4-a5b6-7890-cdef-1234567890ab",
         "fecha_rendicion": "2026-09-08T11:00:00Z",
+        "tasa_cambio": 50.00,
         "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
         "cliente_nombre": "Comercializadora Ejemplo C.A.",
         "cliente_rif": "J-12345678-9",
         "estado": "aprobada",
         "total_efectivo_recaudado": 100.00,
         "total_transferencias_recaudado": 200.00,
+        "total_recaudado_usd": 300.00,
+        "total_recaudado_bs": 15000.00,
         "observaciones": "Cobranza ruta centro",
         "detalle_fpagos": [
-          { "fpago_id": "...", "concepto": "Pago movil", "monto": 200.00, "referencia_bancaria": "123456" }
+          { "fpago_id": "...", "concepto": "Pago movil", "monto": 200.00, "monto_bs": 10000.00, "monto_usd": 200.00, "cuenta_bancaria": "0102-XXXX" }
         ],
         "detalle_ordenes": [
-          { "orden_id": "...", "correlativo": 1025, "recaudado": 300.00 }
+          { "orden_id": "...", "correlativo": 1025, "recaudado": 300.00, "recaudado_bs": 15000.00 }
         ]
       }
     ],
     "error": null
   }
+  ```
+
+### 2.26. Crear Cuenta Bancaria de la Empresa (`crear_cuenta_bancaria_empresa`)
+- **Firma SQL:** `crear_cuenta_bancaria_empresa(p_cuenta_bancaria TEXT, p_entidad_bancaria TEXT)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('crear_cuenta_bancaria_empresa', {
+    p_cuenta_bancaria: '0102-0123-45-6789012345',
+    p_entidad_bancaria: 'Banco de Venezuela'
+  });
+  ```
+
+### 2.27. Actualizar Cuenta Bancaria de la Empresa (`actualizar_cuenta_bancaria_empresa`)
+- **Firma SQL:** `actualizar_cuenta_bancaria_empresa(p_id UUID, p_cuenta_bancaria TEXT DEFAULT NULL, p_entidad_bancaria TEXT DEFAULT NULL, p_status_cuenta BOOLEAN DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('actualizar_cuenta_bancaria_empresa', {
+    p_id: 'UUID_CUENTA',
+    p_cuenta_bancaria: '0105-0987-65-4321098765',
+    p_entidad_bancaria: 'Mercantil Banco',
+    p_status_cuenta: true
+  });
+  ```
+
+### 2.28. Cambiar Estatus / Suspender Cuenta Bancaria (`cambiar_status_cuenta_bancaria_empresa`)
+- **Firma SQL:** `cambiar_status_cuenta_bancaria_empresa(p_id UUID, p_status_cuenta BOOLEAN)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('cambiar_status_cuenta_bancaria_empresa', {
+    p_id: 'UUID_CUENTA',
+    p_status_cuenta: false // false para suspender / dar de baja, true para reactivar
+  });
+  ```
+
+### 2.29. Consultar Cuentas Bancarias de la Empresa (`retorna_cuentas_bancarias_empresa`)
+- **Firma SQL:** `retorna_cuentas_bancarias_empresa(p_solo_activas BOOLEAN DEFAULT TRUE)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_cuentas_bancarias_empresa', {
+    p_solo_activas: true
+  });
   ```
 
 ---

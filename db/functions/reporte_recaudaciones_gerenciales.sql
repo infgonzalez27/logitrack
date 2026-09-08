@@ -19,12 +19,15 @@ BEGIN
         json_build_object(
             'rendicion_id', rc.id,
             'fecha_rendicion', rc.fecha_rendicion,
+            'tasa_cambio', COALESCE(rc.tasa_cambio, 1.0000),
             'cliente_id', rc.cliente_id,
             'cliente_nombre', c.razon_social,
             'cliente_rif', c.rif_nit,
             'estado', rc.estado,
             'total_efectivo_recaudado', rc.total_efectivo_recaudado,
             'total_transferencias_recaudado', rc.total_transferencias_recaudado,
+            'total_recaudado_usd', COALESCE(rc.total_recaudado_usd, 0.00),
+            'total_recaudado_bs', COALESCE(rc.total_recaudado_bs, 0.00),
             'observaciones', rc.observaciones,
             'detalle_fpagos', COALESCE(fpagos_agg.fpagos, '[]'::json),
             'detalle_ordenes', COALESCE(ordenes_agg.ordenes, '[]'::json)
@@ -38,13 +41,18 @@ BEGIN
                 'fpago_id', dfp.fpago_id,
                 'concepto', fp.fpago_concepto,
                 'monto', dfp.monto,
+                'monto_bs', COALESCE(dfp.monto_bs, 0.00),
+                'monto_usd', COALESCE(dfp.monto_usd, dfp.monto, 0.00),
+                'cuenta_bancaria_id', dfp.cuenta_bancaria_id,
+                'entidad_bancaria', cbe.entidad_bancaria,
+                'cuenta_bancaria', COALESCE(cbe.cuenta_bancaria, dfp.cuenta_bancaria),
                 'referencia_bancaria', dfp.referencia_bancaria,
-                'cuenta_bancaria', dfp.cuenta_bancaria,
                 'capture_url', dfp.capture_url
             )
         ) AS fpagos
         FROM public.detalle_rendicion_fpagos dfp
         LEFT JOIN public.fpagos fp ON dfp.fpago_id = fp.fpago_id
+        LEFT JOIN public.cuentas_bancarias_empresa cbe ON dfp.cuenta_bancaria_id = cbe.id
         WHERE dfp.rendicion_id = rc.id
     ) fpagos_agg ON TRUE
     LEFT JOIN LATERAL (
@@ -52,7 +60,8 @@ BEGIN
             json_build_object(
                 'orden_id', dro.orden_distribucion_id,
                 'correlativo', od.correlativo,
-                'recaudado', dro.recaudado
+                'recaudado', dro.recaudado,
+                'recaudado_bs', COALESCE(dro.recaudado_bs, 0.00)
             )
         ) AS ordenes
         FROM public.detalle_rendicion_ordenes dro
