@@ -1,0 +1,16 @@
+## Cuentas por cobrar
+Crea el procedimiento retorna_ordenes_por_liquidar()
+Ordenes bajo el status 'por_liquidar' agrupadas por clientes y ordenadas por mayor cantidad de días vencidos desde su fecha de registro
+Que se pueda visualizar algo asi:
+===================================================================
+Id Cliente  Días vencidos		Cant. Ordenes		Por liquidar
+===================================================================
+   #72			28					1					$1,200.00
+   #12			 7					1					$800.00
+   #56			 2					1					$750.00
+===================================================================
+
+## Depuración base de datos
+1. Eliminar ordenes de distribucion que no tenga registros en la tabla hija detalle_distribucion
+2. De la tabla de camiones solo deja los tres primeros registros y elimina los demás
+Ejecútalo en SUPABASE

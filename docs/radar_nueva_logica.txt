@@ -45,3 +45,31 @@ Lo tienes contemplado así?
 
 Vamos agregar un nuevo campo a la tabla radars titulado aprobado tipo bollean, porque cuando el despachador entrege cuentas al gerente este gerente es quien aprueba
 y al aprobar se ejecutan los STORE PROCEDURE.
+
+## Functions lista de radars según fecha
+Vas a crear una Functions Retorna_lista_radars_segun_rango_fechas(tn_idDespachador, tdFechaInicial, tdFechaLimite)
+para retornar la lista de radars ordenado por fechas descendentes según rango de fechas pasados desde el backend como parametros 
+Para que el front pueda mostrar algo así:
+------------------------------------------------------
+Fecha       ID Radar 	Total paradas  Items   SKU
+------------------------------------------------------
+25/08/2026    #48			12			320		2 
+24/08/2026    #47			12			405		5
+23/08/2026    #46			15			520		3
+------------------------------------------------------
+
+Vas a crear una Funtions que retorne un detalle resumido de las ordenes contenidas en un id_radar que se te pasará como parámetro
+FUNCTION Retorna_Ordenes_Distribucion_Segun_IdRadar(tnIdRadar)
+
+Debe retornar:
+id_orden_distribucion
+Ruta
+razon_social
+direccion_fiscal
+Items
+SKU 
+contenedores_retirados
+
+Nota: SKU es la cantidad de id_producto despachados
+
+Has el análisis, crea el IMPLEMENTATION PLAN en base a lo expuesto anteriormente.

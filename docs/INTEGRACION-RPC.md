@@ -966,6 +966,90 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   });
   ```
 
+### 2.30. Lista de Radares según Rango de Fechas (`retorna_lista_radars_segun_rango_fechas`)
+- **Firma SQL:** `retorna_lista_radars_segun_rango_fechas(p_despachador_id UUID DEFAULT NULL, p_fecha_inicial DATE DEFAULT NULL, p_fecha_limite DATE DEFAULT NULL)`
+- **Descripción:** Retorna el listado de radares asignados a un despachador ordenados por fecha descendente en un rango de fechas especificado, incluyendo paradas (órdenes), unidades despachadas (items), tipos de productos (SKU) y estado de aprobación gerencial.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_radars_segun_rango_fechas', {
+    p_despachador_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab', // Opcional (si se omite usa auth.uid())
+    p_fecha_inicial: '2026-08-01',
+    p_fecha_limite: '2026-08-31'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "fecha_despacho": "2026-08-25",
+        "id_radar": "f1e2d3c4-b5a6-7890-1234-567890abcdef",
+        "correlativo": 48,
+        "total_paradas": 12,
+        "items": 320,
+        "sku": 2,
+        "status_radar": true,
+        "aprobado": false
+      }
+    ],
+    "error": null
+  }
+  ```
+
+### 2.31. Detalle Resumido de Órdenes por Radar ID (`retorna_ordenes_distribucion_segun_idradar`)
+- **Firma SQL:** `retorna_ordenes_distribucion_segun_idradar(p_radar_id UUID)`
+- **Descripción:** Retorna el detalle resumido de las órdenes contenidas dentro de un radar específico identificado por su `p_radar_id`.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_ordenes_distribucion_segun_idradar', {
+    p_radar_id: 'f1e2d3c4-b5a6-7890-1234-567890abcdef'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "id_orden_distribucion": "b1a2c3d4-e5f6-7890-abcd-1234567890ab",
+        "correlativo": 1024,
+        "ruta": "Ruta Centro 01",
+        "razon_social": "Supermercado El Ejemplo C.A.",
+        "direccion_fiscal": "Av. Principal #123, Caracas",
+### 2.32. Cuentas por Liquidar agrupadas por Cliente (`retorna_ordenes_por_liquidar`)
+- **Firma SQL:** `retorna_ordenes_por_liquidar()`
+- **Descripción:** Retorna la lista de órdenes en estado `por_liquidar` agrupadas por cliente y ordenadas por la mayor cantidad de días vencidos desde su fecha de despacho (`dias_vencidos DESC`).
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_ordenes_por_liquidar');
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+        "razon_social": "Comercializadora Ejemplo C.A.",
+        "rif_nit": "J-12345678-9",
+        "dias_vencidos": 28,
+        "cant_ordenes": 1,
+        "monto_por_liquidar": 1200.00
+      },
+      {
+        "cliente_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+        "razon_social": "Distribuidora Los Andes S.A.",
+        "rif_nit": "J-98765432-1",
+        "dias_vencidos": 7,
+        "cant_ordenes": 1,
+        "monto_por_liquidar": 800.00
+      }
+    ],
+    "error": null
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend

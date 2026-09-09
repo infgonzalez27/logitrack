@@ -309,5 +309,18 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     3. **`guardar_resultado_despacho_radar` & `registrar_despacho_cliente_radar`**: Al procesar el despacho de la orden, si el cliente estaba bajo excepción gerencial (`excepcion_despacho_gerencia = TRUE`), resetear automáticamente el campo a `FALSE`.
   - **Documentación:** [docs/PROPOSICION-CAMBIOS-DB.md](file:///d:/ProyectosWeb/LogiTrack/docs/PROPOSICION-CAMBIOS-DB.md#L130).
 
+- `[x]` **Tarea DB-028: RPCs de Consulta de Radares por Fecha y Detalle por Radar ID (`retorna_lista_radars_segun_rango_fechas` y `retorna_ordenes_distribucion_segun_idradar`)**
+  - **Función:** Proporcionar las consultas almacenadas RPC requeridas por la interfaz Frontend para listar radares ordenados por fecha según rango dado para un despachador y para obtener el detalle resumido de las órdenes contenidas dentro de un `id_radar`.
+  - **RPCs Implementadas:**
+    1. `retorna_lista_radars_segun_rango_fechas(p_despachador_id UUID, p_fecha_inicial DATE, p_fecha_limite DATE)`: Retorna la lista de radares en el rango con `fecha_despacho`, `id_radar`, `correlativo`, `total_paradas`, `items`, `sku`, `status_radar` y `aprobado`.
+    2. `retorna_ordenes_distribucion_segun_idradar(p_radar_id UUID)`: Retorna las órdenes del radar especificado con `id_orden_distribucion`, `correlativo`, `ruta`, `razon_social`, `direccion_fiscal`, `items`, `sku` y `contenedores_retirados`.
+  - **Documentación:** Actualizar `docs/INTEGRACION-RPC.md`.
 
-
+- `[x]` **Tarea DB-029: RPC Cuentas por Liquidar agrupadas por Cliente (`retorna_ordenes_por_liquidar`) y Script de Depuración DB**
+  - **Función:** Crear la función RPC `retorna_ordenes_por_liquidar` que agrupa las órdenes en `por_liquidar` por cliente, ordenadas por mayor cantidad de días vencidos, y ejecutar el script de depuración (eliminar órdenes sin detalle y reducir `camiones` a los 3 primeros registros).
+  - **RPC Implementada:** `retorna_ordenes_por_liquidar()`
+  - **Depuración DB:**
+    - `DELETE FROM public.ordenes_distribucion WHERE NOT EXISTS (SELECT 1 FROM public.detalle_distribucion d WHERE d.orden_id = ordenes_distribucion.id);`
+    - `UPDATE ordenes_distribucion/inventario_movil SET camion_id = NULL WHERE camion_id NOT IN (SELECT id FROM camiones ORDER BY created_at ASC LIMIT 3);`
+    - `DELETE FROM public.camiones WHERE id NOT IN (SELECT id FROM camiones ORDER BY created_at ASC LIMIT 3);`
+  - **Documentación:** [docs/INTEGRACION-RPC.md](file:///d:/ProyectosWeb/LogiTrack/docs/INTEGRACION-RPC.md#L1020).
