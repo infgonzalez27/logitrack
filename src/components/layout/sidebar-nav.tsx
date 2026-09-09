@@ -62,10 +62,19 @@ export function SidebarNav({
               {section.title}
             </p>
             <ul className="space-y-0.5">
-              {section.items.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  pathname.startsWith(`${item.href}/`);
+              {(() => {
+                // Marca como activo el link "más específico" que matchea la ruta actual.
+                // Ej: en `/rendiciones/por-liquidar` evita que también se marque `/rendiciones`.
+                const activeItem = section.items
+                  .filter(
+                    (item) =>
+                      pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`),
+                  )
+                  .sort((a, b) => b.href.length - a.href.length)[0];
+
+                return section.items.map((item) => {
+                  const active = activeItem?.href === item.href;
                 return (
                   <li key={item.href}>
                     <Link
@@ -81,7 +90,8 @@ export function SidebarNav({
                     </Link>
                   </li>
                 );
-              })}
+                });
+              })()}
             </ul>
           </div>
         ))}
