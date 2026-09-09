@@ -895,6 +895,45 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.33. Aprobación Gerencial de Radar (`solicita_aprobar_radar`)
+- **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
+- **Descripción:** Aprueba el radar (`status_radar = true`, `aprobado = true`), liquida los envases retirados provisionales acreditándolos a `saldo_contenedores_clientes`, restituye la mercancía no entregada al almacén principal (`productos.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`.
+- **Nota (despacho):** el registro de entrega (`registrar_despacho_cliente_radar`) no requiere que el front clasifique completo/parcial; recibe `cantidad_despachada`. Si el total despachado de la orden es `0`, el SP pasa la orden a `devuelta`; si hay cantidades > 0 y no quedan pendientes, pasa a `por_liquidar`.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
+    p_radar_id: 'f1e2d3c4-b5a6-7890-1234-567890abcdef'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, inventario restituido a almacén y órdenes devueltas anuladas.",
+    "data": {
+      "radar_id": "f1e2d3c4-b5a6-7890-1234-567890abcdef",
+      "status_radar": true,
+      "aprobado": true,
+      "contenedores_procesados": 15,
+      "ordenes_anuladas": 2,
+      "inventario_reintegrado": [
+        { "producto_id": "...", "codigo_producto": "HAR-001", "nombre_producto": "Harina PAN", "cantidad_devuelta": 50 }
+      ]
+    },
+    "error": null
+  }
+  ```
+
+### 2.34. Restitución de Inventario No Despachado al Almacén (`retorna_inventario_no_despachado_para_almacen`)
+- **Firma SQL:** `retorna_inventario_no_despachado_para_almacen(p_radar_id UUID)`
+- **Descripción:** Reingresa la mercancía no despachada de las órdenes de un radar al stock disponible del almacén principal (`productos.stock_disponible`) y ajusta el `inventario_movil`. Usada internamente por §2.33.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_inventario_no_despachado_para_almacen', {
+    p_radar_id: 'f1e2d3c4-b5a6-7890-1234-567890abcdef'
+  });
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend

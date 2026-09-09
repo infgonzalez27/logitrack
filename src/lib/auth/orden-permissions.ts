@@ -10,6 +10,7 @@ export const ORDEN_ESTADOS_VALIDOS: OrdenEstado[] = [
   "lista_para_carga", // legado (pre-migración)
   "en_transito",
   "despachada",
+  "devuelta",
   "por_liquidar",
   "liquidada",
   "anulada",
@@ -46,6 +47,7 @@ const TRANSICIONES_UI: Partial<
       rpc: "aprobar_despacho_orden_distribucion",
     },
   ],
+  devuelta: [],
   por_liquidar: [
     {
       next: "liquidada",
@@ -63,6 +65,7 @@ const LABELS: Record<OrdenEstado, string> = {
   lista_para_carga: "Lista para carga",
   en_transito: "En tránsito",
   despachada: "Despachada",
+  devuelta: "De vuelta",
   por_liquidar: "Por liquidar",
   liquidada: "Liquidada",
   anulada: "Anulada",

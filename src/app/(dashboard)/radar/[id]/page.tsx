@@ -7,6 +7,7 @@ import {
   retornaRadarDetalleReporteAction,
 } from "@/lib/actions/radar";
 import { PageHeader } from "@/components/layout/page-header";
+import { RadarAprobarButton } from "../radar-aprobar-button";
 import { RadarOrdenesResumen } from "../radar-ordenes-resumen";
 import { RadarParadasView } from "../radar-paradas-view";
 import { RadarReporteView } from "../radar-reporte-view";
@@ -30,10 +31,17 @@ export default async function RadarDetallePage({
   }
 
   const modoDespachador = rol === "despachador";
+  const puedeAprobar = rol === "gerente" || rol === "admin";
   const [resumen, reporte] = await Promise.all([
     retornaOrdenesDistribucionSegunIdRadarAction(id),
     retornaRadarDetalleReporteAction(id),
   ]);
+
+  const radarAprobado = Boolean(
+    reporte.ok &&
+      (reporte.reporte.radar.aprobado === true ||
+        (reporte.reporte.radar as { aprobado?: boolean }).aprobado),
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -86,6 +94,21 @@ export default async function RadarDetallePage({
             </section>
           ) : null}
         </>
+      ) : null}
+
+      {puedeAprobar ? (
+        <section className="space-y-3 border-t border-lt-border pt-8">
+          <h2 className="text-base font-semibold text-lt-text">
+            Aprobación gerencial
+          </h2>
+          <p className="text-sm text-lt-text-muted">
+            Al aprobar: se acreditan vacíos retirados, se restituye al almacén
+            la mercancía no despachada y las órdenes de vuelta pasan a anuladas.
+            El SP no evalúa entrega completa/parcial; eso ya quedó en las
+            cantidades registradas por el despachador.
+          </p>
+          <RadarAprobarButton radarId={id} yaAprobado={radarAprobado} />
+        </section>
       ) : null}
     </div>
   );

@@ -4,6 +4,7 @@ export type OrdenEstado =
   | "lista_para_carga" // legado pre-migración DB-000
   | "en_transito"
   | "despachada"
+  | "devuelta"
   | "por_liquidar"
   | "liquidada"
   | "anulada";
@@ -464,6 +465,7 @@ export type RadarCabecera = {
   despachador_id: string;
   fecha_despacho: string;
   status_radar: boolean;
+  aprobado?: boolean;
   total_cantidad_solicitada: number;
   total_cantidad_despachada: number;
   total_contenedores_retirados: number;

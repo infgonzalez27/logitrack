@@ -135,7 +135,9 @@ export async function registrarDespachoClienteRadarAction(input: {
 
   const response = await callDbProcedure<{
     orden_id: string;
-    nuevo_estado_orden: string;
+    nuevo_estado_orden?: string;
+    nuevo_estado?: string;
+    total_despachado?: number;
   }>("registrar_despacho_cliente_radar", {
     p_orden_id: ordenId,
     p_detalles_json: input.detalles.map((linea) => ({
@@ -157,7 +159,9 @@ export async function registrarDespachoClienteRadarAction(input: {
   }
 
   revalidateRadarPaths(ordenId);
-  return { ok: true, estado: response.data?.nuevo_estado_orden };
+  const estado =
+    response.data?.nuevo_estado ?? response.data?.nuevo_estado_orden;
+  return { ok: true, estado };
 }
 
 /**
@@ -318,10 +322,12 @@ export async function finalizarEntregaRadarAction(input: {
   }
 
   revalidateRadarPaths(ordenId);
+  // El SP decide el estado de la orden según cantidades (0 → `devuelta`).
+  const deVuelta = registered.estado === "devuelta" || forzarDeVuelta;
   return {
     ok: true,
     estado: registered.estado,
-    deVuelta: forzarDeVuelta,
+    deVuelta,
   };
 }
 
@@ -371,6 +377,75 @@ export async function reportarIncidenciaRadarAction(input: {
   }));
 
   return registrarDespachoClienteRadarAction({ orden_id: ordenId, detalles });
+}
+
+/**
+ * INTEGRACION-RPC §2.33 — `solicita_aprobar_radar`.
+ * Gerencia/admin cierra el radar: acredita vacíos, restituye inventario
+ * no despachado y anula órdenes en estado `devuelta`.
+ */
+export async function solicitaAprobarRadarAction(
+  radarId: string,
+): Promise<
+  | {
+      ok: true;
+      message?: string;
+      data?: {
+        radar_id?: string;
+        status_radar?: boolean;
+        aprobado?: boolean;
+        contenedores_procesados?: number;
+        ordenes_anuladas?: number;
+      };
+    }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (rol !== "gerente" && rol !== "admin") {
+    return {
+      ok: false,
+      error: "Solo gerencia o admin pueden aprobar el radar.",
+      code: "ACCESO_DENEGADO",
+    };
+  }
+
+  const id = radarId?.trim();
+  if (!id || !UUID_RE.test(id)) {
+    return {
+      ok: false,
+      error: "Identificador de radar inválido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const response = await callDbProcedure<{
+    radar_id?: string;
+    status_radar?: boolean;
+    aprobado?: boolean;
+    contenedores_procesados?: number;
+    ordenes_anuladas?: number;
+  }>("solicita_aprobar_radar", { p_radar_id: id });
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo aprobar el radar."),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/radar");
+  revalidatePath(`/radar/${id}`);
+  revalidatePath("/ordenes");
+  revalidatePath("/inventario-almacen");
+  revalidatePath("/inventario-movil");
+
+  return {
+    ok: true,
+    message: response.message,
+    data: response.data ?? undefined,
+  };
 }
 
 /** INTEGRACION-RPC §2.19 — `crear_o_obtener_radar` */

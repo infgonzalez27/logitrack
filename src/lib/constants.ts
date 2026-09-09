@@ -15,6 +15,7 @@ export const ORDEN_ESTADOS: { value: OrdenEstado; label: string }[] = [
   { value: "lista_para_carga", label: "Lista para carga" },
   { value: "en_transito", label: "En tránsito" },
   { value: "despachada", label: "Despachada" },
+  { value: "devuelta", label: "De vuelta" },
   { value: "por_liquidar", label: "Por liquidar" },
   { value: "liquidada", label: "Liquidada" },
   { value: "anulada", label: "Anulada" },
