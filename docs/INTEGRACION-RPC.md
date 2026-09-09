@@ -1082,15 +1082,14 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
-### 2.34. Restitución de Inventario No Despachado al Almacén (`retorna_inventario_no_despachado_para_almacen`)
-- **Firma SQL:** `retorna_inventario_no_despachado_para_almacen(p_radar_id UUID)`
-- **Descripción:** Reingresa la mercancía no despachada de las órdenes de un radar al stock disponible del almacén principal (`productos.stock_disponible`) y ajusta el `inventario_movil`.
-- **Uso en Frontend / Backend (RPC):**
-  ```typescript
-  const { data, error } = await supabase.rpc('retorna_inventario_no_despachado_para_almacen', {
-    p_radar_id: 'f1e2d3c4-b5a6-7890-1234-567890abcdef'
-  });
-  ```
+### 2.35. Reglas de Cálculo y Conversión Multimoneda en Órdenes de Distribución
+- **Descripción:** Los precios base de lista de productos en LogiTrack están cotizados en **USD** (`precio_lista1` en `productos`). Al crear (`crear_orden_distribucion`) o actualizar (`actualiza_orden_distribucion_segun_correlativo`) una orden:
+  - `valor_unitario_usd`: Es el precio unitario del producto en USD.
+  - `valor_unitario_recaudar`: Es el precio unitario del producto en Bolívares (`ROUND(valor_unitario_usd * tasa_cambio, 2)`).
+  - `subtotal_recaudar_usd`: Suma en USD por producto (`cantidad * valor_unitario_usd`).
+  - `subtotal_recaudar`: Suma en Bs por producto (`ROUND(subtotal_recaudar_usd * tasa_cambio, 2)`).
+  - `total_recaudar_usd`: Suma total en USD de la orden.
+  - `total_recaudar_bs`: Suma total a recaudar en Bolívares (`ROUND(total_recaudar_usd * tasa_cambio, 2)`).
 
 ---
 

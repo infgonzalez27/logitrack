@@ -121,21 +121,24 @@ BEGIN
             RETURN jsonb_build_object('success', false, 'message', 'El producto con ID ' || v_producto_id::text || ' no existe.');
         END IF;
 
-        v_val_recaudar_bs := COALESCE((v_item->>'valor_unitario_recaudar')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, 0.00);
-        v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, 0.00);
+        -- Resolver precio unitario en USD y Bs
+        v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, 0.00);
+        v_val_recaudar_bs := COALESCE((v_item->>'valor_unitario_recaudar')::NUMERIC, 0.00);
 
-        IF v_val_recaudar_bs > 0 AND (v_val_usd IS NULL OR v_val_usd = 0) THEN
+        IF v_val_usd > 0 AND (v_val_recaudar_bs IS NULL OR v_val_recaudar_bs = 0) THEN
+            v_val_recaudar_bs := ROUND(v_val_usd * v_tasa_cambio, 2);
+        ELSIF v_val_recaudar_bs > 0 AND (v_val_usd IS NULL OR v_val_usd = 0) THEN
             v_val_usd := ROUND(v_val_recaudar_bs / v_tasa_cambio, 2);
-        ELSIF v_val_usd > 0 AND (v_val_recaudar_bs IS NULL OR v_val_recaudar_bs = 0) THEN
+        ELSIF v_val_usd > 0 AND v_val_recaudar_bs > 0 THEN
             v_val_recaudar_bs := ROUND(v_val_usd * v_tasa_cambio, 2);
         END IF;
 
-        v_subtotal_bs := ROUND(v_cantidad * v_val_recaudar_bs, 2);
         v_subtotal_usd := ROUND(v_cantidad * v_val_usd, 2);
+        v_subtotal_bs := ROUND(v_cantidad * v_val_recaudar_bs, 2);
 
         v_peso_total := v_peso_total + (COALESCE(v_peso_unitario, 0.00) * v_cantidad);
-        v_total_recaudar_bs := v_total_recaudar_bs + v_subtotal_bs;
         v_total_recaudar_usd := v_total_recaudar_usd + v_subtotal_usd;
+        v_total_recaudar_bs := v_total_recaudar_bs + v_subtotal_bs;
     END LOOP;
 
     -- Insertar Cabecera de la Orden con estado 'aprobada'
@@ -180,17 +183,19 @@ BEGIN
         v_producto_id := (v_item->>'producto_id')::UUID;
         v_cantidad := (v_item->>'cantidad')::INT;
         
-        v_val_recaudar_bs := COALESCE((v_item->>'valor_unitario_recaudar')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, 0.00);
-        v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, 0.00);
+        v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, 0.00);
+        v_val_recaudar_bs := COALESCE((v_item->>'valor_unitario_recaudar')::NUMERIC, 0.00);
 
-        IF v_val_recaudar_bs > 0 AND (v_val_usd IS NULL OR v_val_usd = 0) THEN
+        IF v_val_usd > 0 AND (v_val_recaudar_bs IS NULL OR v_val_recaudar_bs = 0) THEN
+            v_val_recaudar_bs := ROUND(v_val_usd * v_tasa_cambio, 2);
+        ELSIF v_val_recaudar_bs > 0 AND (v_val_usd IS NULL OR v_val_usd = 0) THEN
             v_val_usd := ROUND(v_val_recaudar_bs / v_tasa_cambio, 2);
-        ELSIF v_val_usd > 0 AND (v_val_recaudar_bs IS NULL OR v_val_recaudar_bs = 0) THEN
+        ELSIF v_val_usd > 0 AND v_val_recaudar_bs > 0 THEN
             v_val_recaudar_bs := ROUND(v_val_usd * v_tasa_cambio, 2);
         END IF;
 
-        v_subtotal_bs := ROUND(v_cantidad * v_val_recaudar_bs, 2);
         v_subtotal_usd := ROUND(v_cantidad * v_val_usd, 2);
+        v_subtotal_bs := ROUND(v_cantidad * v_val_recaudar_bs, 2);
 
         INSERT INTO public.detalle_distribucion (
             id,

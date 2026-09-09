@@ -1,0 +1,4 @@
+Revisa la function crear_orden_distribucion porque creo que está almacenando en el campo total_recaudar_bs el total en USD y en el campo total_recaudar_usd
+el total en Bs. después de hacer la reconversión según la tasa de cambio.
+Lo correcto es que el total_recaudar_bs sea (total_recaudar_usd * tasa_cambio)
+Verifica eso y actualiza todos los registros para almacenar todo como es

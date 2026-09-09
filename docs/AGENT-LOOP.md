@@ -334,3 +334,9 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
     - `solicita_aprobar_radar(p_radar_id)`: Establece `status_radar = true`, acredita contenedores retirados a cliente, reingresa inventario a almacén y pasa órdenes `'devuelta'` a `'anulada'`.
     - `retorna_inventario_no_despachado_para_almacen(p_radar_id)`: Reingresa stock devuelto/no entregado al almacén principal y ajusta `inventario_movil`.
   - **Documentación:** [docs/INTEGRACION-RPC.md](file:///d:/ProyectosWeb/LogiTrack/docs/INTEGRACION-RPC.md#L1053).
+
+- `[x]` **Tarea DB-031: Corrección de Totales Multimoneda (`total_recaudar_bs` vs `total_recaudar_usd`) en Órdenes de Distribución**
+  - **Función:** Corregir la asignación de precios unitarios y cálculos multimoneda en `crear_orden_distribucion` y `actualiza_orden_distribucion_segun_correlativo`, asegurando que `total_recaudar_usd` contenga el monto real en USD y `total_recaudar_bs` sea igual a `total_recaudar_usd * tasa_cambio`. Ejecutar script de recálculo de datos en `detalle_distribucion` y `ordenes_distribucion`.
+  - **Migración:** `20260909170000_fix_totales_multimoneda_ordenes.sql` aplicada en Supabase.
+  - **Documentación:** Actualizada en `docs/INTEGRACION-RPC.md`.
+
