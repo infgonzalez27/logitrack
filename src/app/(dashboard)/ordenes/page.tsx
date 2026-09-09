@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge, ordenEstadoTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { convertirUsdABs, resolverMontoUsdOrden } from "@/lib/rendiciones/moneda";
+import { resolverMontosOrden } from "@/lib/rendiciones/moneda";
 import type { OrdenEstado } from "@/types/database";
 
 export default async function OrdenesPage({
@@ -107,17 +107,13 @@ export default async function OrdenesPage({
             { key: "fecha", label: "Despacho" },
           ]}
           rows={ordenes.map((o) => {
-            const usd = resolverMontoUsdOrden({
+            const { usd, bs } = resolverMontosOrden({
               total_recaudar_usd: o.total_recaudar_usd,
               total_recaudar_bs: o.total_recaudar_bs,
               tasa_cambio: o.tasa_cambio,
             });
             const tasa =
               o.tasa_cambio != null ? Number(o.tasa_cambio) : null;
-            const bs =
-              usd > 0 && tasa != null && tasa > 0
-                ? convertirUsdABs(usd, tasa)
-                : null;
             return {
               id: o.id,
               cells: {
@@ -142,7 +138,7 @@ export default async function OrdenesPage({
                 ),
                 tasa: tasa != null ? formatNumber(tasa) : "—",
                 total_usd: usd > 0 ? formatCurrency(usd) : "—",
-                total_bs: bs != null && bs > 0 ? formatNumber(bs) : "—",
+                total_bs: bs > 0 ? formatNumber(bs) : "—",
                 fecha: formatDate(o.fecha_despacho),
               },
             };

@@ -1,5 +1,5 @@
 import { labelOrdenEstado } from "@/lib/constants";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import type { OrdenEstado } from "@/types/database";
 
 export type TicketLinea = {
@@ -31,7 +31,7 @@ const LINE = "--------------------------------";
 
 /** Monto simple para térmicas (evita símbolos Unicode de Intl). */
 function moneyThermal(value: number): string {
-  return `USD ${value.toFixed(2)}`;
+  return `Bs ${value.toFixed(2)}`;
 }
 
 /** Quita tildes/símbolos que muchas SAT no imprimen (papel avanza en blanco). */
@@ -158,9 +158,9 @@ export function OrdenTicket(data: OrdenTicketData) {
             ) : null}
             <p className="lt-ticket__row">
               <span>
-                {formatNumber(linea.cantidad)} × {formatCurrency(linea.unitario)}
+                {formatNumber(linea.cantidad)} × {formatNumber(linea.unitario)} Bs
               </span>
-              <span>{formatCurrency(linea.subtotal)}</span>
+              <span>{formatNumber(linea.subtotal)} Bs</span>
             </p>
           </div>
         ))}
@@ -172,8 +172,8 @@ export function OrdenTicket(data: OrdenTicketData) {
       <div className="lt-ticket__rule lt-ticket__rule--double" />
 
       <p className="lt-ticket__total">
-        <span>TOTAL A RECAUDAR</span>
-        <span>{formatCurrency(totalRecaudar)}</span>
+        <span>TOTAL A RECAUDAR (Bs)</span>
+        <span>{formatNumber(totalRecaudar)}</span>
       </p>
 
       <div className="lt-ticket__rule" />

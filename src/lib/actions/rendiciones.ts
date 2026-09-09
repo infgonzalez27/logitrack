@@ -12,7 +12,7 @@ import {
   convertirBsAUsd,
   convertirUsdABs,
   esFormaPagoEnBs,
-  resolverMontoUsdOrden,
+  resolverMontosOrden,
 } from "@/lib/rendiciones/moneda";
 import type { CuentaBancariaEmpresa, Fpago, OrdenPorLiquidarCliente } from "@/types/database";
 
@@ -132,10 +132,26 @@ type AbonosClienteRpc = {
 };
 
 function mapAbonosClienteRpc(raw: AbonosClienteRpc): AbonosClienteResult {
+  const tasaOficial =
+    raw.tasa_oficial_actual != null && Number(raw.tasa_oficial_actual) > 0
+      ? Number(raw.tasa_oficial_actual)
+      : null;
+
   const ordenes: OrdenParaRendicion[] = (raw.ordenes ?? []).map((o) => {
     const saldoPendiente = Number(o.saldo_pendiente ?? 0);
-    const saldoPendienteBs =
+    const tasaOrden =
+      o.tasa_orden != null && Number(o.tasa_orden) > 0
+        ? Number(o.tasa_orden)
+        : tasaOficial;
+    let saldoPendienteBs =
       o.saldo_pendiente_bs != null ? Number(o.saldo_pendiente_bs) : null;
+    if (
+      (saldoPendienteBs == null || saldoPendienteBs <= 0) &&
+      saldoPendiente > 0 &&
+      tasaOrden != null
+    ) {
+      saldoPendienteBs = convertirUsdABs(saldoPendiente, tasaOrden);
+    }
     return {
       id: o.orden_id,
       correlativo: Number(o.correlativo),
@@ -158,11 +174,12 @@ function mapAbonosClienteRpc(raw: AbonosClienteRpc): AbonosClienteResult {
     cliente_id: raw.cliente_id,
     saldo_favor: Number(raw.saldo_favor ?? 0),
     saldo_favor_bs:
-      raw.saldo_favor_bs != null ? Number(raw.saldo_favor_bs) : null,
-    tasa_oficial_actual:
-      raw.tasa_oficial_actual != null
-        ? Number(raw.tasa_oficial_actual)
-        : null,
+      raw.saldo_favor_bs != null
+        ? Number(raw.saldo_favor_bs)
+        : tasaOficial != null
+          ? convertirUsdABs(Number(raw.saldo_favor ?? 0), tasaOficial)
+          : null,
+    tasa_oficial_actual: tasaOficial,
     ordenes,
   };
 }
@@ -323,21 +340,13 @@ async function solicitaAbonosOrdenDistribucionLocal(
       0,
     );
 
-    const totalUsd = resolverMontoUsdOrden({
+    const { usd: totalUsd, bs: totalBs } = resolverMontosOrden({
       total_recaudar_usd: od.total_recaudar_usd,
       total_recaudar_bs: od.total_recaudar_bs,
       tasa_cambio: tasaOrden,
       sum_lineas_usd: sumUsdLineas,
       sum_lineas_recaudar: sumBsLineas,
     });
-    const totalBs =
-      totalUsd > 0 && tasaOrden > 0
-        ? convertirUsdABs(totalUsd, tasaOrden)
-        : od.total_recaudar_bs != null && Number(od.total_recaudar_bs) > 0
-          ? Number(od.total_recaudar_bs)
-          : sumBsLineas > 0
-            ? sumBsLineas
-            : 0;
 
     const abonos = abonosByOrden.get(od.id) ?? { usd: 0, bs: 0 };
     const saldoPendiente = Math.max(0, totalUsd - abonos.usd);
@@ -807,7 +816,7 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
       (s, d) => s + Number(d.subtotal_recaudar ?? 0),
       0,
     );
-    const montoOrden = resolverMontoUsdOrden({
+    const { usd: montoOrden } = resolverMontosOrden({
       total_recaudar_usd: od.total_recaudar_usd,
       total_recaudar_bs: od.total_recaudar_bs,
       tasa_cambio: od.tasa_cambio,

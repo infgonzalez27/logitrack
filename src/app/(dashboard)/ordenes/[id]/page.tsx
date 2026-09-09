@@ -12,7 +12,7 @@ import { getNombresPerfilByIds } from "@/lib/data/perfiles";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado, labelEstadoEntrega } from "@/lib/constants";
 import { formatDate, formatCurrency, formatNumber } from "@/lib/format";
-import { convertirUsdABs, resolverMontoUsdOrden } from "@/lib/rendiciones/moneda";
+import { resolverMontosOrden } from "@/lib/rendiciones/moneda";
 import { PageHeader } from "@/components/layout/page-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge, ordenEstadoTone } from "@/components/ui/badge";
@@ -67,25 +67,24 @@ export default async function OrdenDetallePage({
   );
 
   const totalRecaudar = detalle.reduce(
-    (sum, linea) => sum + linea.subtotal_recaudar,
+    (sum, linea) => sum + Number(linea.subtotal_recaudar ?? 0),
     0,
   );
-  const totalUsd = resolverMontoUsdOrden({
+  const totalRecaudarUsd = detalle.reduce(
+    (sum, linea) => sum + Number(linea.subtotal_recaudar_usd ?? 0),
+    0,
+  );
+  const { usd: totalUsd, bs: totalBs } = resolverMontosOrden({
     total_recaudar_usd: orden.total_recaudar_usd,
     total_recaudar_bs: orden.total_recaudar_bs,
     tasa_cambio: orden.tasa_cambio,
     sum_lineas_recaudar: totalRecaudar,
+    sum_lineas_usd: totalRecaudarUsd,
   });
   const tasa =
     orden.tasa_cambio != null && Number(orden.tasa_cambio) > 0
       ? Number(orden.tasa_cambio)
       : null;
-  const totalBs =
-    totalUsd > 0 && tasa != null
-      ? convertirUsdABs(totalUsd, tasa)
-      : orden.total_recaudar_bs != null
-        ? Number(orden.total_recaudar_bs)
-        : totalRecaudar;
 
   const puedeEditar = canEditarOrdenBorrador(rol, orden.estado, {
     esCreador: !!user && orden.creado_por === user.id,
@@ -207,12 +206,30 @@ export default async function OrdenDetallePage({
             { key: "producto", label: "Producto" },
             { key: "solicitada", label: "Solicitada" },
             { key: "despachada", label: "Despachada" },
-            { key: "unitario", label: "Unit. recaudar" },
-            { key: "subtotal", label: "Subtotal" },
+            { key: "unitario", label: "Unit. Bs" },
+            { key: "unitario_usd", label: "Unit. USD" },
+            { key: "subtotal", label: "Subtotal Bs" },
+            { key: "subtotal_usd", label: "Subtotal USD" },
             { key: "entrega", label: "Estado entrega" },
           ]}
           rows={detalle.map((linea) => {
             const producto = joinOne(linea.productos);
+            const unitBs = Number(linea.valor_unitario_recaudar ?? 0);
+            const subBs = Number(linea.subtotal_recaudar ?? 0);
+            const unitUsd =
+              linea.valor_unitario_usd != null &&
+              Number(linea.valor_unitario_usd) > 0
+                ? Number(linea.valor_unitario_usd)
+                : tasa != null && unitBs > 0
+                  ? Math.round((unitBs / tasa) * 100) / 100
+                  : null;
+            const subUsd =
+              linea.subtotal_recaudar_usd != null &&
+              Number(linea.subtotal_recaudar_usd) > 0
+                ? Number(linea.subtotal_recaudar_usd)
+                : tasa != null && subBs > 0
+                  ? Math.round((subBs / tasa) * 100) / 100
+                  : null;
             return {
               id: linea.id,
               cells: {
@@ -221,8 +238,10 @@ export default async function OrdenDetallePage({
                 producto: producto?.nombre ?? "—",
                 solicitada: formatNumber(linea.cantidad_solicitada),
                 despachada: formatNumber(linea.cantidad_despachada),
-                unitario: formatCurrency(linea.valor_unitario_recaudar),
-                subtotal: formatCurrency(linea.subtotal_recaudar),
+                unitario: formatNumber(unitBs),
+                unitario_usd: unitUsd != null ? formatCurrency(unitUsd) : "—",
+                subtotal: formatNumber(subBs),
+                subtotal_usd: subUsd != null ? formatCurrency(subUsd) : "—",
                 entrega: labelEstadoEntrega(linea.estado_entrega),
               },
             };

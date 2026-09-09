@@ -72,6 +72,25 @@ function hoyLocal(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/** Saldo pendiente en Bs: del SP/local, o USD × tasa de la orden / del día. */
+function saldoPendienteBsDeOrden(
+  orden: OrdenParaRendicion | undefined,
+  tasaFallback: number | null,
+): number | null {
+  if (!orden) return null;
+  if (orden.saldo_pendiente_bs != null && orden.saldo_pendiente_bs > 0) {
+    return orden.saldo_pendiente_bs;
+  }
+  const tasa =
+    orden.tasa_orden != null && orden.tasa_orden > 0
+      ? orden.tasa_orden
+      : tasaFallback;
+  if (orden.saldo_pendiente > 0 && tasa != null && tasa > 0) {
+    return convertirUsdABs(orden.saldo_pendiente, tasa);
+  }
+  return null;
+}
+
 export function NuevaRendicionForm({
   clientes,
   formasPago,
@@ -142,6 +161,15 @@ export function NuevaRendicionForm({
       : tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0
         ? Number(tasaDelDia.tasa_cambio)
         : null;
+
+  const ordenBorrador = useMemo(
+    () => ordenesDisponibles.find((o) => o.id === borradorOrdenId),
+    [ordenesDisponibles, borradorOrdenId],
+  );
+  const borradorSaldoPendienteBs = saldoPendienteBsDeOrden(
+    ordenBorrador,
+    tasaValor,
+  );
 
   const formaSeleccionada = formasPago.find(
     (f) => f.fpago_id === borradorFpagoId,
@@ -424,11 +452,12 @@ export function NuevaRendicionForm({
       return;
     }
 
+    const saldoPendienteBs = saldoPendienteBsDeOrden(found, tasaValor);
     const montoBs =
       tasaValor != null
         ? convertirUsdABs(montoRendicion, tasaValor)
-        : found.saldo_pendiente_bs != null && found.saldo_pendiente > 0
-          ? (montoRendicion / found.saldo_pendiente) * found.saldo_pendiente_bs
+        : saldoPendienteBs != null && found.saldo_pendiente > 0
+          ? (montoRendicion / found.saldo_pendiente) * saldoPendienteBs
           : 0;
 
     setOrdenes((prev) => [
@@ -441,7 +470,7 @@ export function NuevaRendicionForm({
         monto_orden_bs: found.monto_total_orden_bs,
         abonos: found.abonos_acumulados,
         saldo_pendiente: found.saldo_pendiente,
-        saldo_pendiente_bs: found.saldo_pendiente_bs,
+        saldo_pendiente_bs: saldoPendienteBs,
         monto_rendicion: montoRendicion,
         monto_rendicion_bs: montoBs,
       },
@@ -642,7 +671,7 @@ export function NuevaRendicionForm({
             </p>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Select
               label="Orden"
               placeholder="Órdenes por liquidar"
@@ -658,6 +687,16 @@ export function NuevaRendicionForm({
               step="0.01"
               readOnly
               value={borradorMontoOrden}
+            />
+            <Input
+              label="Saldo pendiente Bs"
+              type="text"
+              readOnly
+              value={
+                borradorSaldoPendienteBs != null
+                  ? formatNumber(borradorSaldoPendienteBs)
+                  : "—"
+              }
             />
             <Input
               label="Monto a rendir $"
@@ -707,6 +746,11 @@ export function NuevaRendicionForm({
                     <td className="px-4 py-3">{formatCurrency(o.abonos)}</td>
                     <td className="px-4 py-3">
                       {formatCurrency(o.saldo_pendiente)}
+                      {o.saldo_pendiente_bs != null && o.saldo_pendiente_bs > 0 ? (
+                        <span className="block text-xs text-lt-text-muted">
+                          {formatNumber(o.saldo_pendiente_bs)} Bs
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 font-medium">
                       {formatCurrency(o.monto_rendicion)}
@@ -752,6 +796,9 @@ export function NuevaRendicionForm({
                     </p>
                     <p className="mt-1 text-sm text-lt-text-muted">
                       Pendiente {formatCurrency(o.saldo_pendiente)}
+                      {o.saldo_pendiente_bs != null && o.saldo_pendiente_bs > 0
+                        ? ` · ${formatNumber(o.saldo_pendiente_bs)} Bs`
+                        : ""}
                     </p>
                     <p className="text-sm font-medium text-lt-text">
                       A rendir {formatCurrency(o.monto_rendicion)}
