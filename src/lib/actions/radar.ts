@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
 import { getRoleNameFromProfile, type RolNombre } from "@/lib/auth/roles";
+import { createClient } from "@/lib/supabase/server";
 import type {
   RadarCabecera,
   RadarDetalleReporte,
+  RadarListaRangoItem,
   RadarOrden,
+  RadarOrdenResumen,
 } from "@/types/database";
 
 export type RadarDetalleInput = {
@@ -446,4 +449,256 @@ export async function retornaRadarDetalleReporteAction(
   }
 
   return { ok: true, reporte: response.data };
+}
+
+function mapRadarListaRango(raw: unknown): RadarListaRangoItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const id =
+    typeof r.id_radar === "string"
+      ? r.id_radar
+      : typeof r.id === "string"
+        ? r.id
+        : null;
+  if (!id) return null;
+  const fecha =
+    typeof r.fecha_despacho === "string"
+      ? r.fecha_despacho.slice(0, 10)
+      : "";
+  return {
+    fecha_despacho: fecha,
+    id_radar: id,
+    correlativo: Number(r.correlativo ?? 0),
+    total_paradas: Number(r.total_paradas ?? 0),
+    items: Number(r.items ?? 0),
+    sku: Number(r.sku ?? 0),
+    status_radar: Boolean(r.status_radar),
+    aprobado: Boolean(r.aprobado),
+  };
+}
+
+function mapRadarOrdenResumen(raw: unknown): RadarOrdenResumen | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const id =
+    typeof r.id_orden_distribucion === "string"
+      ? r.id_orden_distribucion
+      : typeof r.orden_id === "string"
+        ? r.orden_id
+        : null;
+  if (!id) return null;
+  return {
+    id_orden_distribucion: id,
+    correlativo: Number(r.correlativo ?? 0),
+    ruta: String(r.ruta ?? ""),
+    razon_social: String(r.razon_social ?? ""),
+    direccion_fiscal:
+      typeof r.direccion_fiscal === "string" ? r.direccion_fiscal : null,
+    items: Number(r.items ?? 0),
+    sku: Number(r.sku ?? 0),
+    contenedores_retirados: Number(r.contenedores_retirados ?? 0),
+  };
+}
+
+/** INTEGRACION-RPC §2.30 — lista de radares por rango de fechas. */
+export async function retornaListaRadarsSegunRangoFechasAction(input?: {
+  fechaInicial?: string | null;
+  fechaLimite?: string | null;
+  despachadorId?: string | null;
+}): Promise<
+  | { ok: true; items: RadarListaRangoItem[] }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (
+    rol !== "despachador" &&
+    rol !== "gerente" &&
+    rol !== "vendedor" &&
+    rol !== "admin"
+  ) {
+    return { ok: false, error: "No tienes acceso a la lista de radares." };
+  }
+
+  const fi = input?.fechaInicial?.trim().slice(0, 10);
+  const fl = input?.fechaLimite?.trim().slice(0, 10);
+  if (!fi || !fl || !DATE_RE.test(fi) || !DATE_RE.test(fl)) {
+    return {
+      ok: false,
+      error: "Indica un rango de fechas válido (YYYY-MM-DD).",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const despachadorFiltro =
+    rol === "despachador" && profile?.id
+      ? profile.id
+      : input?.despachadorId?.trim() || null;
+
+  // Staff ve todos los radares del rango (el RPC filtra siempre por un despachador).
+  if (rol !== "despachador") {
+    const { listarRadaresPorRangoLocal } = await import("@/lib/data/radares");
+    const items = await listarRadaresPorRangoLocal({
+      fechaInicial: fi,
+      fechaLimite: fl,
+      despachadorId: despachadorFiltro,
+    });
+    return { ok: true, items };
+  }
+
+  const params: Record<string, unknown> = {
+    p_fecha_inicial: fi,
+    p_fecha_limite: fl,
+  };
+  if (despachadorFiltro) params.p_despachador_id = despachadorFiltro;
+
+  const response = await callDbProcedure<unknown>(
+    "retorna_lista_radars_segun_rango_fechas",
+    params,
+  );
+
+  if (!response.success) {
+    const { listarRadaresPorRangoLocal } = await import("@/lib/data/radares");
+    const items = await listarRadaresPorRangoLocal({
+      fechaInicial: fi,
+      fechaLimite: fl,
+      despachadorId: despachadorFiltro,
+    });
+    if (items.length || response.error?.code === "NETWORK_OR_API_ERROR") {
+      return { ok: true, items };
+    }
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo cargar la lista de radares."),
+      code: response.error?.code,
+    };
+  }
+
+  const rows = Array.isArray(response.data)
+    ? response.data
+    : response.data
+      ? [response.data]
+      : [];
+  const items = rows
+    .map(mapRadarListaRango)
+    .filter((x): x is RadarListaRangoItem => x != null);
+
+  return { ok: true, items };
+}
+
+/** INTEGRACION-RPC §2.31 — órdenes/paradas de un radar. */
+export async function retornaOrdenesDistribucionSegunIdRadarAction(
+  radarId: string,
+): Promise<
+  | { ok: true; ordenes: RadarOrdenResumen[] }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (
+    rol !== "despachador" &&
+    rol !== "gerente" &&
+    rol !== "vendedor" &&
+    rol !== "admin"
+  ) {
+    return { ok: false, error: "No tienes acceso al detalle del radar." };
+  }
+
+  const id = radarId?.trim();
+  if (!id || !UUID_RE.test(id)) {
+    return {
+      ok: false,
+      error: "Identificador de radar inválido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const response = await callDbProcedure<unknown>(
+    "retorna_ordenes_distribucion_segun_idradar",
+    { p_radar_id: id },
+  );
+
+  if (!response.success) {
+    // Fallback local si el RPC aún no está desplegado.
+    const supabase = await createClient();
+    const { data: ordenes, error } = await supabase
+      .from("ordenes_distribucion")
+      .select(
+        `
+        id, correlativo,
+        clientes(razon_social, direccion_fiscal),
+        detalle_distribucion(producto_id, cantidad_despachada, cantidad_solicitada, contenedores_retirados)
+      `,
+      )
+      .eq("radar_id", id)
+      .order("correlativo", { ascending: true });
+
+    if (error) {
+      return {
+        ok: false,
+        error: rpcErrorMessage(response, "No se pudo cargar las órdenes del radar."),
+        code: response.error?.code,
+      };
+    }
+
+    type Det = {
+      producto_id: string | null;
+      cantidad_despachada: number | null;
+      cantidad_solicitada: number | null;
+      contenedores_retirados: number | null;
+    };
+    type Cli = {
+      razon_social: string;
+      direccion_fiscal: string | null;
+    };
+    type Row = {
+      id: string;
+      correlativo: number;
+      clientes: Cli | Cli[] | null;
+      detalle_distribucion: Det[] | Det | null;
+    };
+
+    const mapped: RadarOrdenResumen[] = ((ordenes ?? []) as unknown as Row[]).map(
+      (o) => {
+        const c = Array.isArray(o.clientes) ? o.clientes[0] : o.clientes;
+        const dets = Array.isArray(o.detalle_distribucion)
+          ? o.detalle_distribucion
+          : o.detalle_distribucion
+            ? [o.detalle_distribucion]
+            : [];
+        const skus = new Set(
+          dets.map((d) => d.producto_id).filter(Boolean) as string[],
+        );
+        return {
+          id_orden_distribucion: o.id,
+          correlativo: Number(o.correlativo ?? 0),
+          ruta: "Sin Ruta",
+          razon_social: c?.razon_social ?? "—",
+          direccion_fiscal: c?.direccion_fiscal ?? null,
+          items: dets.reduce(
+            (s, d) =>
+              s + Number(d.cantidad_despachada ?? d.cantidad_solicitada ?? 0),
+            0,
+          ),
+          sku: skus.size,
+          contenedores_retirados: dets.reduce(
+            (s, d) => s + Number(d.contenedores_retirados ?? 0),
+            0,
+          ),
+        };
+      },
+    );
+    return { ok: true, ordenes: mapped };
+  }
+
+  const rows = Array.isArray(response.data)
+    ? response.data
+    : response.data
+      ? [response.data]
+      : [];
+  const ordenes = rows
+    .map(mapRadarOrdenResumen)
+    .filter((x): x is RadarOrdenResumen => x != null);
+
+  return { ok: true, ordenes };
 }

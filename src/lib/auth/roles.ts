@@ -84,11 +84,15 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/rendiciones",
 
+    "/rendiciones/por-liquidar",
+
     "/facturas-compras",
 
     "/pagos-proveedores",
 
     "/tasas-cambio",
+
+    "/cuentas-bancarias",
 
     "/usuarios",
 
@@ -103,11 +107,12 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
     "/clientes",
     "/rutas",
     "/rendiciones",
+    "/rendiciones/por-liquidar",
   ],
 
   chofer: ["/ordenes", "/inventario-movil"],
 
-  cobrador: ["/rendiciones"],
+  cobrador: ["/rendiciones", "/rendiciones/por-liquidar"],
 
 };
 
@@ -173,6 +178,19 @@ export function getNavSectionsForRole(rol: RolNombre | null) {
     ];
   }
 
+  if (rol === "cobrador") {
+    return [
+      {
+        title: "Rendición de Cuentas",
+        items: [
+          { href: "/rendiciones/por-liquidar", label: "Órdenes por liquidar" },
+          { href: "/rendiciones", label: "Rendición de Cuentas" },
+          { href: "/rendiciones/nuevo", label: "Nueva rendición" },
+        ],
+      },
+    ];
+  }
+
   const allowed = rol ? ROLE_ALLOWED_HREFS[rol] : ROLE_ALLOWED_HREFS.vendedor;
 
   if (allowed === "*") {
@@ -195,6 +213,10 @@ export function canAccessHref(rol: RolNombre | null, href: string): boolean {
       rol === "vendedor" ||
       rol === "admin"
     );
+  }
+
+  if (rol === "cobrador") {
+    return href === "/rendiciones" || href.startsWith("/rendiciones/");
   }
 
   if (rol === "despachador") {

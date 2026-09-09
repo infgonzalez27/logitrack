@@ -136,7 +136,7 @@ export function EditarOrdenForm({
     <form onSubmit={handleSubmit} className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title={`Editar orden #${correlativo}`}
-        description="Solo se puede editar en borrador. Debe existir tasa del día."
+        description="Se puede editar mientras esté aprobada y aún no se haya cargado al camión."
       />
 
       <Card title="Cabecera">

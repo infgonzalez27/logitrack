@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getCurrentProfile } from "@/lib/auth";
 import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
+import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import type { Cliente } from "@/types/database";
 
@@ -24,6 +26,10 @@ export type ClienteEditarInput = {
   despachador_id: string | null;
   id_ruta: string | null;
   activo: boolean;
+  limite_credito: number | null;
+  max_facturas_vencidas: number | null;
+  permiso_despacho_manual: boolean;
+  excepcion_despacho_gerencia: boolean;
 };
 
 export async function obtenerClienteParaEditarAction(
@@ -40,7 +46,7 @@ export async function obtenerClienteParaEditarAction(
   const { data, error } = await supabase
     .from("clientes")
     .select(
-      "id, rif_nit, razon_social, direccion_fiscal, telefono, movil1, correo_e, vendedor_id, despachador_id, id_ruta, activo",
+      "id, rif_nit, razon_social, direccion_fiscal, telefono, movil1, correo_e, vendedor_id, despachador_id, id_ruta, activo, limite_credito, max_facturas_vencidas, permiso_despacho_manual, excepcion_despacho_gerencia",
     )
     .eq("id", clienteId)
     .single();
@@ -64,6 +70,14 @@ export async function obtenerClienteParaEditarAction(
       despachador_id: row.despachador_id ?? null,
       id_ruta: row.id_ruta ?? null,
       activo: row.activo,
+      limite_credito:
+        row.limite_credito != null ? Number(row.limite_credito) : null,
+      max_facturas_vencidas:
+        row.max_facturas_vencidas != null
+          ? Number(row.max_facturas_vencidas)
+          : null,
+      permiso_despacho_manual: row.permiso_despacho_manual ?? true,
+      excepcion_despacho_gerencia: row.excepcion_despacho_gerencia ?? false,
     },
   };
 }
@@ -106,6 +120,16 @@ export async function actualizarClienteAction(
     return { ok: false, error: "La ruta es obligatoria." };
   }
 
+  const limiteCredito =
+    input.limite_credito == null || Number.isNaN(Number(input.limite_credito))
+      ? 0
+      : Math.max(0, Number(input.limite_credito));
+  const maxFacturas =
+    input.max_facturas_vencidas == null ||
+    Number.isNaN(Number(input.max_facturas_vencidas))
+      ? 0
+      : Math.max(0, Math.floor(Number(input.max_facturas_vencidas)));
+
   const response = await callDbProcedure<Cliente>(
     "actualiza_registro_cliente_segun_uuid",
     {
@@ -120,6 +144,9 @@ export async function actualizarClienteAction(
       p_despachador_id: despachadorId,
       p_id_ruta: idRuta,
       p_activo: !!input.activo,
+      p_limite_credito: limiteCredito,
+      p_max_facturas_vencidas: maxFacturas,
+      p_permiso_despacho_manual: !!input.permiso_despacho_manual,
     },
   );
 
@@ -133,6 +160,51 @@ export async function actualizarClienteAction(
 
   revalidatePath("/clientes");
   revalidatePath(`/clientes/${id}`);
+  revalidatePath("/ordenes");
+  revalidatePath("/radar");
+  return { ok: true };
+}
+
+/** INTEGRACION-RPC §2.23 — `otorgar_excepcion_despacho_gerencia` */
+export async function otorgarExcepcionDespachoGerenciaAction(
+  clienteId: string,
+): Promise<{ ok: true } | { ok: false; error: string; code?: string }> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (rol !== "gerente" && rol !== "admin") {
+    return {
+      ok: false,
+      error: "Solo gerencia o admin pueden otorgar la excepción.",
+      code: "ACCESO_DENEGADO",
+    };
+  }
+
+  const id = clienteId?.trim();
+  if (!id || !isUuid(id)) {
+    return { ok: false, error: "Cliente inválido.", code: "PARAMETRO_INVALIDO" };
+  }
+
+  const response = await callDbProcedure<{
+    cliente_id: string;
+    excepcion_despacho_gerencia: boolean;
+  }>("otorgar_excepcion_despacho_gerencia", {
+    p_cliente_id: id,
+  });
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(
+        response,
+        "No se pudo otorgar la excepción de despacho.",
+      ),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath(`/clientes/${id}`);
+  revalidatePath("/clientes");
+  revalidatePath("/radar");
   revalidatePath("/ordenes");
   return { ok: true };
 }

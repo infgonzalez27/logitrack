@@ -69,6 +69,16 @@ export async function createClienteAction(
   const vendedorId = String(formData.get("vendedor_id") || "").trim();
   const despachadorId = String(formData.get("despachador_id") || "").trim();
   const idRuta = String(formData.get("id_ruta") || "").trim();
+  const limiteRaw = Number(formData.get("limite_credito") ?? 0);
+  const maxFacturasRaw = Number(formData.get("max_facturas_vencidas") ?? 0);
+  const permisoRaw = String(formData.get("permiso_despacho_manual") || "false");
+  const limiteCredito =
+    Number.isFinite(limiteRaw) && limiteRaw >= 0 ? limiteRaw : 0;
+  const maxFacturas =
+    Number.isFinite(maxFacturasRaw) && maxFacturasRaw >= 0
+      ? Math.floor(maxFacturasRaw)
+      : 0;
+
   const { error } = await supabase.from("clientes").insert({
     rif_nit: String(formData.get("rif_nit")).trim(),
     razon_social: String(formData.get("razon_social")).trim(),
@@ -79,6 +89,9 @@ export async function createClienteAction(
     vendedor_id: vendedorId || null,
     despachador_id: despachadorId || null,
     id_ruta: idRuta || null,
+    limite_credito: limiteCredito,
+    max_facturas_vencidas: maxFacturas,
+    permiso_despacho_manual: permisoRaw === "true",
     activo: true,
   });
 

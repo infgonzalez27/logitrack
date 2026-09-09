@@ -84,13 +84,13 @@ export function canCreateOrden(rol: RolNombre | null): boolean {
   return isOrdenStaff(rol) || rol === "vendedor";
 }
 
-/** Editar cabecera/detalle solo en borrador (RPC actualiza_orden_…_correlativo). */
+/** Editar cabecera/detalle antes de cargar a camión (borrador o aprobada). */
 export function canEditarOrdenBorrador(
   rol: RolNombre | null,
   estado: OrdenEstado,
   opts?: { esCreador?: boolean },
 ): boolean {
-  if (estado !== "borrador") return false;
+  if (estado !== "borrador" && estado !== "aprobada") return false;
   if (isOrdenStaff(rol)) return true;
   if (rol === "vendedor") return !!opts?.esCreador;
   return false;

@@ -3,17 +3,25 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  listarOrdenesParaRendicionAction,
   registrarRendicionCuentasAction,
+  solicitaAbonosOrdenDistribucionAction,
   uploadCaptureRendicionAction,
   type OrdenParaRendicion,
 } from "@/lib/actions/rendiciones";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDateOnly, formatNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import type { Fpago } from "@/types/database";
+import {
+  convertirBsAUsd,
+  convertirUsdABs,
+  esFormaPagoEnBs,
+} from "@/lib/rendiciones/moneda";
+import type {
+  CuentaBancariaEmpresa,
+  Fpago,
+  TasaCambio,
+} from "@/types/database";
 
 export type ClienteOption = {
   value: string;
@@ -26,9 +34,15 @@ type PagoAgregado = {
   fpago_id: string;
   concepto: string;
   fpago_info: boolean;
-  monto: number;
+  en_bs: boolean;
+  monto_ingresado: number;
+  monto_usd: number;
+  monto_bs: number;
+  tasa_aplicada: number | null;
+  fecha: string;
   referencia_bancaria: string | null;
-  cuenta_bancaria: string | null;
+  cuenta_bancaria_id: string | null;
+  cuenta_label: string | null;
   capture_url: string | null;
   preview_url: string | null;
 };
@@ -36,30 +50,59 @@ type PagoAgregado = {
 type OrdenAgregada = {
   key: string;
   orden_id: string;
-  etiqueta: string;
+  correlativo: number;
   monto_orden: number;
+  monto_orden_bs: number | null;
+  abonos: number;
+  saldo_pendiente: number;
+  saldo_pendiente_bs: number | null;
   monto_rendicion: number;
+  monto_rendicion_bs: number;
 };
 
 function newKey() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function hoyLocal(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function NuevaRendicionForm({
   clientes,
   formasPago,
   formasError,
+  cuentasBancarias,
+  cuentasError = null,
+  tasaDelDia = null,
+  tasaError = null,
 }: {
   clientes: ClienteOption[];
   formasPago: Fpago[];
   formasError?: string | null;
+  cuentasBancarias: CuentaBancariaEmpresa[];
+  cuentasError?: string | null;
+  tasaDelDia?: TasaCambio | null;
+  tasaError?: string | null;
 }) {
   const router = useRouter();
   const captureInputRef = useRef<HTMLInputElement>(null);
 
   const [buscarCliente, setBuscarCliente] = useState("");
   const [clienteId, setClienteId] = useState("");
+  const [fechaPago, setFechaPago] = useState(hoyLocal);
   const [observaciones, setObservaciones] = useState("");
+  const [saldoFavor, setSaldoFavor] = useState(0);
+  const [saldoFavorBs, setSaldoFavorBs] = useState<number | null>(null);
+  const [tasaOficial, setTasaOficial] = useState<number | null>(
+    tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0
+      ? Number(tasaDelDia.tasa_cambio)
+      : null,
+  );
 
   const [ordenesDisponibles, setOrdenesDisponibles] = useState<
     OrdenParaRendicion[]
@@ -69,13 +112,19 @@ export function NuevaRendicionForm({
 
   const [borradorFpagoId, setBorradorFpagoId] = useState("");
   const [borradorMontoForma, setBorradorMontoForma] = useState("0.00");
+  const [borradorFechaPago, setBorradorFechaPago] = useState(hoyLocal);
   const [borradorReferencia, setBorradorReferencia] = useState("");
-  const [borradorCuenta, setBorradorCuenta] = useState("");
+  const [borradorCuentaId, setBorradorCuentaId] = useState(
+    () => cuentasBancarias[0]?.id ?? "",
+  );
   const [borradorCaptureUrl, setBorradorCaptureUrl] = useState<string | null>(
     null,
   );
   const [borradorPreview, setBorradorPreview] = useState<string | null>(null);
   const [subiendoCapture, setSubiendoCapture] = useState(false);
+  const [pagoSeleccionadoKey, setPagoSeleccionadoKey] = useState<string | null>(
+    null,
+  );
 
   const [borradorOrdenId, setBorradorOrdenId] = useState("");
   const [borradorMontoOrden, setBorradorMontoOrden] = useState("0.00");
@@ -87,11 +136,28 @@ export function NuevaRendicionForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const clienteSeleccionado = clientes.find((c) => c.value === clienteId);
+  const tasaValor =
+    tasaOficial != null && tasaOficial > 0
+      ? tasaOficial
+      : tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0
+        ? Number(tasaDelDia.tasa_cambio)
+        : null;
+
   const formaSeleccionada = formasPago.find(
     (f) => f.fpago_id === borradorFpagoId,
   );
   const pideInfoBancaria = formaSeleccionada?.fpago_info === true;
+  const borradorEnBs = formaSeleccionada
+    ? esFormaPagoEnBs(formaSeleccionada.fpago_concepto)
+    : false;
+  const borradorEquivUsd =
+    borradorEnBs && tasaValor != null
+      ? convertirBsAUsd(Number(borradorMontoForma) || 0, tasaValor)
+      : Number(borradorMontoForma) || 0;
+  const borradorEquivBs =
+    !borradorEnBs && tasaValor != null
+      ? convertirUsdABs(Number(borradorMontoForma) || 0, tasaValor)
+      : Number(borradorMontoForma) || 0;
 
   const clientesFiltrados = useMemo(() => {
     const q = buscarCliente.trim().toLowerCase();
@@ -103,11 +169,22 @@ export function NuevaRendicionForm({
     );
   }, [clientes, buscarCliente]);
 
+  const cuentasOptions = useMemo(
+    () =>
+      cuentasBancarias.map((c) => ({
+        value: c.id,
+        label: `${c.entidad_bancaria} · ${c.cuenta_bancaria}`,
+      })),
+    [cuentasBancarias],
+  );
+
   useEffect(() => {
     if (!clienteId) {
       setOrdenesDisponibles([]);
       setOrdenesError(null);
       setOrdenes([]);
+      setSaldoFavor(0);
+      setSaldoFavorBs(null);
       setBorradorOrdenId("");
       setBorradorMontoOrden("0.00");
       setBorradorRendicion("0.00");
@@ -118,15 +195,25 @@ export function NuevaRendicionForm({
     setCargandoOrdenes(true);
     setOrdenesError(null);
 
-    void listarOrdenesParaRendicionAction(clienteId).then((result) => {
+    void solicitaAbonosOrdenDistribucionAction(clienteId).then((result) => {
       if (cancelled) return;
       setCargandoOrdenes(false);
       if (!result.ok) {
         setOrdenesError(result.error);
         setOrdenesDisponibles([]);
+        setSaldoFavor(0);
+        setSaldoFavorBs(null);
         return;
       }
-      setOrdenesDisponibles(result.ordenes);
+      setOrdenesDisponibles(result.data.ordenes);
+      setSaldoFavor(result.data.saldo_favor);
+      setSaldoFavorBs(result.data.saldo_favor_bs);
+      if (
+        result.data.tasa_oficial_actual != null &&
+        result.data.tasa_oficial_actual > 0
+      ) {
+        setTasaOficial(result.data.tasa_oficial_actual);
+      }
       setOrdenes([]);
       setBorradorOrdenId("");
       setBorradorMontoOrden("0.00");
@@ -141,34 +228,59 @@ export function NuevaRendicionForm({
   const ordenesParaSelect = useMemo(() => {
     const usadas = new Set(ordenes.map((o) => o.orden_id));
     return ordenesDisponibles
-      .filter((o) => !usadas.has(o.id))
+      .filter((o) => !usadas.has(o.id) && o.saldo_pendiente > 0)
       .map((o) => ({
         value: o.id,
-        label: `#${o.correlativo} · ${o.factura_origen_numero} · ${formatCurrency(o.total_recaudar)}`,
+        label: `#${o.correlativo} · pendiente ${formatCurrency(o.saldo_pendiente)}`,
       }));
   }, [ordenesDisponibles, ordenes]);
 
   const totalOrdenes = useMemo(
-    () => ordenes.reduce((sum, o) => sum + o.monto_orden, 0),
+    () => ordenes.reduce((sum, o) => sum + o.monto_rendicion, 0),
     [ordenes],
   );
   const totalRendicion = useMemo(
-    () => pagos.reduce((sum, p) => sum + p.monto, 0),
+    () => pagos.reduce((sum, p) => sum + p.monto_usd, 0),
     [pagos],
   );
   const diferencia = totalRendicion - totalOrdenes;
 
+  function resetFormulario() {
+    setBuscarCliente("");
+    setClienteId("");
+    setFechaPago(hoyLocal());
+    setObservaciones("");
+    setSaldoFavor(0);
+    setSaldoFavorBs(null);
+    setOrdenesDisponibles([]);
+    setOrdenesError(null);
+    setBorradorFpagoId("");
+    setBorradorMontoForma("0.00");
+    setBorradorFechaPago(hoyLocal());
+    setBorradorReferencia("");
+    setBorradorCuentaId(cuentasBancarias[0]?.id ?? "");
+    setBorradorCaptureUrl(null);
+    setBorradorPreview(null);
+    setPagoSeleccionadoKey(null);
+    setBorradorOrdenId("");
+    setBorradorMontoOrden("0.00");
+    setBorradorRendicion("0.00");
+    setPagos([]);
+    setOrdenes([]);
+    setError(null);
+    if (captureInputRef.current) captureInputRef.current.value = "";
+  }
+
   function onFormaChange(value: string) {
     setBorradorFpagoId(value);
     setBorradorReferencia("");
-    setBorradorCuenta("");
   }
 
   function onOrdenChange(value: string) {
     setBorradorOrdenId(value);
     const found = ordenesDisponibles.find((o) => o.id === value);
     if (found) {
-      const monto = found.total_recaudar.toFixed(2);
+      const monto = found.saldo_pendiente.toFixed(2);
       setBorradorMontoOrden(monto);
       setBorradorRendicion(monto);
     } else {
@@ -201,15 +313,22 @@ export function NuevaRendicionForm({
     setBorradorCaptureUrl(result.url);
   }
 
-  function agregarFormaPago() {
+  function incluirPago() {
     setError(null);
     if (!formaSeleccionada) {
       setError("Selecciona una forma de pago.");
       return;
     }
-    const monto = Number(borradorMontoForma);
-    if (!Number.isFinite(monto) || monto <= 0) {
+    const montoIngresado = Number(borradorMontoForma);
+    if (!Number.isFinite(montoIngresado) || montoIngresado <= 0) {
       setError("El monto de la forma de pago debe ser mayor a 0.");
+      return;
+    }
+    const enBs = esFormaPagoEnBs(formaSeleccionada.fpago_concepto);
+    if (enBs && (tasaValor == null || tasaValor <= 0)) {
+      setError(
+        "No hay tasa del día para convertir bolívares. Regístrala en Tasas de cambio (BCV).",
+      );
       return;
     }
     if (formaSeleccionada.fpago_info) {
@@ -217,11 +336,22 @@ export function NuevaRendicionForm({
         setError("Ingresa la referencia bancaria.");
         return;
       }
-      if (!borradorCuenta.trim()) {
-        setError("Ingresa la cuenta bancaria.");
+      if (!borradorCuentaId) {
+        setError("Selecciona la cuenta bancaria de la empresa.");
         return;
       }
     }
+
+    const montoUsd = enBs
+      ? convertirBsAUsd(montoIngresado, tasaValor as number)
+      : montoIngresado;
+    const montoBs = enBs
+      ? montoIngresado
+      : tasaValor != null
+        ? convertirUsdABs(montoIngresado, tasaValor)
+        : 0;
+
+    const cuenta = cuentasBancarias.find((c) => c.id === borradorCuentaId);
 
     setPagos((prev) => [
       ...prev,
@@ -230,12 +360,22 @@ export function NuevaRendicionForm({
         fpago_id: formaSeleccionada.fpago_id,
         concepto: formaSeleccionada.fpago_concepto,
         fpago_info: formaSeleccionada.fpago_info,
-        monto,
+        en_bs: enBs,
+        monto_ingresado: montoIngresado,
+        monto_usd: montoUsd,
+        monto_bs: montoBs,
+        tasa_aplicada: tasaValor,
+        fecha: borradorFechaPago || fechaPago,
         referencia_bancaria: formaSeleccionada.fpago_info
           ? borradorReferencia.trim()
           : null,
-        cuenta_bancaria: formaSeleccionada.fpago_info
-          ? borradorCuenta.trim()
+        cuenta_bancaria_id: formaSeleccionada.fpago_info
+          ? borradorCuentaId
+          : null,
+        cuenta_label: formaSeleccionada.fpago_info
+          ? cuenta
+            ? `${cuenta.entidad_bancaria} · ${cuenta.cuenta_bancaria}`
+            : null
           : null,
         capture_url: borradorCaptureUrl,
         preview_url: borradorPreview,
@@ -244,17 +384,27 @@ export function NuevaRendicionForm({
 
     setBorradorFpagoId("");
     setBorradorMontoForma("0.00");
+    setBorradorFechaPago(fechaPago);
     setBorradorReferencia("");
-    setBorradorCuenta("");
     setBorradorCaptureUrl(null);
     setBorradorPreview(null);
+    setPagoSeleccionadoKey(null);
     if (captureInputRef.current) captureInputRef.current.value = "";
+  }
+
+  function quitarPagoSeleccionado() {
+    if (!pagoSeleccionadoKey) {
+      setError("Selecciona una opción de pago para quitar.");
+      return;
+    }
+    setPagos((prev) => prev.filter((p) => p.key !== pagoSeleccionadoKey));
+    setPagoSeleccionadoKey(null);
   }
 
   function agregarOrden() {
     setError(null);
     if (!borradorOrdenId) {
-      setError("Selecciona una orden de distribución.");
+      setError("Selecciona una orden.");
       return;
     }
     const found = ordenesDisponibles.find((o) => o.id === borradorOrdenId);
@@ -264,18 +414,36 @@ export function NuevaRendicionForm({
     }
     const montoRendicion = Number(borradorRendicion);
     if (!Number.isFinite(montoRendicion) || montoRendicion <= 0) {
-      setError("El monto de rendición debe ser mayor a 0.");
+      setError("El monto a rendir debe ser mayor a 0.");
       return;
     }
+    if (montoRendicion > found.saldo_pendiente + 0.009) {
+      setError(
+        `El monto a rendir no puede superar el saldo pendiente (${formatCurrency(found.saldo_pendiente)}).`,
+      );
+      return;
+    }
+
+    const montoBs =
+      tasaValor != null
+        ? convertirUsdABs(montoRendicion, tasaValor)
+        : found.saldo_pendiente_bs != null && found.saldo_pendiente > 0
+          ? (montoRendicion / found.saldo_pendiente) * found.saldo_pendiente_bs
+          : 0;
 
     setOrdenes((prev) => [
       ...prev,
       {
         key: newKey(),
         orden_id: found.id,
-        etiqueta: `#${found.correlativo} · ${found.factura_origen_numero}`,
-        monto_orden: found.total_recaudar,
+        correlativo: found.correlativo,
+        monto_orden: found.monto_total_orden,
+        monto_orden_bs: found.monto_total_orden_bs,
+        abonos: found.abonos_acumulados,
+        saldo_pendiente: found.saldo_pendiente,
+        saldo_pendiente_bs: found.saldo_pendiente_bs,
         monto_rendicion: montoRendicion,
+        monto_rendicion_bs: montoBs,
       },
     ]);
 
@@ -293,7 +461,7 @@ export function NuevaRendicionForm({
       return;
     }
     if (!pagos.length) {
-      setError("Agrega al menos una forma de pago.");
+      setError("Agrega al menos una opción de pago.");
       return;
     }
     if (!ordenes.length) {
@@ -301,20 +469,32 @@ export function NuevaRendicionForm({
       return;
     }
 
+    const obs = [
+      observaciones.trim(),
+      fechaPago ? `Fecha de pago: ${fechaPago}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
     startTransition(async () => {
       const result = await registrarRendicionCuentasAction({
         cliente_id: clienteId,
-        observaciones,
+        observaciones: obs || undefined,
+        tasa_cambio: tasaValor,
         ordenes: ordenes.map((o) => ({
           orden_id: o.orden_id,
           monto_recaudado: o.monto_rendicion,
+          monto_recaudado_bs: o.monto_rendicion_bs,
         })),
         pagos: pagos.map((p) => ({
           fpago_id: p.fpago_id,
-          monto: p.monto,
+          monto: p.monto_ingresado,
+          en_bs: p.en_bs,
+          monto_bs: p.monto_bs,
+          monto_usd: p.monto_usd,
           fpago_info: p.fpago_info,
           referencia_bancaria: p.referencia_bancaria,
-          cuenta_bancaria: p.cuenta_bancaria,
+          cuenta_bancaria_id: p.cuenta_bancaria_id,
           capture_url: p.capture_url,
         })),
       });
@@ -326,195 +506,130 @@ export function NuevaRendicionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <Card title="Clientes">
-        <div className="space-y-3">
-          <Input
-            label="Buscar"
-            placeholder="Razón social o código…"
-            value={buscarCliente}
-            onChange={(e) => setBuscarCliente(e.target.value)}
-            autoComplete="off"
-          />
-          <Select
-            label="Cliente"
-            name="cliente_id"
-            required
-            placeholder="Selecciona cliente"
-            options={clientesFiltrados.map((c) => ({
-              value: c.value,
-              label: `${c.codigo ? `${c.codigo} — ` : ""}${c.label}`,
-            }))}
-            value={clienteId}
-            onChange={(e) => setClienteId(e.target.value)}
-          />
-          <Input
-            label="Código"
-            name="codigo_cliente"
-            readOnly
-            value={clienteSeleccionado?.codigo ?? ""}
-            placeholder="Código del cliente"
-          />
-          <Input
-            label="Observaciones"
-            name="observaciones"
-            value={observaciones}
-            onChange={(e) => setObservaciones(e.target.value)}
-          />
+    <form onSubmit={handleSubmit} className="space-y-4 pb-28">
+      <section className="overflow-hidden rounded-2xl border border-lt-border bg-[color-mix(in_srgb,var(--lt-primary)_18%,#0f2a3d)] text-white shadow-sm">
+        <div className="border-b border-white/15 px-4 py-3 sm:px-5">
+          <h1 className="font-display text-xl tracking-tight sm:text-2xl">
+            Rendición de Cuentas
+          </h1>
         </div>
-      </Card>
-
-      <Card title="Forma">
-        <div className="space-y-3">
-          {formasError ? (
-            <p className="text-sm text-lt-danger-text">{formasError}</p>
-          ) : null}
-          {!formasError && formasPago.length === 0 ? (
-            <p className="text-sm text-lt-text-muted">
-              No hay formas de pago disponibles.
-            </p>
-          ) : null}
-
-          <Select
-            label="Forma"
-            name="forma_pago"
-            placeholder="Selecciona forma de pago"
-            options={formasPago.map((f) => ({
-              value: f.fpago_id,
-              label: f.fpago_concepto,
-            }))}
-            value={borradorFpagoId}
-            onChange={(e) => onFormaChange(e.target.value)}
-            disabled={formasPago.length === 0}
-          />
-
-          <Input
-            label="Monto"
-            type="number"
-            min={0}
-            step="0.01"
-            value={borradorMontoForma}
-            onChange={(e) => setBorradorMontoForma(e.target.value)}
-          />
-
-          {pideInfoBancaria ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  label="Referencia bancaria"
-                  name="referencia_bancaria"
-                  required
-                  value={borradorReferencia}
-                  onChange={(e) => setBorradorReferencia(e.target.value)}
-                  placeholder="Nº de referencia"
-                />
-                <Input
-                  label="Cuenta bancaria"
-                  name="cuenta_bancaria"
-                  required
-                  value={borradorCuenta}
-                  onChange={(e) => setBorradorCuenta(e.target.value)}
-                  placeholder="Cuenta / banco"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <span className="block text-sm font-medium text-lt-text">
-                  Capture
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={subiendoCapture}
-                    onClick={() => captureInputRef.current?.click()}
-                  >
-                    {subiendoCapture ? "Subiendo…" : "Capture"}
-                  </Button>
-                  <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border border-lt-border bg-lt-surface-muted">
-                    {borradorPreview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={borradorPreview}
-                        alt="Vista previa captura"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-[10px] text-lt-text-muted">
-                        img
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <input
-                  ref={captureInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) =>
-                    void onCaptureSelected(e.target.files?.[0])
-                  }
-                />
-              </div>
-            </>
-          ) : borradorFpagoId ? (
-            <p className="text-xs text-lt-text-muted">
-              Efectivo: no se solicita referencia ni cuenta bancaria.
-            </p>
-          ) : null}
-
-          <Button
-            type="button"
-            className="w-full"
-            onClick={agregarFormaPago}
-            disabled={formasPago.length === 0}
-          >
-            Agregar forma de pago
-          </Button>
-
-          {pagos.length > 0 ? (
-            <ul className="space-y-2 border-t border-lt-border-light pt-3">
-              {pagos.map((p) => (
-                <li
-                  key={p.key}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-lt-border-light px-3 py-2 text-sm"
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    {p.preview_url || p.capture_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={p.preview_url ?? p.capture_url ?? ""}
-                        alt=""
-                        className="h-9 w-9 rounded object-cover"
-                      />
-                    ) : null}
-                    <span className="truncate">
-                      {p.concepto} · {formatCurrency(p.monto)}
-                      {p.fpago_info && p.referencia_bancaria
-                        ? ` · ref ${p.referencia_bancaria}`
-                        : ""}
-                    </span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() =>
-                      setPagos((prev) =>
-                        prev.filter((item) => item.key !== p.key),
-                      )
-                    }
-                  >
-                    Quitar
-                  </Button>
-                </li>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-white/80">
+              Proceso No.
+            </label>
+            <input
+              readOnly
+              value="Nuevo"
+              className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-white/80">
+              Fecha de pago
+            </label>
+            <input
+              type="date"
+              value={fechaPago}
+              onChange={(e) => {
+                setFechaPago(e.target.value);
+                setBorradorFechaPago(e.target.value);
+              }}
+              className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-white/80">
+              Tasa del día (BCV)
+            </label>
+            <input
+              readOnly
+              value={
+                tasaValor != null
+                  ? `${formatNumber(tasaValor)}${
+                      tasaDelDia?.fecha_tasa
+                        ? ` · ${formatDateOnly(tasaDelDia.fecha_tasa)}`
+                        : ""
+                    }`
+                  : "Sin tasa"
+              }
+              className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
+            />
+            {tasaError ? (
+              <p className="text-xs text-amber-200">{tasaError}</p>
+            ) : !tasaValor ? (
+              <p className="text-xs text-amber-200">
+                Registra la tasa en Tasas de cambio para pagos en Bs.
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-white/80">
+              Saldo a favor
+            </label>
+            <input
+              readOnly
+              value={
+                clienteId
+                  ? `${formatCurrency(saldoFavor)}${
+                      saldoFavorBs != null
+                        ? ` · ${formatNumber(saldoFavorBs)} Bs`
+                        : ""
+                    }`
+                  : "—"
+              }
+              className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2 lg:col-span-4">
+            <label className="block text-xs font-medium text-white/80">
+              Cliente
+            </label>
+            <input
+              type="search"
+              placeholder="Buscar por razón social o RIF…"
+              value={buscarCliente}
+              onChange={(e) => setBuscarCliente(e.target.value)}
+              className="mb-2 w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2 text-sm text-lt-text"
+              autoComplete="off"
+            />
+            <select
+              required
+              value={clienteId}
+              onChange={(e) => setClienteId(e.target.value)}
+              className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
+            >
+              <option value="">Selecciona cliente</option>
+              {clientesFiltrados.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.codigo ? `${c.label} (${c.codigo})` : c.label}
+                </option>
               ))}
-            </ul>
-          ) : null}
+            </select>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2 lg:col-span-4">
+            <label className="block text-xs font-medium text-white/80">
+              Observaciones
+            </label>
+            <input
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              placeholder="Opcional"
+              className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
+            />
+          </div>
         </div>
-      </Card>
+      </section>
 
-      <Card title="Orden de distribución">
-        <div className="space-y-3">
+      <section className="overflow-hidden rounded-2xl border border-lt-border bg-lt-surface shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-lt-border-light bg-lt-surface-muted px-4 py-3">
+          <h2 className="text-base font-semibold text-lt-text">Órdenes</h2>
+          <Button type="button" onClick={agregarOrden} disabled={!clienteId}>
+            + Orden
+          </Button>
+        </div>
+
+        <div className="space-y-3 border-b border-lt-border-light p-4">
           {cargandoOrdenes ? (
             <p className="text-sm text-lt-text-muted">Cargando órdenes…</p>
           ) : null}
@@ -527,18 +642,17 @@ export function NuevaRendicionForm({
             </p>
           ) : null}
 
-          <Select
-            label="Orden"
-            name="orden_id"
-            placeholder="Órdenes por liquidar del cliente"
-            options={ordenesParaSelect}
-            value={borradorOrdenId}
-            onChange={(e) => onOrdenChange(e.target.value)}
-            disabled={!clienteId || cargandoOrdenes}
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Select
+              label="Orden"
+              placeholder="Órdenes por liquidar"
+              options={ordenesParaSelect}
+              value={borradorOrdenId}
+              onChange={(e) => onOrdenChange(e.target.value)}
+              disabled={!clienteId || cargandoOrdenes}
+            />
             <Input
-              label="Monto orden"
+              label="Saldo pendiente $"
               type="number"
               min={0}
               step="0.01"
@@ -546,7 +660,7 @@ export function NuevaRendicionForm({
               value={borradorMontoOrden}
             />
             <Input
-              label="Rendición"
+              label="Monto a rendir $"
               type="number"
               min={0}
               step="0.01"
@@ -554,24 +668,98 @@ export function NuevaRendicionForm({
               onChange={(e) => setBorradorRendicion(e.target.value)}
             />
           </div>
-          <Button type="button" className="w-full" onClick={agregarOrden}>
-            Agregar orden
-          </Button>
+        </div>
 
-          {ordenes.length > 0 ? (
-            <ul className="space-y-2 border-t border-lt-border-light pt-3">
-              {ordenes.map((o) => (
-                <li
-                  key={o.key}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-lt-border-light px-3 py-2 text-sm"
-                >
-                  <span className="truncate">
-                    {o.etiqueta} · orden {formatCurrency(o.monto_orden)} ·
-                    rendición {formatCurrency(o.monto_rendicion)}
-                  </span>
-                  <Button
+        <div className="hidden overflow-x-auto md:block">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-lt-surface-muted text-xs uppercase tracking-wide text-lt-text-muted">
+              <tr>
+                <th className="px-4 py-3 font-medium">Correlativo</th>
+                <th className="px-4 py-3 font-medium">Total orden</th>
+                <th className="px-4 py-3 font-medium">Abonos</th>
+                <th className="px-4 py-3 font-medium">Saldo pend.</th>
+                <th className="px-4 py-3 font-medium">Monto a rendir</th>
+                <th className="px-4 py-3 font-medium" />
+              </tr>
+            </thead>
+            <tbody>
+              {ordenes.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-8 text-center text-lt-text-muted"
+                  >
+                    Agrega órdenes con el botón + Orden.
+                  </td>
+                </tr>
+              ) : (
+                ordenes.map((o) => (
+                  <tr
+                    key={o.key}
+                    className="border-t border-lt-border-light"
+                  >
+                    <td className="px-4 py-3 font-medium text-lt-text">
+                      {o.correlativo}
+                    </td>
+                    <td className="px-4 py-3">
+                      {formatCurrency(o.monto_orden)}
+                    </td>
+                    <td className="px-4 py-3">{formatCurrency(o.abonos)}</td>
+                    <td className="px-4 py-3">
+                      {formatCurrency(o.saldo_pendiente)}
+                    </td>
+                    <td className="px-4 py-3 font-medium">
+                      {formatCurrency(o.monto_rendicion)}
+                      <span className="block text-xs text-lt-text-muted">
+                        {formatNumber(o.monto_rendicion_bs)} Bs
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        className="rounded-lg px-2 py-1 text-sm font-medium text-lt-danger-text hover:bg-lt-danger-bg"
+                        onClick={() =>
+                          setOrdenes((prev) =>
+                            prev.filter((item) => item.key !== o.key),
+                          )
+                        }
+                      >
+                        Quitar
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <ul className="space-y-2 p-4 md:hidden">
+          {ordenes.length === 0 ? (
+            <li className="py-4 text-center text-sm text-lt-text-muted">
+              Agrega órdenes con el botón + Orden.
+            </li>
+          ) : (
+            ordenes.map((o) => (
+              <li
+                key={o.key}
+                className="rounded-xl border border-lt-border-light p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-lt-text">
+                      Orden No. {o.correlativo}
+                    </p>
+                    <p className="mt-1 text-sm text-lt-text-muted">
+                      Pendiente {formatCurrency(o.saldo_pendiente)}
+                    </p>
+                    <p className="text-sm font-medium text-lt-text">
+                      A rendir {formatCurrency(o.monto_rendicion)}
+                    </p>
+                  </div>
+                  <button
                     type="button"
-                    variant="ghost"
+                    className="text-sm font-medium text-lt-danger-text"
                     onClick={() =>
                       setOrdenes((prev) =>
                         prev.filter((item) => item.key !== o.key),
@@ -579,61 +767,338 @@ export function NuevaRendicionForm({
                     }
                   >
                     Quitar
-                  </Button>
-                </li>
-              ))}
-            </ul>
+                  </button>
+                </div>
+              </li>
+            ))
+          )}
+        </ul>
+
+        <div className="flex justify-end border-t border-lt-border-light bg-lt-surface-muted px-4 py-3">
+          <p className="text-sm font-semibold text-lt-text">
+            Monto total a cobrar:{" "}
+            <span className="text-lt-primary">
+              {formatCurrency(totalOrdenes)}
+            </span>
+          </p>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-lt-border bg-lt-surface shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-lt-border-light bg-lt-surface-muted px-4 py-3">
+          <h2 className="text-base font-semibold text-lt-text">
+            Opciones de pago
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={incluirPago}
+              disabled={formasPago.length === 0}
+            >
+              Incluir
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={quitarPagoSeleccionado}
+              disabled={!pagoSeleccionadoKey}
+            >
+              Quitar
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-3 border-b border-lt-border-light p-4">
+          {formasError ? (
+            <p className="text-sm text-lt-danger-text">{formasError}</p>
+          ) : null}
+          {cuentasError ? (
+            <p className="text-sm text-lt-danger-text">{cuentasError}</p>
+          ) : null}
+          {!cuentasError && cuentasBancarias.length === 0 ? (
+            <p className="text-sm text-amber-700">
+              No hay cuentas bancarias activas de la empresa. Regístralas antes
+              de pagos con transferencia / pago móvil.
+            </p>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Select
+              label="Forma de pago"
+              placeholder="Selecciona forma"
+              options={formasPago.map((f) => ({
+                value: f.fpago_id,
+                label: f.fpago_concepto,
+              }))}
+              value={borradorFpagoId}
+              onChange={(e) => onFormaChange(e.target.value)}
+              disabled={formasPago.length === 0}
+            />
+            <Input
+              label="Fecha"
+              type="date"
+              value={borradorFechaPago}
+              onChange={(e) => setBorradorFechaPago(e.target.value)}
+            />
+            <Input
+              label={borradorEnBs ? "Monto Bs" : "Monto $"}
+              type="number"
+              min={0}
+              step="0.01"
+              value={borradorMontoForma}
+              onChange={(e) => setBorradorMontoForma(e.target.value)}
+            />
+            {pideInfoBancaria ? (
+              <div className="flex items-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={subiendoCapture}
+                  onClick={() => captureInputRef.current?.click()}
+                >
+                  {subiendoCapture ? "Subiendo…" : "Captura"}
+                </Button>
+                <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg border border-lt-border bg-lt-surface-muted">
+                  {borradorPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={borradorPreview}
+                      alt="Vista previa captura"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[10px] text-lt-text-muted">img</span>
+                  )}
+                </div>
+                <input
+                  ref={captureInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => void onCaptureSelected(e.target.files?.[0])}
+                />
+              </div>
+            ) : (
+              <div className="flex items-end">
+                <p className="pb-2 text-xs text-lt-text-muted">
+                  {borradorFpagoId
+                    ? borradorEnBs
+                      ? tasaValor != null
+                        ? `Equivale a ${formatCurrency(borradorEquivUsd)}`
+                        : "Falta tasa del día"
+                      : tasaValor != null
+                        ? `Equivale a ${formatNumber(borradorEquivBs)} Bs`
+                        : "Monto en dólares"
+                    : " "}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {borradorFpagoId && tasaValor != null ? (
+            <p className="text-sm text-lt-text-muted">
+              {borradorEnBs ? (
+                <>
+                  Conversión BCV:{" "}
+                  <span className="font-medium text-lt-text">
+                    {formatNumber(Number(borradorMontoForma) || 0)} Bs ÷{" "}
+                    {formatNumber(tasaValor)} ={" "}
+                    {formatCurrency(borradorEquivUsd)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  Equivalente:{" "}
+                  <span className="font-medium text-lt-text">
+                    {formatCurrency(Number(borradorMontoForma) || 0)} ×{" "}
+                    {formatNumber(tasaValor)} ={" "}
+                    {formatNumber(borradorEquivBs)} Bs
+                  </span>
+                </>
+              )}
+            </p>
+          ) : null}
+
+          {pideInfoBancaria ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Referencia bancaria"
+                required
+                value={borradorReferencia}
+                onChange={(e) => setBorradorReferencia(e.target.value)}
+                placeholder="Nº de referencia"
+              />
+              <Select
+                label="Cuenta bancaria empresa"
+                required
+                placeholder="Selecciona cuenta destino"
+                options={cuentasOptions}
+                value={borradorCuentaId}
+                onChange={(e) => setBorradorCuentaId(e.target.value)}
+                disabled={cuentasBancarias.length === 0}
+              />
+            </div>
           ) : null}
         </div>
-      </Card>
 
-      <Card title="Totales">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Input
-            label="Total en ordenes"
-            readOnly
-            value={totalOrdenes.toFixed(2)}
-          />
-          <Input
-            label="Total en rendición"
-            readOnly
-            value={totalRendicion.toFixed(2)}
-          />
-          <div>
+        <div className="hidden overflow-x-auto md:block">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-lt-surface-muted text-xs uppercase tracking-wide text-lt-text-muted">
+              <tr>
+                <th className="px-4 py-3 font-medium">Forma de pago</th>
+                <th className="px-4 py-3 font-medium">Fecha</th>
+                <th className="px-4 py-3 font-medium">Monto ingresado</th>
+                <th className="px-4 py-3 font-medium">USD</th>
+                <th className="px-4 py-3 font-medium">Bs</th>
+                <th className="px-4 py-3 font-medium">Cuenta / ref.</th>
+                <th className="px-4 py-3 font-medium">Captura</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagos.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-8 text-center text-lt-text-muted"
+                  >
+                    Incluye opciones de pago con el botón Incluir.
+                  </td>
+                </tr>
+              ) : (
+                pagos.map((p) => (
+                  <tr
+                    key={p.key}
+                    className={`cursor-pointer border-t border-lt-border-light ${
+                      pagoSeleccionadoKey === p.key
+                        ? "bg-lt-primary-muted"
+                        : "hover:bg-lt-surface-muted"
+                    }`}
+                    onClick={() => setPagoSeleccionadoKey(p.key)}
+                  >
+                    <td className="px-4 py-3 font-medium text-lt-text">
+                      {p.concepto}
+                    </td>
+                    <td className="px-4 py-3">{p.fecha || "—"}</td>
+                    <td className="px-4 py-3">
+                      {p.en_bs
+                        ? `${formatNumber(p.monto_ingresado)} Bs`
+                        : formatCurrency(p.monto_ingresado)}
+                    </td>
+                    <td className="px-4 py-3 font-medium">
+                      {formatCurrency(p.monto_usd)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {formatNumber(p.monto_bs)}
+                    </td>
+                    <td className="px-4 py-3 text-lt-text-muted">
+                      {p.cuenta_label ?? "—"}
+                      {p.referencia_bancaria
+                        ? ` · ${p.referencia_bancaria}`
+                        : ""}
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.preview_url || p.capture_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.preview_url ?? p.capture_url ?? ""}
+                          alt=""
+                          className="h-9 w-9 rounded object-cover"
+                        />
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <ul className="space-y-2 p-4 md:hidden">
+          {pagos.length === 0 ? (
+            <li className="py-4 text-center text-sm text-lt-text-muted">
+              Incluye opciones de pago con el botón Incluir.
+            </li>
+          ) : (
+            pagos.map((p) => (
+              <li
+                key={p.key}
+                className={`rounded-xl border p-3 ${
+                  pagoSeleccionadoKey === p.key
+                    ? "border-lt-primary bg-lt-primary-muted"
+                    : "border-lt-border-light"
+                }`}
+                onClick={() => setPagoSeleccionadoKey(p.key)}
+              >
+                <p className="font-semibold text-lt-text">{p.concepto}</p>
+                <p className="mt-1 text-sm text-lt-text-muted">
+                  {p.en_bs
+                    ? `${formatNumber(p.monto_ingresado)} Bs → ${formatCurrency(p.monto_usd)}`
+                    : formatCurrency(p.monto_usd)}
+                </p>
+              </li>
+            ))
+          )}
+        </ul>
+
+        <div className="flex flex-wrap items-end justify-between gap-3 border-t border-lt-border-light bg-lt-surface-muted px-4 py-4">
+          <div className="grid min-w-[16rem] flex-1 gap-3 sm:grid-cols-2 lg:max-w-xl">
             <Input
-              label="Diferencia"
+              label="Total Rendición $"
               readOnly
-              value={diferencia.toFixed(2)}
+              value={formatNumber(totalRendicion)}
             />
+            <Input
+              label="Monto total a cobrar $"
+              readOnly
+              value={formatNumber(totalOrdenes)}
+            />
+          </div>
+          <div className="text-right text-sm">
             {diferencia > 0 ? (
-              <p className="mt-1 text-xs text-lt-success-text">
+              <p className="text-lt-success-text">
                 Saldo a favor: {formatCurrency(diferencia)}
               </p>
             ) : diferencia < 0 ? (
-              <p className="mt-1 text-xs text-lt-danger-text">
+              <p className="text-lt-danger-text">
                 Faltante: {formatCurrency(Math.abs(diferencia))}
               </p>
+            ) : clienteId ? (
+              <p className="text-lt-text-muted">Cuadra sin diferencia</p>
             ) : null}
           </div>
         </div>
-      </Card>
+      </section>
 
       {error ? <p className="lt-alert-error">{error}</p> : null}
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button
-          type="submit"
-          disabled={pending || !clienteId || subiendoCapture}
-        >
-          {pending ? "Registrando…" : "Registrar rendición"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => router.push("/rendiciones")}
-        >
-          Cancelar
-        </Button>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-lt-border bg-lt-surface/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-2 px-3 py-3 sm:justify-between">
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => router.push("/rendiciones")}
+            >
+              Buscar
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => router.push("/rendiciones")}
+            >
+              Abandonar
+            </Button>
+          </div>
+          <Button
+            type="submit"
+            disabled={pending || !clienteId || subiendoCapture}
+          >
+            {pending ? "Guardando…" : "Guardar"}
+          </Button>
+        </div>
       </div>
     </form>
   );

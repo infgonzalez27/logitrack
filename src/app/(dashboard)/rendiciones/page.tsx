@@ -30,8 +30,8 @@ export default async function RendicionesPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Rendición de cuentas"
-        description="Módulo 4 — Cobranzas y devoluciones en ruta"
+        title="Rendición de Cuentas"
+        description="Registro de órdenes por liquidar y opciones de pago."
         action={<Button href="/rendiciones/nuevo">Nueva rendición</Button>}
       />
       {ok ? (

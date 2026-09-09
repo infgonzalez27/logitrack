@@ -7,10 +7,13 @@ import type { RadarDetalle, RadarOrden } from "@/types/database";
 
 function paradaEstado(orden: RadarOrden): {
   label: string;
-  tone: "success" | "warning" | "neutral";
+  tone: "success" | "warning" | "default" | "danger";
 } {
+  if (orden.despacho_permitido === false) {
+    return { label: "Bloqueado", tone: "danger" };
+  }
   const detalles = orden.detalles ?? [];
-  if (!detalles.length) return { label: "Sin líneas", tone: "neutral" };
+  if (!detalles.length) return { label: "Sin líneas", tone: "default" };
   const pendientes = detalles.filter(
     (d) => (d.estado_entrega ?? "pendiente") === "pendiente",
   );
@@ -31,6 +34,10 @@ function resumenCarga(detalles: RadarDetalle[]): string {
   );
   if (!detalles.length) return "Sin productos";
   return `${formatNumber(items)} items · ${detalles.length} SKU`;
+}
+
+function despachoPermitido(orden: RadarOrden): boolean {
+  return orden.despacho_permitido !== false;
 }
 
 export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) {
@@ -61,6 +68,7 @@ export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) 
       <ul className="space-y-3">
         {ordenes.map((orden) => {
           const estado = paradaEstado(orden);
+          const permitido = despachoPermitido(orden);
           const mapsUrl = orden.cliente.direccion_fiscal
             ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orden.cliente.direccion_fiscal)}`
             : null;
@@ -91,10 +99,23 @@ export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) 
                   <Badge tone={estado.tone}>{estado.label}</Badge>
                 </div>
 
+                {!permitido ? (
+                  <p className="lt-alert-error mt-3 text-sm">
+                    {orden.motivo_bloqueo?.trim() ||
+                      "Cliente con restricciones de crédito. Solicita autorización a gerencia."}
+                  </p>
+                ) : null}
+
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button href={`/radar/entrega/${orden.orden_id}`}>
-                    Iniciar entrega
-                  </Button>
+                  {permitido ? (
+                    <Button href={`/radar/entrega/${orden.orden_id}`}>
+                      Iniciar entrega
+                    </Button>
+                  ) : (
+                    <Button type="button" disabled>
+                      Entrega bloqueada
+                    </Button>
+                  )}
                   {mapsUrl ? (
                     <a
                       href={mapsUrl}

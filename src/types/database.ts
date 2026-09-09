@@ -95,6 +95,13 @@ export interface Cliente {
   despachador_id?: string | null;
   /** Ruta — schema DB admin; combo vía `retorna_lista_rutas`. */
   id_ruta?: string | null;
+  /** Crédito a favor por rendiciones (USD). */
+  saldo_favor?: number | null;
+  /** DB-027 — políticas de crédito / despacho. */
+  limite_credito?: number | null;
+  max_facturas_vencidas?: number | null;
+  permiso_despacho_manual?: boolean | null;
+  excepcion_despacho_gerencia?: boolean | null;
   activo: boolean;
   created_at: string;
   perfiles_usuario?: PerfilUsuario | null;
@@ -257,8 +264,12 @@ export interface RendicionCuentas {
   id: string;
   cliente_id: string;
   fecha_rendicion: string;
+  /** Tasa BCV aplicada al registrar (DB-028). */
+  tasa_cambio?: number | null;
   total_efectivo_recaudado: number;
   total_transferencias_recaudado: number;
+  total_recaudado_bs?: number | null;
+  total_recaudado_usd?: number | null;
   total_devoluciones_valoradas: number;
   estado: RendicionEstado;
   observaciones: string | null;
@@ -271,6 +282,7 @@ export interface DetalleRendicionOrden {
   rendicion_id: string;
   orden_distribucion_id: string;
   recaudado: number;
+  recaudado_bs?: number | null;
   ordenes_distribucion?: OrdenDistribucion | null;
 }
 
@@ -282,6 +294,15 @@ export interface Fpago {
   fpago_info: boolean;
 }
 
+/** Cuentas bancarias destino de la empresa (DB-028). */
+export interface CuentaBancariaEmpresa {
+  id: string;
+  cuenta_bancaria: string;
+  entidad_bancaria: string;
+  status_cuenta: boolean;
+  created_at?: string | null;
+}
+
 export interface DetalleRendicionPago {
   id: string;
   rendicion_id: string;
@@ -289,10 +310,14 @@ export interface DetalleRendicionPago {
   /** @deprecated Reemplazado por fpago_id (migración DB-010). */
   metodo_pago?: MetodoPagoRendicion | null;
   monto: number;
+  monto_bs?: number | null;
+  monto_usd?: number | null;
+  cuenta_bancaria_id?: string | null;
   referencia_bancaria: string | null;
   cuenta_bancaria: string | null;
   capture_url: string | null;
   fpagos?: Fpago | null;
+  cuentas_bancarias_empresa?: CuentaBancariaEmpresa | null;
 }
 
 export interface FacturaCompra {
@@ -386,6 +411,10 @@ export type RadarCliente = {
   telefono: string | null;
   movil1: string | null;
   nombre_ruta: string | null;
+  limite_credito?: number | null;
+  max_facturas_vencidas?: number | null;
+  permiso_despacho_manual?: boolean | null;
+  excepcion_despacho_gerencia?: boolean | null;
 };
 
 export type RadarDetalle = {
@@ -420,6 +449,9 @@ export type RadarOrden = {
   tasa_cambio: number | null;
   total_recaudar_bs: number | null;
   total_recaudar_usd: number | null;
+  /** DB-027 — false si el cliente está bloqueado por crédito. */
+  despacho_permitido?: boolean;
+  motivo_bloqueo?: string | null;
   cliente: RadarCliente;
   detalles: RadarDetalle[];
   saldo_contenedores: RadarSaldoContenedor[];
@@ -443,6 +475,40 @@ export type RadarCabecera = {
 export type RadarListaItem = RadarCabecera & {
   despachador_nombre: string;
   total_ordenes: number;
+};
+
+/** §2.30 — fila de `retorna_lista_radars_segun_rango_fechas`. */
+export type RadarListaRangoItem = {
+  fecha_despacho: string;
+  id_radar: string;
+  correlativo: number;
+  total_paradas: number;
+  items: number;
+  sku: number;
+  status_radar: boolean;
+  aprobado: boolean;
+};
+
+/** §2.31 — parada resumida de `retorna_ordenes_distribucion_segun_idradar`. */
+export type RadarOrdenResumen = {
+  id_orden_distribucion: string;
+  correlativo: number;
+  ruta: string;
+  razon_social: string;
+  direccion_fiscal: string | null;
+  items: number;
+  sku: number;
+  contenedores_retirados: number;
+};
+
+/** §2.32 — fila de `retorna_ordenes_por_liquidar`. */
+export type OrdenPorLiquidarCliente = {
+  cliente_id: string;
+  razon_social: string;
+  rif_nit: string | null;
+  dias_vencidos: number;
+  cant_ordenes: number;
+  monto_por_liquidar: number;
 };
 
 export type RadarReporteProducto = {
@@ -693,11 +759,28 @@ export interface Database {
           p_despachador_id?: string | null;
           p_id_ruta?: string | null;
           p_activo?: boolean | null;
+          p_limite_credito?: number | null;
+          p_max_facturas_vencidas?: number | null;
+          p_permiso_despacho_manual?: boolean | null;
         };
         Returns: {
           success: boolean;
           message?: string;
           data: Cliente | null;
+          error?: { code: string; message: string; details?: string | null } | null;
+        };
+      };
+      otorgar_excepcion_despacho_gerencia: {
+        Args: {
+          p_cliente_id: string;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data: {
+            cliente_id: string;
+            excepcion_despacho_gerencia: boolean;
+          } | null;
           error?: { code: string; message: string; details?: string | null } | null;
         };
       };

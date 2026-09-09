@@ -5,6 +5,8 @@ import {
   retornaListaRutasAction,
   retornaUsuariosDespachadoresAction,
 } from "@/lib/actions/rutas";
+import { getCurrentProfile } from "@/lib/auth";
+import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout/page-header";
 import { ClienteEditarForm } from "./cliente-editar-form";
 
@@ -14,17 +16,26 @@ export default async function ClienteEditarPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [result, vendedoresResult, rutasResult, despachadoresResult] =
-    await Promise.all([
-      obtenerClienteParaEditarAction(id),
-      listarUsuariosAction({ rol: "vendedor" }),
-      retornaListaRutasAction(),
-      retornaUsuariosDespachadoresAction(),
-    ]);
+  const [
+    result,
+    vendedoresResult,
+    rutasResult,
+    despachadoresResult,
+    profile,
+  ] = await Promise.all([
+    obtenerClienteParaEditarAction(id),
+    listarUsuariosAction({ rol: "vendedor" }),
+    retornaListaRutasAction(),
+    retornaUsuariosDespachadoresAction(),
+    getCurrentProfile(),
+  ]);
 
   if (!result.ok) {
     notFound();
   }
+
+  const rol = getRoleNameFromProfile(profile);
+  const puedeOtorgarExcepcion = rol === "gerente" || rol === "admin";
 
   const vendedores = vendedoresResult.ok
     ? vendedoresResult.usuarios.map((u) => ({
@@ -67,6 +78,7 @@ export default async function ClienteEditarPage({
         vendedores={vendedores}
         rutas={rutas}
         despachadores={despachadores}
+        puedeOtorgarExcepcion={puedeOtorgarExcepcion}
       />
     </div>
   );
