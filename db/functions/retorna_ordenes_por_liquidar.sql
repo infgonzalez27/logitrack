@@ -17,7 +17,7 @@ BEGIN
                     'dias_vencidos', (CURRENT_DATE - MIN(od.fecha_despacho::date))::INT,
                     'cant_ordenes', COUNT(od.id),
                     'monto_por_liquidar', SUM(
-                        COALESCE(od.subtotal_recaudar, od.subtotal, od.total_recaudar_usd, 0.00) - COALESCE(abonos.total_recaudado_usd, 0.00)
+                        COALESCE(od.total_recaudar_usd, 0.00) - COALESCE(abonos.total_recaudado_usd, 0.00)
                     )
                 ) ORDER BY (CURRENT_DATE - MIN(od.fecha_despacho::date)) DESC
             ),

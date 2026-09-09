@@ -51,12 +51,12 @@ BEGIN
             'correlativo', od.correlativo,
             'fecha_despacho', od.fecha_despacho,
             'tasa_orden', COALESCE(od.tasa_cambio, v_tasa_oficial),
-            'monto_total_orden', COALESCE(od.subtotal_recaudar, od.subtotal, 0.00),
-            'monto_total_orden_bs', COALESCE(od.total_recaudar_bs, (COALESCE(od.subtotal_recaudar, od.subtotal, 0.00) * COALESCE(od.tasa_cambio, v_tasa_oficial)), 0.00),
+            'monto_total_orden', COALESCE(od.total_recaudar_usd, 0.00),
+            'monto_total_orden_bs', COALESCE(od.total_recaudar_bs, (COALESCE(od.total_recaudar_usd, 0.00) * COALESCE(od.tasa_cambio, v_tasa_oficial)), 0.00),
             'abonos_acumulados', COALESCE(abonos.total_recaudado_usd, 0.00),
             'abonos_acumulados_bs', COALESCE(abonos.total_recaudado_bs, 0.00),
-            'saldo_pendiente', COALESCE(od.subtotal_recaudar, od.subtotal, 0.00) - COALESCE(abonos.total_recaudado_usd, 0.00),
-            'saldo_pendiente_bs', COALESCE(od.total_recaudar_bs, (COALESCE(od.subtotal_recaudar, od.subtotal, 0.00) * COALESCE(od.tasa_cambio, v_tasa_oficial)), 0.00) - COALESCE(abonos.total_recaudado_bs, 0.00)
+            'saldo_pendiente', COALESCE(od.total_recaudar_usd, 0.00) - COALESCE(abonos.total_recaudado_usd, 0.00),
+            'saldo_pendiente_bs', COALESCE(od.total_recaudar_bs, (COALESCE(od.total_recaudar_usd, 0.00) * COALESCE(od.tasa_cambio, v_tasa_oficial)), 0.00) - COALESCE(abonos.total_recaudado_bs, 0.00)
         ) ORDER BY od.created_at ASC
     ) INTO v_ordenes
     FROM public.ordenes_distribucion od

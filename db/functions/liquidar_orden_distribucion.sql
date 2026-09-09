@@ -23,8 +23,8 @@ BEGIN
         );
     END IF;
 
-    -- Obtener orden
-    SELECT estado, cliente_id, camion_id, COALESCE(subtotal_recaudar, subtotal, 0.00)
+    -- Obtener orden usando la columna oficial total_recaudar_usd
+    SELECT estado, cliente_id, camion_id, COALESCE(total_recaudar_usd, 0.00)
     INTO v_estado_orden, v_cliente_id, v_camion_id, v_subtotal_recaudar
     FROM public.ordenes_distribucion
     WHERE id = p_orden_id;
