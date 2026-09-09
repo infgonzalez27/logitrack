@@ -12,6 +12,7 @@ import {
   convertirBsAUsd,
   convertirUsdABs,
   esFormaPagoEnBs,
+  resolverMontoUsdOrden,
 } from "@/lib/rendiciones/moneda";
 import type { CuentaBancariaEmpresa, Fpago, OrdenPorLiquidarCliente } from "@/types/database";
 
@@ -322,20 +323,21 @@ async function solicitaAbonosOrdenDistribucionLocal(
       0,
     );
 
-    const totalUsd =
-      od.total_recaudar_usd != null && Number(od.total_recaudar_usd) > 0
-        ? Number(od.total_recaudar_usd)
-        : sumUsdLineas > 0
-          ? sumUsdLineas
-          : sumBsLineas > 0 && tasaOrden > 0
-            ? Math.round((sumBsLineas / tasaOrden) * 100) / 100
-            : 0;
+    const totalUsd = resolverMontoUsdOrden({
+      total_recaudar_usd: od.total_recaudar_usd,
+      total_recaudar_bs: od.total_recaudar_bs,
+      tasa_cambio: tasaOrden,
+      sum_lineas_usd: sumUsdLineas,
+      sum_lineas_recaudar: sumBsLineas,
+    });
     const totalBs =
-      od.total_recaudar_bs != null && Number(od.total_recaudar_bs) > 0
-        ? Number(od.total_recaudar_bs)
-        : sumBsLineas > 0
-          ? sumBsLineas
-          : totalUsd * tasaOrden;
+      totalUsd > 0 && tasaOrden > 0
+        ? convertirUsdABs(totalUsd, tasaOrden)
+        : od.total_recaudar_bs != null && Number(od.total_recaudar_bs) > 0
+          ? Number(od.total_recaudar_bs)
+          : sumBsLineas > 0
+            ? sumBsLineas
+            : 0;
 
     const abonos = abonosByOrden.get(od.id) ?? { usd: 0, bs: 0 };
     const saldoPendiente = Math.max(0, totalUsd - abonos.usd);
@@ -700,24 +702,24 @@ export async function aprobarRendicionAction(rendicionId: string) {
 function mapOrdenPorLiquidar(raw: unknown): OrdenPorLiquidarCliente | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  const clienteId =
-    typeof r.cliente_id === "string"
-      ? r.cliente_id
+  const ordenId =
+    typeof r.orden_id === "string"
+      ? r.orden_id
       : typeof r.id === "string"
         ? r.id
         : null;
-  if (!clienteId) return null;
+  if (!ordenId) return null;
   return {
-    cliente_id: clienteId,
+    orden_id: ordenId,
+    correlativo: Number(r.correlativo ?? 0),
+    cliente_id: typeof r.cliente_id === "string" ? r.cliente_id : "",
     razon_social: String(r.razon_social ?? "—"),
-    rif_nit: typeof r.rif_nit === "string" ? r.rif_nit : null,
     dias_vencidos: Number(r.dias_vencidos ?? 0),
-    cant_ordenes: Number(r.cant_ordenes ?? 0),
     monto_por_liquidar: Number(r.monto_por_liquidar ?? 0),
   };
 }
 
-/** Fallback local si el RPC falla por columnas inexistentes (`subtotal_recaudar`). */
+/** Una fila por orden en estado `por_liquidar`. */
 async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente[]> {
   const supabase = await createClient();
   const { data: ordenes, error } = await supabase
@@ -725,11 +727,13 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
     .select(
       `
       id,
+      correlativo,
       cliente_id,
       fecha_despacho,
+      tasa_cambio,
       total_recaudar_usd,
       total_recaudar_bs,
-      clientes(razon_social, rif_nit),
+      clientes(razon_social),
       detalle_distribucion(subtotal_recaudar_usd, subtotal_recaudar)
     `,
     )
@@ -746,13 +750,15 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
   };
   type Row = {
     id: string;
+    correlativo: number;
     cliente_id: string;
     fecha_despacho: string | null;
+    tasa_cambio: number | null;
     total_recaudar_usd: number | null;
     total_recaudar_bs: number | null;
     clientes:
-      | { razon_social: string; rif_nit: string | null }
-      | { razon_social: string; rif_nit: string | null }[]
+      | { razon_social: string }
+      | { razon_social: string }[]
       | null;
     detalle_distribucion: Det[] | Det | null;
   };
@@ -783,15 +789,7 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
-  type Agg = {
-    cliente_id: string;
-    razon_social: string;
-    rif_nit: string | null;
-    minFecha: Date | null;
-    cant_ordenes: number;
-    monto_por_liquidar: number;
-  };
-  const byCliente = new Map<string, Agg>();
+  const items: OrdenPorLiquidarCliente[] = [];
 
   for (const od of rows) {
     const cliente =
@@ -805,67 +803,49 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
       (s, d) => s + Number(d.subtotal_recaudar_usd ?? 0),
       0,
     );
-    const montoOrden =
-      od.total_recaudar_usd != null && Number(od.total_recaudar_usd) > 0
-        ? Number(od.total_recaudar_usd)
-        : sumUsd > 0
-          ? sumUsd
-          : Number(od.total_recaudar_bs ?? 0);
+    const sumRecaudar = dets.reduce(
+      (s, d) => s + Number(d.subtotal_recaudar ?? 0),
+      0,
+    );
+    const montoOrden = resolverMontoUsdOrden({
+      total_recaudar_usd: od.total_recaudar_usd,
+      total_recaudar_bs: od.total_recaudar_bs,
+      tasa_cambio: od.tasa_cambio,
+      sum_lineas_usd: sumUsd,
+      sum_lineas_recaudar: sumRecaudar,
+    });
     const saldo = Math.max(0, montoOrden - (abonosMap.get(od.id) ?? 0));
 
-    let fecha: Date | null = null;
+    let dias = 0;
     if (od.fecha_despacho) {
       const iso = String(od.fecha_despacho).slice(0, 10);
       const [y, m, d] = iso.split("-").map(Number);
-      if (y && m && d) fecha = new Date(y, m - 1, d);
-    }
-
-    let agg = byCliente.get(od.cliente_id);
-    if (!agg) {
-      agg = {
-        cliente_id: od.cliente_id,
-        razon_social: cliente?.razon_social ?? "—",
-        rif_nit: cliente?.rif_nit ?? null,
-        minFecha: fecha,
-        cant_ordenes: 0,
-        monto_por_liquidar: 0,
-      };
-      byCliente.set(od.cliente_id, agg);
-    }
-    agg.cant_ordenes += 1;
-    agg.monto_por_liquidar += saldo;
-    if (fecha && (!agg.minFecha || fecha < agg.minFecha)) {
-      agg.minFecha = fecha;
-    }
-  }
-
-  const items: OrdenPorLiquidarCliente[] = [...byCliente.values()].map(
-    (a) => {
-      let dias = 0;
-      if (a.minFecha) {
+      if (y && m && d) {
+        const fecha = new Date(y, m - 1, d);
         dias = Math.max(
           0,
           Math.floor(
-            (hoy.getTime() - a.minFecha.getTime()) / (1000 * 60 * 60 * 24),
+            (hoy.getTime() - fecha.getTime()) / (1000 * 60 * 60 * 24),
           ),
         );
       }
-      return {
-        cliente_id: a.cliente_id,
-        razon_social: a.razon_social,
-        rif_nit: a.rif_nit,
-        dias_vencidos: dias,
-        cant_ordenes: a.cant_ordenes,
-        monto_por_liquidar: Math.round(a.monto_por_liquidar * 100) / 100,
-      };
-    },
-  );
+    }
 
-  items.sort((a, b) => b.dias_vencidos - a.dias_vencidos);
+    items.push({
+      orden_id: od.id,
+      correlativo: Number(od.correlativo ?? 0),
+      cliente_id: od.cliente_id,
+      razon_social: cliente?.razon_social ?? "—",
+      dias_vencidos: dias,
+      monto_por_liquidar: Math.round(saldo * 100) / 100,
+    });
+  }
+
+  items.sort((a, b) => b.dias_vencidos - a.dias_vencidos || b.correlativo - a.correlativo);
   return items;
 }
 
-/** INTEGRACION-RPC §2.32 — cartera de órdenes por liquidar agrupada por cliente. */
+/** Cartera de órdenes por liquidar (una fila por orden). */
 export async function retornaOrdenesPorLiquidarAction(): Promise<
   | { ok: true; items: OrdenPorLiquidarCliente[] }
   | { ok: false; error: string; code?: string }
@@ -879,6 +859,12 @@ export async function retornaOrdenesPorLiquidarAction(): Promise<
     rol !== "cobrador"
   ) {
     return { ok: false, error: "No tienes acceso a órdenes por liquidar." };
+  }
+
+  // Preferir cálculo local: el RPC usa total_recaudar_usd que hoy suele ser bs/tasa.
+  const local = await retornaOrdenesPorLiquidarLocal();
+  if (local.length) {
+    return { ok: true, items: local };
   }
 
   const response = await callDbProcedure<unknown>("retorna_ordenes_por_liquidar");
@@ -895,12 +881,6 @@ export async function retornaOrdenesPorLiquidarAction(): Promise<
     return { ok: true, items };
   }
 
-  const local = await retornaOrdenesPorLiquidarLocal();
-  if (local.length || response.error?.code === "NETWORK_OR_API_ERROR") {
-    return { ok: true, items: local };
-  }
-
-  // Si el RPC falló por columna inexistente, el local suele devolver [] o datos.
   return { ok: true, items: local };
 }
 

@@ -24,13 +24,12 @@ export default async function OrdenesPorLiquidarPage() {
   const result = await retornaOrdenesPorLiquidarAction();
   const items = result.ok ? result.items : [];
   const totalMonto = items.reduce((s, i) => s + i.monto_por_liquidar, 0);
-  const totalOrdenes = items.reduce((s, i) => s + i.cant_ordenes, 0);
 
   return (
     <div className="lt-print-document mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Órdenes por liquidar"
-        description="Cartera de clientes con órdenes pendientes de liquidación."
+        description="Órdenes pendientes de liquidación."
         action={
           <div className="flex flex-wrap gap-2">
             <PrintButton label="Imprimir" />
@@ -53,12 +52,11 @@ export default async function OrdenesPorLiquidarPage() {
           <table className="w-full min-w-[36rem] text-left text-sm">
             <thead className="border-b border-lt-border bg-lt-surface-muted text-lt-text-muted">
               <tr>
+                <th className="px-4 py-3 font-medium">Id</th>
                 <th className="px-4 py-3 font-medium">Cliente</th>
-                <th className="px-4 py-3 font-medium">RIF / NIT</th>
                 <th className="px-4 py-3 font-medium text-right">
                   Días vencidos
                 </th>
-                <th className="px-4 py-3 font-medium text-right">Órdenes</th>
                 <th className="px-4 py-3 font-medium text-right">
                   Monto por liquidar
                 </th>
@@ -68,7 +66,7 @@ export default async function OrdenesPorLiquidarPage() {
               {!items.length ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={4}
                     className="px-4 py-8 text-center text-lt-text-muted"
                   >
                     No hay órdenes en estado por liquidar.
@@ -77,25 +75,20 @@ export default async function OrdenesPorLiquidarPage() {
               ) : (
                 items.map((row) => (
                   <tr
-                    key={row.cliente_id}
+                    key={row.orden_id}
                     className="border-b border-lt-border-light last:border-0"
                   >
                     <td className="px-4 py-3 font-medium text-lt-text">
                       <Link
-                        href={`/clientes/${row.cliente_id}`}
+                        href={`/ordenes/${row.orden_id}`}
                         className="text-lt-primary hover:underline print:text-lt-text print:no-underline"
                       >
-                        {row.razon_social}
+                        #{row.correlativo}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-lt-text-muted">
-                      {row.rif_nit || "—"}
-                    </td>
+                    <td className="px-4 py-3 text-lt-text">{row.razon_social}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-lt-text">
                       {formatNumber(row.dias_vencidos)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-lt-text">
-                      {formatNumber(row.cant_ordenes)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-medium text-lt-text">
                       {formatCurrency(row.monto_por_liquidar)}
@@ -108,10 +101,7 @@ export default async function OrdenesPorLiquidarPage() {
               <tfoot className="border-t border-lt-border bg-lt-surface-muted font-semibold">
                 <tr>
                   <td className="px-4 py-3" colSpan={3}>
-                    Totales ({formatNumber(items.length)} clientes)
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatNumber(totalOrdenes)}
+                    Totales ({formatNumber(items.length)} órdenes)
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {formatCurrency(totalMonto)}

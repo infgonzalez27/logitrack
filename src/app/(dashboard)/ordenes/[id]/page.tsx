@@ -12,6 +12,7 @@ import { getNombresPerfilByIds } from "@/lib/data/perfiles";
 import { joinOne } from "@/lib/supabase/join";
 import { labelOrdenEstado, labelEstadoEntrega } from "@/lib/constants";
 import { formatDate, formatCurrency, formatNumber } from "@/lib/format";
+import { convertirUsdABs, resolverMontoUsdOrden } from "@/lib/rendiciones/moneda";
 import { PageHeader } from "@/components/layout/page-header";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge, ordenEstadoTone } from "@/components/ui/badge";
@@ -69,14 +70,22 @@ export default async function OrdenDetallePage({
     (sum, linea) => sum + linea.subtotal_recaudar,
     0,
   );
-  const totalBs =
-    orden.total_recaudar_bs != null
-      ? Number(orden.total_recaudar_bs)
-      : totalRecaudar;
-  const totalUsd =
-    orden.total_recaudar_usd != null
-      ? Number(orden.total_recaudar_usd)
+  const totalUsd = resolverMontoUsdOrden({
+    total_recaudar_usd: orden.total_recaudar_usd,
+    total_recaudar_bs: orden.total_recaudar_bs,
+    tasa_cambio: orden.tasa_cambio,
+    sum_lineas_recaudar: totalRecaudar,
+  });
+  const tasa =
+    orden.tasa_cambio != null && Number(orden.tasa_cambio) > 0
+      ? Number(orden.tasa_cambio)
       : null;
+  const totalBs =
+    totalUsd > 0 && tasa != null
+      ? convertirUsdABs(totalUsd, tasa)
+      : orden.total_recaudar_bs != null
+        ? Number(orden.total_recaudar_bs)
+        : totalRecaudar;
 
   const puedeEditar = canEditarOrdenBorrador(rol, orden.estado, {
     esCreador: !!user && orden.creado_por === user.id,
@@ -162,7 +171,7 @@ export default async function OrdenDetallePage({
             <div className="flex justify-between gap-4">
               <dt className="text-lt-text-muted">Total USD</dt>
               <dd>
-                {totalUsd != null ? formatCurrency(totalUsd) : "—"}
+                {totalUsd > 0 ? formatCurrency(totalUsd) : "—"}
               </dd>
             </div>
           </dl>
@@ -221,7 +230,7 @@ export default async function OrdenDetallePage({
         />
         <p className="mt-4 text-right text-sm font-medium">
           Total a recaudar (Bs): {formatNumber(totalBs)}
-          {totalUsd != null ? (
+          {totalUsd > 0 ? (
             <>
               {" "}
               · USD: {formatCurrency(totalUsd)}

@@ -2,13 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
-import {
-  retornaOrdenesDistribucionSegunIdRadarAction,
-  retornaRadarDetalleReporteAction,
-} from "@/lib/actions/radar";
+import { retornaRadarDetalleReporteAction } from "@/lib/actions/radar";
 import { PageHeader } from "@/components/layout/page-header";
 import { RadarAprobarButton } from "../radar-aprobar-button";
-import { RadarOrdenesResumen } from "../radar-ordenes-resumen";
 import { RadarParadasView } from "../radar-paradas-view";
 import { RadarReporteView } from "../radar-reporte-view";
 
@@ -32,10 +28,7 @@ export default async function RadarDetallePage({
 
   const modoDespachador = rol === "despachador";
   const puedeAprobar = rol === "gerente" || rol === "admin";
-  const [resumen, reporte] = await Promise.all([
-    retornaOrdenesDistribucionSegunIdRadarAction(id),
-    retornaRadarDetalleReporteAction(id),
-  ]);
+  const reporte = await retornaRadarDetalleReporteAction(id);
 
   const radarAprobado = Boolean(
     reporte.ok &&
@@ -58,27 +51,9 @@ export default async function RadarDetallePage({
         }
       />
 
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold text-lt-text">
-          Órdenes del radar
-        </h2>
-        {!resumen.ok ? (
-          <p className="lt-alert-error">{resumen.error}</p>
-        ) : (
-          <RadarOrdenesResumen
-            ordenes={resumen.ordenes}
-            radarId={id}
-            modoDespachador={modoDespachador}
-          />
-        )}
-      </section>
-
       {reporte.ok ? (
         <>
-          <section className="space-y-3 border-t border-lt-border pt-8">
-            <h2 className="text-base font-semibold text-lt-text">
-              Clientes a visitar
-            </h2>
+          <section className="space-y-3">
             <RadarParadasView
               reporte={reporte.reporte}
               radarId={id}
@@ -94,7 +69,9 @@ export default async function RadarDetallePage({
             </section>
           ) : null}
         </>
-      ) : null}
+      ) : (
+        <p className="lt-alert-error">{reporte.error}</p>
+      )}
 
       {puedeAprobar ? (
         <section className="space-y-3 border-t border-lt-border pt-8">

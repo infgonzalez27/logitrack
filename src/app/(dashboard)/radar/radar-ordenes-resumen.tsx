@@ -29,7 +29,7 @@ export function RadarOrdenesResumen({
             <th className="px-4 py-3 font-medium">Ruta</th>
             <th className="px-4 py-3 font-medium">Cliente</th>
             <th className="px-4 py-3 font-medium">Dirección</th>
-            <th className="px-4 py-3 font-medium text-right">Items</th>
+            <th className="px-4 py-3 font-medium text-right">Cant. Despachada</th>
             <th className="px-4 py-3 font-medium text-right">SKU</th>
             <th className="px-4 py-3 font-medium text-right">Cont.</th>
           </tr>

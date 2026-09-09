@@ -5,12 +5,13 @@ import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { listarOrdenesDistribucion } from "@/lib/data/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
 import { labelOrdenEstado, ORDEN_ESTADOS } from "@/lib/constants";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge, ordenEstadoTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { convertirUsdABs, resolverMontoUsdOrden } from "@/lib/rendiciones/moneda";
 import type { OrdenEstado } from "@/types/database";
 
 export default async function OrdenesPage({
@@ -101,40 +102,51 @@ export default async function OrdenesPage({
             { key: "chofer", label: "Despachador" },
             { key: "estado", label: "Estado" },
             { key: "tasa", label: "Tasa" },
+            { key: "total_usd", label: "Total USD" },
             { key: "total_bs", label: "Total Bs" },
             { key: "fecha", label: "Despacho" },
           ]}
-          rows={ordenes.map((o) => ({
-            id: o.id,
-            cells: {
-              correlativo: (
-                <Link
-                  href={`/ordenes/${o.id}`}
-                  className="font-medium text-lt-primary underline hover:text-lt-primary-hover"
-                >
-                  #{o.correlativo}
-                </Link>
-              ),
-              factura: o.factura_origen_numero,
-              cliente: o.cliente_razon_social ?? "—",
-              chofer: (() => {
-                const id = o.despachador_id || o.chofer_id;
-                return id ? (nombresPerfil[id] ?? "—") : "—";
-              })(),
-              estado: (
-                <Badge tone={ordenEstadoTone(o.estado)}>
-                  {labelOrdenEstado(o.estado)}
-                </Badge>
-              ),
-              tasa:
-                o.tasa_cambio != null ? formatNumber(Number(o.tasa_cambio)) : "—",
-              total_bs:
-                o.total_recaudar_bs != null
-                  ? formatNumber(Number(o.total_recaudar_bs))
-                  : "—",
-              fecha: formatDate(o.fecha_despacho),
-            },
-          }))}
+          rows={ordenes.map((o) => {
+            const usd = resolverMontoUsdOrden({
+              total_recaudar_usd: o.total_recaudar_usd,
+              total_recaudar_bs: o.total_recaudar_bs,
+              tasa_cambio: o.tasa_cambio,
+            });
+            const tasa =
+              o.tasa_cambio != null ? Number(o.tasa_cambio) : null;
+            const bs =
+              usd > 0 && tasa != null && tasa > 0
+                ? convertirUsdABs(usd, tasa)
+                : null;
+            return {
+              id: o.id,
+              cells: {
+                correlativo: (
+                  <Link
+                    href={`/ordenes/${o.id}`}
+                    className="font-medium text-lt-primary underline hover:text-lt-primary-hover"
+                  >
+                    #{o.correlativo}
+                  </Link>
+                ),
+                factura: o.factura_origen_numero,
+                cliente: o.cliente_razon_social ?? "—",
+                chofer: (() => {
+                  const id = o.despachador_id || o.chofer_id;
+                  return id ? (nombresPerfil[id] ?? "—") : "—";
+                })(),
+                estado: (
+                  <Badge tone={ordenEstadoTone(o.estado)}>
+                    {labelOrdenEstado(o.estado)}
+                  </Badge>
+                ),
+                tasa: tasa != null ? formatNumber(tasa) : "—",
+                total_usd: usd > 0 ? formatCurrency(usd) : "—",
+                total_bs: bs != null && bs > 0 ? formatNumber(bs) : "—",
+                fecha: formatDate(o.fecha_despacho),
+              },
+            };
+          })}
           emptyMessage="No hay órdenes para este filtro."
         />
       </Card>

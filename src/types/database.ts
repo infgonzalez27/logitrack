@@ -503,13 +503,13 @@ export type RadarOrdenResumen = {
   contenedores_retirados: number;
 };
 
-/** §2.32 — fila de `retorna_ordenes_por_liquidar`. */
+/** §2.32 — fila de cartera por liquidar (una fila por orden). */
 export type OrdenPorLiquidarCliente = {
+  orden_id: string;
+  correlativo: number;
   cliente_id: string;
   razon_social: string;
-  rif_nit: string | null;
   dias_vencidos: number;
-  cant_ordenes: number;
   monto_por_liquidar: number;
 };
 

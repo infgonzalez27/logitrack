@@ -54,7 +54,7 @@ function resumenCarga(o: ParadaOrden): string {
   );
   const skus = detalles.length;
   if (!skus) return "Sin productos";
-  return `${formatNumber(items)} items · ${skus} SKU`;
+  return `${formatNumber(items)} Cant. Despachada · ${skus} SKU`;
 }
 
 export function RadarParadasView({

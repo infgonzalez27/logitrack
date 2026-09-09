@@ -39,7 +39,7 @@ function resumenCarga(detalles: RadarDetalle[]): string {
     0,
   );
   if (!detalles.length) return "Sin productos";
-  return `${formatNumber(items)} items · ${detalles.length} SKU`;
+  return `${formatNumber(items)} Cant. Despachada · ${detalles.length} SKU`;
 }
 
 function despachoPermitido(orden: RadarOrden): boolean {
