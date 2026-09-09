@@ -326,10 +326,11 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Documentación:** [docs/INTEGRACION-RPC.md](file:///d:/ProyectosWeb/LogiTrack/docs/INTEGRACION-RPC.md#L1020).
 
 - `[x]` **Tarea DB-030: Módulo de Aprobación de Radar (`solicita_aprobar_radar`), Estado `devuelta`, Transición a `anulada` y Reingreso de Inventario a Almacén (`retorna_inventario_no_despachado_para_almacen`)**
-  - **Función:** Actualizar `registrar_despacho_cliente_radar` para que si la cantidad despachada es 0 la orden pase a estado `devuelta` registrando envases devueltos; crear `solicita_aprobar_radar` para cambiar `status_radar = true` y `aprobado = true`, actualizar saldos de contenedores del cliente, reingresar stock no entregado a almacén (`productos.stock_disponible`) y finalmente transicionar las órdenes `devuelta` a `anulada`.
+  - **Función:** Actualizar `registrar_despacho_cliente_radar` para que si la cantidad despachada es 0 la orden pase a estado `devuelta` registrando envases devueltos; crear `solicita_aprobar_radar` para cambiar `status_radar = true`, actualizar saldos de contenedores del cliente, reingresar stock no entregado a almacén (`productos.stock_disponible`) y transicionar las órdenes `devuelta` a `anulada`.
   - **DDL & RPCs:**
+    - `ALTER TABLE public.radars DROP COLUMN IF EXISTS aprobado;` (estandarización a `status_radar`).
     - Update constraint `ordenes_distribucion_estado_check` para incluir `'devuelta'`.
-    - `registrar_despacho_cliente_radar(p_orden_id, p_detalles_json)`: Si despachado = 0 transiciona a `'devuelta'`.
-    - `solicita_aprobar_radar(p_radar_id)`: Aprueba el radar, acredita contenedores retirados a cliente, reingresa inventario a almacén y pasa órdenes `'devuelta'` a `'anulada'`.
+    - `registrar_despacho_cliente_radar(p_orden_id, p_detalles_json)`: Si despachado = 0 transiciona a `'devuelta'`. Si `status_radar = true` retorna `RADAR_APROBADO_BLOQUEADO`.
+    - `solicita_aprobar_radar(p_radar_id)`: Establece `status_radar = true`, acredita contenedores retirados a cliente, reingresa inventario a almacén y pasa órdenes `'devuelta'` a `'anulada'`.
     - `retorna_inventario_no_despachado_para_almacen(p_radar_id)`: Reingresa stock devuelto/no entregado al almacén principal y ajusta `inventario_movil`.
-  - **Documentación:** Actualizar `docs/INTEGRACION-RPC.md`.
+  - **Documentación:** [docs/INTEGRACION-RPC.md](file:///d:/ProyectosWeb/LogiTrack/docs/INTEGRACION-RPC.md#L1053).

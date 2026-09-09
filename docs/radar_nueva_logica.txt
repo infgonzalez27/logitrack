@@ -75,10 +75,11 @@ Nota: SKU es la cantidad de id_producto despachados
 Has el análisis, crea el IMPLEMENTATION PLAN en base a lo expuesto anteriormente.
 
 ## Despacho de productos no es parcial
+referencia Function registrar_despacho_cliente_radar
 Si el front envía que las cantidades despachadas están en cero, la orden queda bajo el status de 'devuelta', sin embargo, igualmente 
 se debe permitir registrar los contenedores registrados
 
-## FUNCTIONS solicita_aprobar_radar(tnIdRadar)
+## FUNCTIONS solicita_aprobar_radar()
 por defecto el campo status_radar debe ser .F. (no aprobado)
 esta función cambia el status a .T. (aprobado)
 Ejecuta las funciones referente a:
@@ -90,3 +91,9 @@ Se debe crear una Function para retornar el inventario no despachado al almacen 
 Tienes libertad para asesorarme de cual sería la lógica, porque un radar puede tener mas de una orden de distribución no despachadas
 y esta función se ejecuta cuando el radar es aprobado por el usuario gerente 
 
+## campo: status_radar
+Es el único campo para validar si el radar está aprobado por la gerencia, no se debe usar un campo adicional llamado 'aprobado'.
+Cuando se llama a la Function solicita_aprobar_radar() se debe cambiar el campo status_radar a .T. y se ejecutam las funciones:
+Actualiza el saldo de los contenedores a los clientes
+Devuelve el inventario no despachado del camion (inventario movil) al almacén.
+elimina el campo aprobado y quita todo lo que esté condicionado al mismo.

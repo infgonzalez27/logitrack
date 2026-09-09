@@ -36,8 +36,7 @@ BEGIN
                     'total_paradas', COALESCE(ord_stats.total_paradas, 0),
                     'items', COALESCE(ord_stats.total_items, 0),
                     'sku', COALESCE(ord_stats.total_sku, 0),
-                    'status_radar', COALESCE(r.status_radar, FALSE),
-                    'aprobado', COALESCE(r.aprobado, FALSE)
+                    'status_radar', COALESCE(r.status_radar, FALSE)
                 ) ORDER BY r.fecha_despacho DESC, r.correlativo DESC
             ),
             '[]'::jsonb

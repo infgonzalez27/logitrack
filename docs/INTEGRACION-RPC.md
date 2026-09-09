@@ -968,7 +968,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.30. Lista de Radares según Rango de Fechas (`retorna_lista_radars_segun_rango_fechas`)
 - **Firma SQL:** `retorna_lista_radars_segun_rango_fechas(p_despachador_id UUID DEFAULT NULL, p_fecha_inicial DATE DEFAULT NULL, p_fecha_limite DATE DEFAULT NULL)`
-- **Descripción:** Retorna el listado de radares asignados a un despachador ordenados por fecha descendente en un rango de fechas especificado, incluyendo paradas (órdenes), unidades despachadas (items), tipos de productos (SKU) y estado de aprobación gerencial.
+- **Descripción:** Retorna el listado de radares asignados a un despachador ordenados por fecha descendente en un rango de fechas especificado, incluyendo paradas (órdenes), unidades despachadas (items), tipos de productos (SKU) y estado del radar (`status_radar = true` indica cerrado, `status_radar = false` indica abierto).
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('retorna_lista_radars_segun_rango_fechas', {
@@ -989,8 +989,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
         "total_paradas": 12,
         "items": 320,
         "sku": 2,
-        "status_radar": true,
-        "aprobado": false
+        "status_radar": true
       }
     ],
     "error": null
@@ -1016,7 +1015,13 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
         "correlativo": 1024,
         "ruta": "Ruta Centro 01",
         "razon_social": "Supermercado El Ejemplo C.A.",
-        "direccion_fiscal": "Av. Principal #123, Caracas",
+        "direccion_fiscal": "Av. Principal #123, Caracas"
+      }
+    ],
+    "error": null
+  }
+  ```
+
 ### 2.32. Cuentas por Liquidar agrupadas por Cliente (`retorna_ordenes_por_liquidar`)
 - **Firma SQL:** `retorna_ordenes_por_liquidar()`
 - **Descripción:** Retorna la lista de órdenes en estado `por_liquidar` agrupadas por cliente y ordenadas por la mayor cantidad de días vencidos desde su fecha de despacho (`dias_vencidos DESC`).
@@ -1052,7 +1057,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.33. Aprobación Gerencial de Radar (`solicita_aprobar_radar`)
 - **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
-- **Descripción:** Aprueba el radar (`status_radar = true`, `aprobado = true`), liquida los envases retirados provisionales acreditándolos a `saldo_contenedores_clientes`, restituye la mercancía no entregada al almacén principal (`productos.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`.
+- **Descripción:** Aprueba el radar (`status_radar = true`), liquida los envases retirados provisionales acreditándolos a `saldo_contenedores_clientes`, restituye la mercancía no entregada al almacén principal (`productos.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
@@ -1067,7 +1072,6 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "data": {
       "radar_id": "f1e2d3c4-b5a6-7890-1234-567890abcdef",
       "status_radar": true,
-      "aprobado": true,
       "contenedores_procesados": 15,
       "ordenes_anuladas": 2,
       "inventario_reintegrado": [

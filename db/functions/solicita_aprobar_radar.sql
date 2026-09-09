@@ -9,7 +9,6 @@ DECLARE
     v_despachador_id UUID;
     v_fecha_despacho DATE;
     v_status_radar BOOLEAN;
-    v_aprobado BOOLEAN;
     v_rec RECORD;
     v_inv_res JSONB;
     v_ordenes_anuladas_count INT := 0;
@@ -25,9 +24,9 @@ BEGIN
         );
     END IF;
 
-    -- Verificar existencia del radar
-    SELECT despachador_id, fecha_despacho, COALESCE(status_radar, FALSE), COALESCE(aprobado, FALSE)
-    INTO v_despachador_id, v_fecha_despacho, v_status_radar, v_aprobado
+    -- Verificar existencia del radar y su estado actual
+    SELECT despachador_id, fecha_despacho, COALESCE(status_radar, FALSE)
+    INTO v_despachador_id, v_fecha_despacho, v_status_radar
     FROM public.radars
     WHERE id = p_radar_id;
 
@@ -41,23 +40,21 @@ BEGIN
         );
     END IF;
 
-    IF v_status_radar = TRUE AND v_aprobado = TRUE THEN
+    IF v_status_radar = TRUE THEN
         RETURN jsonb_build_object(
             'success', TRUE,
             'message', 'El radar ya se encuentra previamente aprobado.',
             'data', jsonb_build_object(
                 'radar_id', p_radar_id,
-                'status_radar', TRUE,
-                'aprobado', TRUE
+                'status_radar', TRUE
             ),
             'error', NULL
         );
     END IF;
 
-    -- 1. Marcar el radar como aprobado y cerrado (.T.)
+    -- 1. Marcar el radar como aprobado y cerrado (.T.) mediante status_radar = TRUE
     UPDATE public.radars
-    SET status_radar = TRUE,
-        aprobado = TRUE
+    SET status_radar = TRUE
     WHERE id = p_radar_id;
 
     -- 2. Procesar movimiento de envases devueltos por clientes (contenedores_retirados)
@@ -75,14 +72,12 @@ BEGIN
         GROUP BY o.cliente_id, d.orden_id, COALESCE(d.contenedor_id, p.contenedor_id)
     LOOP
         IF v_rec.contenedor_id IS NOT NULL THEN
-            -- Registrar transacción de movimiento de contenedores
             INSERT INTO public.movimientos_contenedores (
                 cliente_id, orden_id, contenedor_id, cantidad_entregada, cantidad_retirada, creado_por
             ) VALUES (
                 v_rec.cliente_id, v_rec.orden_id, v_rec.contenedor_id, 0, v_rec.total_retirados, auth.uid()
             );
 
-            -- Descontar saldo pendiente en saldo_contenedores_clientes
             UPDATE public.saldo_contenedores_clientes
             SET saldo_pendiente = GREATEST(0, saldo_pendiente - v_rec.total_retirados),
                 updated_at = NOW()
@@ -110,7 +105,6 @@ BEGIN
         'data', jsonb_build_object(
             'radar_id', p_radar_id,
             'status_radar', TRUE,
-            'aprobado', TRUE,
             'contenedores_procesados', v_contenedores_procesados,
             'ordenes_anuladas', v_ordenes_anuladas_count,
             'inventario_reintegrado', COALESCE(v_inv_res->'data', '[]'::jsonb)
@@ -132,4 +126,4 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.solicita_aprobar_radar TO authenticated, service_role;
 
-COMMENT ON FUNCTION public.solicita_aprobar_radar(UUID) IS 'Aprueba el radar (.T.), actualiza saldos de contenedores de clientes, reingresa inventario no despachado a almacén y pasa órdenes devueltas a anulada.';
+COMMENT ON FUNCTION public.solicita_aprobar_radar(UUID) IS 'Aprueba el radar (status_radar = TRUE), actualiza saldos de contenedores de clientes, reingresa inventario no despachado a almacén y pasa órdenes devueltas a anulada.';

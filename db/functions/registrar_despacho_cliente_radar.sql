@@ -11,7 +11,6 @@ DECLARE
     v_camion_id UUID;
     v_radar_id UUID;
     v_status_radar BOOLEAN;
-    v_aprobado BOOLEAN;
     v_item JSONB;
     v_detalle_id UUID;
     v_cantidad_despachada INT;
@@ -61,14 +60,14 @@ BEGIN
         );
     END IF;
 
-    -- Validar si el radar asociado ya fue aprobado/bloqueado por Gerencia
+    -- Validar si el radar asociado ya fue aprobado/cerrado por Gerencia (status_radar = TRUE)
     IF v_radar_id IS NOT NULL THEN
-        SELECT COALESCE(status_radar, FALSE), COALESCE(aprobado, FALSE)
-        INTO v_status_radar, v_aprobado
+        SELECT COALESCE(status_radar, FALSE)
+        INTO v_status_radar
         FROM public.radars
         WHERE id = v_radar_id;
 
-        IF v_status_radar = TRUE OR v_aprobado = TRUE THEN
+        IF v_status_radar = TRUE THEN
             RETURN jsonb_build_object(
                 'success', FALSE,
                 'error', jsonb_build_object(
@@ -115,7 +114,6 @@ BEGIN
             IF FOUND THEN
                 v_devolucion := GREATEST(0, v_cantidad_solicitada - v_cantidad_despachada);
 
-                -- Actualizar inventario móvil del vehículo si hay camión asociado
                 IF v_camion_id IS NOT NULL THEN
                     UPDATE public.inventario_movil
                     SET cantidad_entregada = cantidad_entregada + v_cantidad_despachada,
@@ -124,7 +122,6 @@ BEGIN
                     WHERE camion_id = v_camion_id AND producto_id = v_producto_id;
                 END IF;
 
-                -- Actualizar detalle de distribución
                 UPDATE public.detalle_distribucion
                 SET cantidad_despachada = v_cantidad_despachada,
                     estado_entrega = COALESCE(v_estado_entrega, CASE WHEN v_cantidad_despachada > 0 THEN 'entregado' ELSE 'rechazado' END),
@@ -136,18 +133,15 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- Verificar si todas las líneas han sido procesadas
     SELECT COUNT(*) INTO v_pendientes_count
     FROM public.detalle_distribucion
     WHERE orden_id = p_orden_id AND (estado_entrega IS NULL OR estado_entrega = 'pendiente');
 
     IF v_pendientes_count = 0 THEN
-        -- Calcular total despachado en la orden
         SELECT COALESCE(SUM(cantidad_despachada), 0) INTO v_total_despachado
         FROM public.detalle_distribucion
         WHERE orden_id = p_orden_id;
 
-        -- Si no se despachó ningún producto (cantidad_despachada = 0), pasa a 'devuelta'
         IF v_total_despachado = 0 THEN
             v_nuevo_estado_orden := 'devuelta';
         ELSE
@@ -158,7 +152,6 @@ BEGIN
         SET estado = v_nuevo_estado_orden
         WHERE id = p_orden_id;
 
-        -- Resetear la excepción de crédito gerencial si estaba activa
         IF v_excepcion_gerencia THEN
             UPDATE public.clientes
             SET excepcion_despacho_gerencia = FALSE
