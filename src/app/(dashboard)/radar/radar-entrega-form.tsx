@@ -346,7 +346,7 @@ export function RadarEntregaForm({
           </h3>
           <p className="mt-1 text-sm text-lt-text-muted">
             Por defecto va la cantidad solicitada. Despacho = entrega completa;
-            Rechazado = todos los ítems a cero (orden de vuelta).
+            Rechazado = todos los ítems a cero (orden devuelta).
           </p>
         </div>
 

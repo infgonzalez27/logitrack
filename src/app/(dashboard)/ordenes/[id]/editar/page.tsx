@@ -78,9 +78,9 @@ export default async function EditarOrdenPage({
         correlativo={orden.correlativo}
         ordenId={orden.id}
         initial={{
-          cliente_id: orden.cliente_id,
-          camion_id: orden.camion_id,
-          factura_origen_numero: orden.factura_origen_numero,
+          cliente_id: orden.cliente_id ?? "",
+          camion_id: orden.camion_id ?? "",
+          factura_origen_numero: orden.factura_origen_numero ?? "",
           fecha_despacho: toDatetimeLocal(orden.fecha_despacho),
           lineas: detalle.map((l) => ({
             producto_id: l.producto_id,

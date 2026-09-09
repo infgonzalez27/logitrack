@@ -750,6 +750,12 @@ export async function actualizaOrdenDistribucionAction(input: {
         "El cliente no tiene despachador asignado. Asígnalo en la ficha del cliente.",
     };
   }
+  if (!input.camion_id?.trim()) {
+    return { error: "El camión es obligatorio." };
+  }
+  if (!isUuid(input.camion_id.trim())) {
+    return { error: "Camión inválido." };
+  }
 
   const response = await callDbProcedure<{
     correlativo: number;

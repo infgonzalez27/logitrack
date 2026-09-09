@@ -71,7 +71,7 @@ export default async function OrdenImprimirPage({
 
       {esDeVuelta ? (
         <p className="rounded-xl border border-lt-warning-border bg-lt-warning-bg px-3 py-2 text-center text-sm font-semibold text-lt-warning-text print:border-black print:bg-transparent print:text-black">
-          ORDEN DE VUELTA — revisar saldo de vacíos
+          ORDEN DEVUELTA — revisar saldo de vacíos
         </p>
       ) : null}
 

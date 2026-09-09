@@ -31,7 +31,7 @@ function paradaEstado(o: ParadaOrden): {
       (d) => d.estado_entrega === "rechazado",
     );
     if (todosRechazados) {
-      return { label: "De vuelta", tone: "danger" };
+      return { label: "Devuelta", tone: "danger" };
     }
     return { label: "Completado", tone: "success" };
   }

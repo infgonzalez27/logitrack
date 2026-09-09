@@ -65,7 +65,7 @@ const LABELS: Record<OrdenEstado, string> = {
   lista_para_carga: "Lista para carga",
   en_transito: "En tránsito",
   despachada: "Despachada",
-  devuelta: "De vuelta",
+  devuelta: "Devuelta",
   por_liquidar: "Por liquidar",
   liquidada: "Liquidada",
   anulada: "Anulada",

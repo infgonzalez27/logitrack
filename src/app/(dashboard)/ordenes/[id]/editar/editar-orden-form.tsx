@@ -102,6 +102,11 @@ export function EditarOrdenForm({
       setPending(false);
       return;
     }
+    if (!camionId.trim()) {
+      setError("El camión es obligatorio.");
+      setPending(false);
+      return;
+    }
     if (!lineas.length) {
       setError("Agrega al menos un producto.");
       setPending(false);
@@ -140,6 +145,12 @@ export function EditarOrdenForm({
       />
 
       <Card title="Cabecera">
+        {!initial.camion_id ? (
+          <p className="lt-alert-error mb-3 text-sm">
+            Esta orden no tiene camión asignado. Debes seleccionar uno antes de
+            guardar.
+          </p>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <Select
             label="Cliente"
@@ -160,6 +171,7 @@ export function EditarOrdenForm({
             label="Camión"
             required
             options={camiones}
+            placeholder="Selecciona un camión"
             value={camionId}
             onChange={(e) => setCamionId(e.target.value)}
           />

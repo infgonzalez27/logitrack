@@ -32,6 +32,7 @@ export function Select({
         id={selectId}
         className={`lt-input w-full cursor-pointer rounded-xl border border-lt-border bg-lt-surface px-3.5 py-2.5 text-sm text-lt-text transition-colors duration-200 outline-none focus:border-lt-primary focus:ring-2 focus:ring-lt-primary/25 ${className}`}
         {...props}
+        value={props.value === null ? "" : props.value}
       >
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((opt) => (

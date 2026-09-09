@@ -21,7 +21,7 @@ function paradaEstado(orden: RadarOrden): {
     const todosRechazados = detalles.every(
       (d) => d.estado_entrega === "rechazado",
     );
-    if (todosRechazados) return { label: "De vuelta", tone: "danger" };
+    if (todosRechazados) return { label: "Devuelta", tone: "danger" };
     return { label: "Completado", tone: "success" };
   }
   const enProceso = detalles.some(
