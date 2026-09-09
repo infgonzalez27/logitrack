@@ -35,8 +35,8 @@ function deriveLineaEstado(
   asignada: number,
   entregada: number,
 ): { label: string; tone: "success" | "warning" | "danger" } {
-  if (entregada <= 0) return { label: "No entregado", tone: "danger" };
-  if (entregada >= asignada) return { label: "Completo", tone: "success" };
+  if (entregada <= 0) return { label: "Rechazado", tone: "danger" };
+  if (entregada >= asignada) return { label: "Despacho", tone: "success" };
   return { label: "Parcial", tone: "warning" };
 }
 
@@ -119,9 +119,20 @@ export function RadarEntregaForm({
     }));
   }, [contenedores, orden.saldo_contenedores]);
 
-  function setCantidad(detalleId: string, value: number, max: number) {
-    const next = Math.max(0, Math.min(max, value));
-    setCantidades((prev) => ({ ...prev, [detalleId]: String(next) }));
+  function marcarDespachoCompleto() {
+    const next: Record<string, string> = {};
+    for (const det of pendientes) {
+      next[det.detalle_id] = String(det.cantidad_solicitada ?? 0);
+    }
+    setCantidades(next);
+  }
+
+  function marcarRechazadoTodos() {
+    const next: Record<string, string> = {};
+    for (const det of pendientes) {
+      next[det.detalle_id] = "0";
+    }
+    setCantidades(next);
   }
 
   function addRetiro() {
@@ -334,8 +345,27 @@ export function RadarEntregaForm({
             Productos a entregar
           </h3>
           <p className="mt-1 text-sm text-lt-text-muted">
-            Asignado vs entregado. Por defecto coincide con la salida.
+            Por defecto va la cantidad solicitada. Despacho = entrega completa;
+            Rechazado = todos los ítems a cero (orden de vuelta).
           </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={marcarDespachoCompleto}
+          >
+            Despacho
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={marcarRechazadoTodos}
+          >
+            Rechazado
+          </Button>
         </div>
 
         {pendientes.map((det) => {
@@ -367,61 +397,15 @@ export function RadarEntregaForm({
                     <Badge tone={lineaEstado.tone}>{lineaEstado.label}</Badge>
                   </div>
                   <p className="text-xs text-lt-text-subtle">
-                    {det.codigo_producto ?? "Sin código"} · Asignado{" "}
+                    {det.codigo_producto ?? "Sin código"} · Solicitado{" "}
                     {formatNumber(asignada)}
                   </p>
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <p className="mb-1.5 text-sm font-medium text-lt-text">
-                  Cantidad entregada
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-lt-border text-lg font-semibold text-lt-text hover:bg-lt-surface-muted"
-                    onClick={() =>
-                      setCantidad(det.detalle_id, entregada - 1, asignada)
-                    }
-                    aria-label="Disminuir"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    min={0}
-                    max={asignada}
-                    required
-                    value={cantidades[det.detalle_id] ?? "0"}
-                    onChange={(e) =>
-                      setCantidad(
-                        det.detalle_id,
-                        Number(e.target.value) || 0,
-                        asignada,
-                      )
-                    }
-                    className="lt-input w-full max-w-[7rem] text-center text-lg font-semibold"
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-lt-border text-lg font-semibold text-lt-text hover:bg-lt-surface-muted"
-                    onClick={() =>
-                      setCantidad(det.detalle_id, entregada + 1, asignada)
-                    }
-                    aria-label="Aumentar"
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    className="ml-1 text-sm font-medium text-lt-primary"
-                    onClick={() =>
-                      setCantidad(det.detalle_id, asignada, asignada)
-                    }
-                  >
-                    Todo
-                  </button>
+                  <p className="mt-2 text-sm font-medium text-lt-text">
+                    Cantidad entregada:{" "}
+                    <span className="tabular-nums text-lg font-semibold">
+                      {formatNumber(entregada)}
+                    </span>
+                  </p>
                 </div>
               </div>
             </div>
