@@ -356,6 +356,44 @@ export async function reportarIncidenciaRadarAction(input: {
   return registrarDespachoClienteRadarAction({ orden_id: ordenId, detalles });
 }
 
+/**
+ * Devolución / orden de vuelta: marca todas las líneas pendientes como
+ * `rechazado` con motivo "Devolución" y lo envía a Supabase vía §2.17.
+ */
+export async function marcarDevolucionRadarAction(input: {
+  orden_id: string;
+  detalle_ids: string[];
+}): Promise<{ ok: true; estado?: string } | { ok: false; error: string; code?: string }> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (rol !== "despachador") {
+    return { ok: false, error: "Solo el despachador puede registrar devolución." };
+  }
+
+  const ordenId = input.orden_id?.trim();
+  if (!ordenId || !UUID_RE.test(ordenId)) {
+    return { ok: false, error: "Orden inválida.", code: "PARAMETRO_INVALIDO" };
+  }
+  if (!input.detalle_ids?.length) {
+    return {
+      ok: false,
+      error: "No hay líneas pendientes para marcar como devolución.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const detalles: RadarDetalleInput[] = input.detalle_ids.map((detalle_id) => ({
+    detalle_id,
+    cantidad_despachada: 0,
+    estado_entrega: "rechazado",
+    motivo_rechazo: "Devolución",
+    contenedores_retirados: 0,
+    contenedor_id: null,
+  }));
+
+  return registrarDespachoClienteRadarAction({ orden_id: ordenId, detalles });
+}
+
 /** INTEGRACION-RPC §2.19 — `crear_o_obtener_radar` */
 export async function crearOObtenerRadarAction(input: {
   despachador_id: string;

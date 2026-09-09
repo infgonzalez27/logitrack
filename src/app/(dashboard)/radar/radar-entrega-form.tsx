@@ -513,14 +513,24 @@ export function RadarEntregaForm({
 
         <div className="border-t border-lt-border pt-3">
           {!incidenciaOpen ? (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={pending}
-              onClick={() => setIncidenciaOpen(true)}
-            >
-              Reportar incidencia
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                onClick={() => setIncidenciaOpen(true)}
+              >
+                Reportar incidencia
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                href={backHref}
+                className="w-full sm:w-auto"
+              >
+                Cancelar
+              </Button>
+            </div>
           ) : (
             <div className="space-y-3">
               <Select
