@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatDateOnly, formatNumber } from "@/lib/format";
 import type { RadarDetalle, RadarOrden } from "@/types/database";
-import { RadarDevolucionButton } from "./radar-devolucion-button";
 
 function paradaEstado(orden: RadarOrden): {
   label: string;
@@ -22,7 +21,7 @@ function paradaEstado(orden: RadarOrden): {
     const todosRechazados = detalles.every(
       (d) => d.estado_entrega === "rechazado",
     );
-    if (todosRechazados) return { label: "Devolución", tone: "danger" };
+    if (todosRechazados) return { label: "De vuelta", tone: "danger" };
     return { label: "Completado", tone: "success" };
   }
   const enProceso = detalles.some(
@@ -45,13 +44,6 @@ function resumenCarga(detalles: RadarDetalle[]): string {
 
 function despachoPermitido(orden: RadarOrden): boolean {
   return orden.despacho_permitido !== false;
-}
-
-function detalleIdsPendientes(orden: RadarOrden): string[] {
-  return (orden.detalles ?? [])
-    .filter((d) => (d.estado_entrega ?? "pendiente") === "pendiente")
-    .map((d) => d.detalle_id)
-    .filter(Boolean);
 }
 
 export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) {
@@ -83,10 +75,12 @@ export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) 
         {ordenes.map((orden) => {
           const estado = paradaEstado(orden);
           const permitido = despachoPermitido(orden);
-          const pendientes = detalleIdsPendientes(orden);
           const mapsUrl = orden.cliente.direccion_fiscal
             ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orden.cliente.direccion_fiscal)}`
             : null;
+          const pendientes = (orden.detalles ?? []).some(
+            (d) => (d.estado_entrega ?? "pendiente") === "pendiente",
+          );
 
           return (
             <li key={orden.orden_id}>
@@ -122,16 +116,10 @@ export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) 
                 ) : null}
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {permitido && pendientes.length ? (
-                    <>
-                      <Button href={`/radar/entrega/${orden.orden_id}`}>
-                        Iniciar entrega
-                      </Button>
-                      <RadarDevolucionButton
-                        ordenId={orden.orden_id}
-                        detalleIds={pendientes}
-                      />
-                    </>
+                  {permitido && pendientes ? (
+                    <Button href={`/radar/entrega/${orden.orden_id}`}>
+                      Iniciar entrega
+                    </Button>
                   ) : permitido ? null : (
                     <Button type="button" disabled>
                       Entrega bloqueada

@@ -182,6 +182,13 @@ export function RadarEntregaForm({
       return;
     }
 
+    // De vuelta: reimprimir para dejar visible el saldo de vacíos.
+    if (result.deVuelta) {
+      router.push(`/ordenes/${orden.orden_id}/imprimir?de_vuelta=1`);
+      router.refresh();
+      return;
+    }
+
     router.push(backHref);
     router.refresh();
   }

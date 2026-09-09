@@ -172,7 +172,10 @@ export async function finalizarEntregaRadarAction(input: {
   cliente_id: string;
   entregas: RadarEntregaLineaInput[];
   retiros: RadarRetiroInput[];
-}): Promise<{ ok: true; estado?: string } | { ok: false; error: string; code?: string }> {
+}): Promise<
+  | { ok: true; estado?: string; deVuelta?: boolean }
+  | { ok: false; error: string; code?: string }
+> {
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
   if (rol !== "despachador") {
@@ -241,16 +244,26 @@ export async function finalizarEntregaRadarAction(input: {
     }
   }
 
+  // Regla DB master: entrega completa o de vuelta (sin parcial por ítem).
+  const forzarDeVuelta = input.entregas.some((linea) => {
+    const asignada = Number(linea.cantidad_asignada);
+    const entregada = Number(linea.cantidad_entregada);
+    return !Number.isFinite(entregada) || entregada < asignada;
+  });
+
   const detalles: RadarDetalleInput[] = input.entregas.map((linea, idx) => {
     const asignada = Number(linea.cantidad_asignada);
-    const entregada = Math.min(Number(linea.cantidad_entregada), asignada);
-    const estado = deriveEstadoEntrega(asignada, entregada);
+    let entregada = Math.min(Number(linea.cantidad_entregada), asignada);
+    if (forzarDeVuelta) entregada = 0;
+    const estado = forzarDeVuelta
+      ? "rechazado"
+      : deriveEstadoEntrega(asignada, entregada);
     const retiro = retirosValidos[idx];
     const motivo =
-      estado === "entregado_parcial"
-        ? "Entrega parcial"
-        : estado === "rechazado"
-          ? "No entregado"
+      estado === "rechazado"
+        ? "Devolución"
+        : estado === "entregado_parcial"
+          ? "Entrega parcial"
           : null;
     return {
       detalle_id: linea.detalle_id,
@@ -305,7 +318,11 @@ export async function finalizarEntregaRadarAction(input: {
   }
 
   revalidateRadarPaths(ordenId);
-  return { ok: true, estado: registered.estado };
+  return {
+    ok: true,
+    estado: registered.estado,
+    deVuelta: forzarDeVuelta,
+  };
 }
 
 /**
@@ -349,44 +366,6 @@ export async function reportarIncidenciaRadarAction(input: {
     cantidad_despachada: 0,
     estado_entrega: "rechazado",
     motivo_rechazo: `Incidencia: ${motivo}`,
-    contenedores_retirados: 0,
-    contenedor_id: null,
-  }));
-
-  return registrarDespachoClienteRadarAction({ orden_id: ordenId, detalles });
-}
-
-/**
- * Devolución / orden de vuelta: marca todas las líneas pendientes como
- * `rechazado` con motivo "Devolución" y lo envía a Supabase vía §2.17.
- */
-export async function marcarDevolucionRadarAction(input: {
-  orden_id: string;
-  detalle_ids: string[];
-}): Promise<{ ok: true; estado?: string } | { ok: false; error: string; code?: string }> {
-  const profile = await getCurrentProfile();
-  const rol = getRoleNameFromProfile(profile);
-  if (rol !== "despachador") {
-    return { ok: false, error: "Solo el despachador puede registrar devolución." };
-  }
-
-  const ordenId = input.orden_id?.trim();
-  if (!ordenId || !UUID_RE.test(ordenId)) {
-    return { ok: false, error: "Orden inválida.", code: "PARAMETRO_INVALIDO" };
-  }
-  if (!input.detalle_ids?.length) {
-    return {
-      ok: false,
-      error: "No hay líneas pendientes para marcar como devolución.",
-      code: "PARAMETRO_INVALIDO",
-    };
-  }
-
-  const detalles: RadarDetalleInput[] = input.detalle_ids.map((detalle_id) => ({
-    detalle_id,
-    cantidad_despachada: 0,
-    estado_entrega: "rechazado",
-    motivo_rechazo: "Devolución",
     contenedores_retirados: 0,
     contenedor_id: null,
   }));

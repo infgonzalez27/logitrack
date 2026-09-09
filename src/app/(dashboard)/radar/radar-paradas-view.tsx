@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatDateOnly, formatNumber } from "@/lib/format";
 import type { RadarDetalle, RadarDetalleReporte } from "@/types/database";
-import { RadarDevolucionButton } from "./radar-devolucion-button";
 
 type ParadaOrden = RadarDetalleReporte["ordenes"][number];
 
@@ -32,7 +31,7 @@ function paradaEstado(o: ParadaOrden): {
       (d) => d.estado_entrega === "rechazado",
     );
     if (todosRechazados) {
-      return { label: "Devolución", tone: "danger" };
+      return { label: "De vuelta", tone: "danger" };
     }
     return { label: "Completado", tone: "success" };
   }
@@ -56,13 +55,6 @@ function resumenCarga(o: ParadaOrden): string {
   const skus = detalles.length;
   if (!skus) return "Sin productos";
   return `${formatNumber(items)} items · ${skus} SKU`;
-}
-
-function detalleIdsPendientes(o: ParadaOrden): string[] {
-  return ((o.detalles ?? []) as RadarDetalle[])
-    .filter((d) => (d.estado_entrega ?? "pendiente") === "pendiente")
-    .map((d) => d.detalle_id)
-    .filter(Boolean);
 }
 
 export function RadarParadasView({
@@ -107,10 +99,12 @@ export function RadarParadasView({
         {(ordenes ?? []).map((o) => {
           const id = ordenId(o);
           const estado = paradaEstado(o);
-          const pendientes = detalleIdsPendientes(o);
           const mapsUrl = o.cliente?.direccion_fiscal
             ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.cliente.direccion_fiscal)}`
             : null;
+          const pendientes = ((o.detalles ?? []) as RadarDetalle[]).some(
+            (d) => (d.estado_entrega ?? "pendiente") === "pendiente",
+          );
 
           return (
             <li key={id || String(o.correlativo)}>
@@ -139,16 +133,10 @@ export function RadarParadasView({
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {modoDespachador && id && pendientes.length ? (
-                    <>
-                      <Button href={`/radar/${radarId}/entrega/${id}`}>
-                        Iniciar entrega
-                      </Button>
-                      <RadarDevolucionButton
-                        ordenId={id}
-                        detalleIds={pendientes}
-                      />
-                    </>
+                  {modoDespachador && id && pendientes ? (
+                    <Button href={`/radar/${radarId}/entrega/${id}`}>
+                      Iniciar entrega
+                    </Button>
                   ) : null}
                   {mapsUrl ? (
                     <a

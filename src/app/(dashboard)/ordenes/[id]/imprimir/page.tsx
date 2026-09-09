@@ -10,10 +10,14 @@ import type { OrdenEstado } from "@/types/database";
 
 export default async function OrdenImprimirPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ de_vuelta?: string }>;
 }) {
   const { id } = await params;
+  const { de_vuelta } = await searchParams;
+  const esDeVuelta = de_vuelta === "1" || de_vuelta === "true";
   const [user, profile] = await Promise.all([
     getSessionUser(),
     getCurrentProfile(),
@@ -64,6 +68,12 @@ export default async function OrdenImprimirPage({
   return (
     <div className="lt-ticket-page mx-auto max-w-[22rem] space-y-4 px-2 py-4">
       <OrdenPrintControls volverHref={`/ordenes/${orden.id}`} />
+
+      {esDeVuelta ? (
+        <p className="rounded-xl border border-lt-warning-border bg-lt-warning-bg px-3 py-2 text-center text-sm font-semibold text-lt-warning-text print:border-black print:bg-transparent print:text-black">
+          ORDEN DE VUELTA — revisar saldo de vacíos
+        </p>
+      ) : null}
 
       <OrdenTicket
         correlativo={orden.correlativo}
