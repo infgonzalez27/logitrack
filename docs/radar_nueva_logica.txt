@@ -73,3 +73,20 @@ contenedores_retirados
 Nota: SKU es la cantidad de id_producto despachados
 
 Has el análisis, crea el IMPLEMENTATION PLAN en base a lo expuesto anteriormente.
+
+## Despacho de productos no es parcial
+Si el front envía que las cantidades despachadas están en cero, la orden queda bajo el status de 'devuelta', sin embargo, igualmente 
+se debe permitir registrar los contenedores registrados
+
+## FUNCTIONS solicita_aprobar_radar(tnIdRadar)
+por defecto el campo status_radar debe ser .F. (no aprobado)
+esta función cambia el status a .T. (aprobado)
+Ejecuta las funciones referente a:
+Actualiza el saldo de los contenedores a los clientes
+Devuelve el inventario no despachado del camion (inventario movil) al almacén. 
+
+## FUNCTIONS retorna_inventario_no_despachado_para_almacen()
+Se debe crear una Function para retornar el inventario no despachado al almacen y esto se hace con las ordenes cuyo estado sea 'devuelto'
+Tienes libertad para asesorarme de cual sería la lógica, porque un radar puede tener mas de una orden de distribución no despachadas
+y esta función se ejecuta cuando el radar es aprobado por el usuario gerente 
+
