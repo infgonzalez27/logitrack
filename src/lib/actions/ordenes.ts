@@ -19,7 +19,8 @@ import type { EstadoEntrega, OrdenEstado, ProductoOrdenRpc } from "@/types/datab
 export type LineaOrdenInput = {
   producto_id: string;
   cantidad_solicitada: number;
-  valor_unitario_recaudar: number;
+  /** Precio unitario en USD (`productos.precio_lista1` o editado). */
+  valor_unitario_usd: number;
 };
 
 type CrearOrdenRpcResult = {
@@ -61,28 +62,19 @@ function parseRpcError(data: unknown, fallback: string): string {
   return fallback;
 }
 
-function mapProductosJson(
-  lineas: LineaOrdenInput[],
-  tasaCambio?: number | null,
-): ProductoOrdenRpc[] {
-  const tasa =
-    tasaCambio != null && Number.isFinite(tasaCambio) && tasaCambio > 0
-      ? tasaCambio
-      : null;
-
+/**
+ * Órdenes dolarizadas: solo `valor_unitario_usd`.
+ * `valor_unitario_recaudar` / Bs no se registran (null).
+ */
+function mapProductosJson(lineas: LineaOrdenInput[]): ProductoOrdenRpc[] {
   return lineas.map((linea) => {
-    const valorBs = linea.valor_unitario_recaudar;
-    const valorUsd =
-      tasa != null && valorBs > 0
-        ? Math.round((valorBs / tasa) * 100) / 100
-        : null;
-
+    const valorUsd = Number(linea.valor_unitario_usd);
     return {
       producto_id: linea.producto_id.trim(),
       cantidad: linea.cantidad_solicitada,
-      precio_unitario: valorBs,
-      valor_unitario_recaudar: valorBs,
+      precio_unitario: valorUsd,
       valor_unitario_usd: valorUsd,
+      valor_unitario_recaudar: null,
     };
   });
 }
@@ -129,10 +121,10 @@ function validateCreateOrdenInput(
       return `Línea ${i + 1}: la cantidad debe ser mayor a 0.`;
     }
     if (
-      !Number.isFinite(linea.valor_unitario_recaudar) ||
-      linea.valor_unitario_recaudar < 0
+      !Number.isFinite(linea.valor_unitario_usd) ||
+      linea.valor_unitario_usd < 0
     ) {
-      return `Línea ${i + 1}: el precio unitario no puede ser negativo.`;
+      return `Línea ${i + 1}: el precio unitario (USD) no puede ser negativo.`;
     }
   }
 
@@ -233,7 +225,7 @@ export async function createOrdenAction(input: {
       ? input.tasa_cambio
       : null;
 
-  const productosJson = mapProductosJson(input.lineas, tasa);
+  const productosJson = mapProductosJson(input.lineas);
   if (!productosJson.length) {
     return { error: "Agrega al menos una línea de producto." };
   }
@@ -707,8 +699,7 @@ export async function registrarMovimientoContenedoresAction(input: {
 export type ActualizaOrdenDetalleInput = {
   producto_id: string;
   cantidad_solicitada: number;
-  valor_unitario_recaudar: number;
-  valor_unitario_usd?: number | null;
+  valor_unitario_usd: number;
 };
 
 /** DB-017 — solo órdenes en borrador. */
@@ -774,12 +765,16 @@ export async function actualizaOrdenDistribucionAction(input: {
       fecha_despacho: input.fecha_despacho?.trim() || null,
       factura_origen_numero: input.factura_origen_numero?.trim() || null,
     },
-    p_detalle: lineas.map((l) => ({
-      producto_id: l.producto_id.trim(),
-      cantidad_solicitada: l.cantidad_solicitada,
-      valor_unitario_recaudar: l.valor_unitario_recaudar,
-      valor_unitario_usd: l.valor_unitario_usd ?? null,
-    })),
+    p_detalle: lineas.map((l) => {
+      const valorUsd = Number(l.valor_unitario_usd);
+      return {
+        producto_id: l.producto_id.trim(),
+        cantidad_solicitada: l.cantidad_solicitada,
+        valor_unitario_usd: valorUsd,
+        valor_unitario_recaudar: null,
+        subtotal_recaudar: null,
+      };
+    }),
   });
 
   if (!response.success) {

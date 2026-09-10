@@ -31,9 +31,7 @@ export default async function RadarDetallePage({
   const reporte = await retornaRadarDetalleReporteAction(id);
 
   const radarAprobado = Boolean(
-    reporte.ok &&
-      (reporte.reporte.radar.aprobado === true ||
-        (reporte.reporte.radar as { aprobado?: boolean }).aprobado),
+    reporte.ok && reporte.reporte.radar.status_radar === true,
   );
 
   return (

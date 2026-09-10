@@ -9,7 +9,13 @@ import { Button } from "@/components/ui/button";
  * en Android el diálogo completo (Wi‑Fi / red) no suele aparecer si print()
  * se dispara solo al cargar la página.
  */
-export function OrdenPrintControls({ volverHref }: { volverHref: string }) {
+export function OrdenPrintControls({
+  volverHref,
+  volverLabel = "Volver a la orden",
+}: {
+  volverHref: string;
+  volverLabel?: string;
+}) {
   const router = useRouter();
   const [aviso, setAviso] = useState<string | null>(null);
 
@@ -43,7 +49,7 @@ export function OrdenPrintControls({ volverHref }: { volverHref: string }) {
           variant="secondary"
           onClick={() => router.push(volverHref)}
         >
-          Volver a la orden
+          {volverLabel}
         </Button>
       </div>
     </div>

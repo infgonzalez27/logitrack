@@ -193,14 +193,13 @@ export function RadarEntregaForm({
       return;
     }
 
-    // De vuelta: reimprimir para dejar visible el saldo de vacíos.
-    if (result.deVuelta) {
-      router.push(`/ordenes/${orden.orden_id}/imprimir?de_vuelta=1`);
-      router.refresh();
-      return;
+    // Reimprimir con estado de cuenta de vacíos (proyectado hasta aprobar radar).
+    const qs = new URLSearchParams({ estado_cuenta: "1" });
+    if (result.deVuelta) qs.set("de_vuelta", "1");
+    if (backHref.startsWith("/radar")) {
+      qs.set("volver", backHref);
     }
-
-    router.push(backHref);
+    router.push(`/ordenes/${orden.orden_id}/imprimir?${qs.toString()}`);
     router.refresh();
   }
 

@@ -27,7 +27,7 @@ export function RadarReporteView({ reporte }: { reporte: RadarDetalleReporte }) 
           <p className="text-sm text-lt-text-muted">
             {formatDateOnly(radar.fecha_despacho)} ·{" "}
             {despachador.nombre_completo}
-            {radar.status_radar ? " · Despacho registrado" : " · Pendiente de ruta"}
+            {radar.status_radar ? " · Aprobado" : " · Pendiente de aprobación"}
           </p>
         </div>
         <Button

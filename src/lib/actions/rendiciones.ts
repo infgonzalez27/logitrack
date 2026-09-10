@@ -240,7 +240,7 @@ async function solicitaAbonosOrdenDistribucionLocal(
       total_recaudar_bs,
       created_at,
       estado,
-      detalle_distribucion(subtotal_recaudar, subtotal_recaudar_usd)
+      detalle_distribucion(subtotal_recaudar_usd)
     `,
     )
     .eq("cliente_id", clienteId)
@@ -335,17 +335,11 @@ async function solicitaAbonosOrdenDistribucionLocal(
       (s, l) => s + Number(l.subtotal_recaudar_usd ?? 0),
       0,
     );
-    const sumBsLineas = lineas.reduce(
-      (s, l) => s + Number(l.subtotal_recaudar ?? 0),
-      0,
-    );
 
     const { usd: totalUsd, bs: totalBs } = resolverMontosOrden({
       total_recaudar_usd: od.total_recaudar_usd,
-      total_recaudar_bs: od.total_recaudar_bs,
       tasa_cambio: tasaOrden,
       sum_lineas_usd: sumUsdLineas,
-      sum_lineas_recaudar: sumBsLineas,
     });
 
     const abonos = abonosByOrden.get(od.id) ?? { usd: 0, bs: 0 };
@@ -741,9 +735,8 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
       fecha_despacho,
       tasa_cambio,
       total_recaudar_usd,
-      total_recaudar_bs,
       clientes(razon_social),
-      detalle_distribucion(subtotal_recaudar_usd, subtotal_recaudar)
+      detalle_distribucion(subtotal_recaudar_usd)
     `,
     )
     .eq("estado", "por_liquidar");
@@ -755,7 +748,6 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
 
   type Det = {
     subtotal_recaudar_usd: number | null;
-    subtotal_recaudar: number | null;
   };
   type Row = {
     id: string;
@@ -764,7 +756,6 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
     fecha_despacho: string | null;
     tasa_cambio: number | null;
     total_recaudar_usd: number | null;
-    total_recaudar_bs: number | null;
     clientes:
       | { razon_social: string }
       | { razon_social: string }[]
@@ -812,16 +803,10 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
       (s, d) => s + Number(d.subtotal_recaudar_usd ?? 0),
       0,
     );
-    const sumRecaudar = dets.reduce(
-      (s, d) => s + Number(d.subtotal_recaudar ?? 0),
-      0,
-    );
     const { usd: montoOrden } = resolverMontosOrden({
       total_recaudar_usd: od.total_recaudar_usd,
-      total_recaudar_bs: od.total_recaudar_bs,
       tasa_cambio: od.tasa_cambio,
       sum_lineas_usd: sumUsd,
-      sum_lineas_recaudar: sumRecaudar,
     });
     const saldo = Math.max(0, montoOrden - (abonosMap.get(od.id) ?? 0));
 

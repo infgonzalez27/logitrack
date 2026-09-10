@@ -55,11 +55,8 @@ export function RadarLista({ items }: { items: RadarListaRangoItem[] }) {
               <td className="px-4 py-3">
                 <div className="flex flex-wrap gap-1">
                   <Badge tone={r.status_radar ? "success" : "warning"}>
-                    {r.status_radar ? "Despachado" : "Pendiente"}
+                    {r.status_radar ? "Aprobado" : "Pendiente"}
                   </Badge>
-                  {r.aprobado ? (
-                    <Badge tone="success">Aprobado</Badge>
-                  ) : null}
                 </div>
               </td>
             </tr>

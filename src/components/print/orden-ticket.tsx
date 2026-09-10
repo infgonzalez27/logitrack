@@ -1,5 +1,6 @@
 import { labelOrdenEstado } from "@/lib/constants";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import type { EstadoCuentaVacioLinea } from "@/lib/ordenes/estado-cuenta-vacios";
 import type { OrdenEstado } from "@/types/database";
 
 export type TicketLinea = {
@@ -25,13 +26,15 @@ export type OrdenTicketData = {
   pesoKg: number;
   lineas: TicketLinea[];
   totalRecaudar: number;
+  estadoCuentaVacios?: EstadoCuentaVacioLinea[];
+  estadoCuentaProvisional?: boolean;
 };
 
 const LINE = "--------------------------------";
 
 /** Monto simple para térmicas (evita símbolos Unicode de Intl). */
 function moneyThermal(value: number): string {
-  return `Bs ${value.toFixed(2)}`;
+  return `USD ${value.toFixed(2)}`;
 }
 
 /** Quita tildes/símbolos que muchas SAT no imprimen (papel avanza en blanco). */
@@ -84,6 +87,21 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
 
   lines.push(LINE);
   lines.push(`TOTAL: ${moneyThermal(data.totalRecaudar)}`);
+
+  if (data.estadoCuentaVacios && data.estadoCuentaVacios.length > 0) {
+    lines.push(LINE);
+    lines.push("ESTADO DE CUENTA - VACIOS");
+    for (const v of data.estadoCuentaVacios) {
+      lines.push(v.nombre);
+      lines.push(
+        `  Ant:${formatNumber(v.saldo_anterior)} Ret:${formatNumber(v.retirado)} Nuevo:${formatNumber(v.saldo_nuevo)}`,
+      );
+    }
+    if (data.estadoCuentaProvisional) {
+      lines.push("(provisional hasta aprobar radar)");
+    }
+  }
+
   lines.push(LINE);
   lines.push("Gracias por su preferencia");
   lines.push("*** Fin del ticket ***");
@@ -106,6 +124,8 @@ export function OrdenTicket(data: OrdenTicketData) {
     pesoKg,
     lineas,
     totalRecaudar,
+    estadoCuentaVacios,
+    estadoCuentaProvisional,
   } = data;
 
   return (
@@ -158,9 +178,9 @@ export function OrdenTicket(data: OrdenTicketData) {
             ) : null}
             <p className="lt-ticket__row">
               <span>
-                {formatNumber(linea.cantidad)} × {formatNumber(linea.unitario)} Bs
+                {formatNumber(linea.cantidad)} × {formatCurrency(linea.unitario)}
               </span>
-              <span>{formatNumber(linea.subtotal)} Bs</span>
+              <span>{formatCurrency(linea.subtotal)}</span>
             </p>
           </div>
         ))}
@@ -172,9 +192,42 @@ export function OrdenTicket(data: OrdenTicketData) {
       <div className="lt-ticket__rule lt-ticket__rule--double" />
 
       <p className="lt-ticket__total">
-        <span>TOTAL A RECAUDAR (Bs)</span>
-        <span>{formatNumber(totalRecaudar)}</span>
+        <span>TOTAL A RECAUDAR (USD)</span>
+        <span>{formatCurrency(totalRecaudar)}</span>
       </p>
+
+      {estadoCuentaVacios && estadoCuentaVacios.length > 0 ? (
+        <>
+          <div className="lt-ticket__rule" />
+          <section className="lt-ticket__block">
+            <p className="lt-ticket__label">ESTADO DE CUENTA — VACÍOS</p>
+            {estadoCuentaVacios.map((v) => (
+              <div key={v.contenedor_id} className="lt-ticket__item">
+                <p className="lt-ticket__strong">{v.nombre}</p>
+                <p className="lt-ticket__row">
+                  <span>Anterior</span>
+                  <span>{formatNumber(v.saldo_anterior)}</span>
+                </p>
+                <p className="lt-ticket__row">
+                  <span>Retirado</span>
+                  <span>{formatNumber(v.retirado)}</span>
+                </p>
+                <p className="lt-ticket__row">
+                  <span>Saldo nuevo</span>
+                  <span className="lt-ticket__strong">
+                    {formatNumber(v.saldo_nuevo)}
+                  </span>
+                </p>
+              </div>
+            ))}
+            {estadoCuentaProvisional ? (
+              <p className="lt-ticket__muted">
+                Provisional hasta que gerencia apruebe el radar.
+              </p>
+            ) : null}
+          </section>
+        </>
+      ) : null}
 
       <div className="lt-ticket__rule" />
 

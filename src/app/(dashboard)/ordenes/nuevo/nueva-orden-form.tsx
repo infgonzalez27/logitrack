@@ -26,7 +26,7 @@ export type ClienteOrdenOption = Option & {
 type Linea = {
   producto_id: string;
   cantidad_solicitada: number;
-  valor_unitario_recaudar: number;
+  valor_unitario_usd: number;
 };
 
 function defaultFechaDespachoLocal(): string {
@@ -85,7 +85,7 @@ export function NuevaOrdenForm({
         {
           producto_id: producto.id,
           cantidad_solicitada: qty,
-          valor_unitario_recaudar: producto.precio_lista1 ?? producto.precio ?? 0,
+          valor_unitario_usd: producto.precio_lista1 ?? producto.precio ?? 0,
         },
       ];
     });
@@ -145,7 +145,7 @@ export function NuevaOrdenForm({
 
   const totalRecaudar = lineas.reduce(
     (total, linea) =>
-      total + linea.cantidad_solicitada * linea.valor_unitario_recaudar,
+      total + linea.cantidad_solicitada * linea.valor_unitario_usd,
     0,
   );
 
@@ -281,15 +281,15 @@ export function NuevaOrdenForm({
                           }
                         />
                         <Input
-                          label="Precio unitario"
+                          label="Precio unitario (USD)"
                           type="number"
                           min={0}
                           step="0.01"
                           required
-                          value={linea.valor_unitario_recaudar}
+                          value={linea.valor_unitario_usd}
                           onChange={(e) =>
                             updateLinea(linea.producto_id, {
-                              valor_unitario_recaudar: Number(e.target.value),
+                              valor_unitario_usd: Number(e.target.value),
                             })
                           }
                         />
@@ -310,7 +310,7 @@ export function NuevaOrdenForm({
             </ul>
           )}
           <p className="mt-4 text-sm text-lt-text-muted">
-            Total a recaudar:{" "}
+            Total a recaudar (USD):{" "}
             <span className="font-medium text-lt-text">
               ${totalRecaudar.toFixed(2)}
             </span>

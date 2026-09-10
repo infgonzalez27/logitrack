@@ -208,6 +208,7 @@ export interface OrdenDistribucion {
   vendedor_id?: string | null;
   despachador_id?: string | null;
   id_ruta?: string | null;
+  radar_id?: string | null;
   estado: OrdenEstado;
   fecha_despacho: string | null;
   peso_total_calculado: number;
@@ -251,13 +252,17 @@ export interface DetalleDistribucion {
   producto_id: string;
   cantidad_solicitada: number;
   cantidad_despachada: number;
-  valor_unitario_recaudar: number;
-  subtotal_recaudar: number;
+  /** Deprecated: null (crédito dolarizado). */
+  valor_unitario_recaudar: number | null;
+  /** Deprecated: null (crédito dolarizado). */
+  subtotal_recaudar: number | null;
   valor_unitario_usd?: number | null;
   subtotal_recaudar_usd?: number | null;
   secuencia_entrega: number | null;
   estado_entrega: EstadoEntrega;
   motivo_rechazo: string | null;
+  contenedores_retirados?: number | null;
+  contenedor_id?: string | null;
   productos?: Producto | null;
 }
 
@@ -385,7 +390,8 @@ export type ProductoOrdenRpc = {
   cantidad: number;
   /** Compatibilidad con SP antiguo. */
   precio_unitario?: number;
-  valor_unitario_recaudar?: number;
+  /** Deprecated: no se registra Bs en detalle (crédito dolarizado). */
+  valor_unitario_recaudar?: number | null;
   valor_unitario_usd?: number | null;
 };
 
@@ -465,7 +471,6 @@ export type RadarCabecera = {
   despachador_id: string;
   fecha_despacho: string;
   status_radar: boolean;
-  aprobado?: boolean;
   total_cantidad_solicitada: number;
   total_cantidad_despachada: number;
   total_contenedores_retirados: number;
@@ -487,8 +492,8 @@ export type RadarListaRangoItem = {
   total_paradas: number;
   items: number;
   sku: number;
+  /** true = aprobado por gerencia (`status_radar`). */
   status_radar: boolean;
-  aprobado: boolean;
 };
 
 /** §2.31 — parada resumida de `retorna_ordenes_distribucion_segun_idradar`. */

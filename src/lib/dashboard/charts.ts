@@ -25,7 +25,7 @@ async function fetchOrdenesFinancieras(
       created_at,
       fecha_despacho,
       clientes(razon_social),
-      detalle_distribucion(subtotal_recaudar),
+      detalle_distribucion(subtotal_recaudar_usd),
       detalle_rendicion_ordenes(recaudado)
     `);
 

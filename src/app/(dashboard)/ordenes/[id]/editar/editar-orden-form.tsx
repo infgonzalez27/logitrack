@@ -21,7 +21,7 @@ type Option = { value: string; label: string };
 type Linea = {
   producto_id: string;
   cantidad_solicitada: number;
-  valor_unitario_recaudar: number;
+  valor_unitario_usd: number;
 };
 
 export function EditarOrdenForm({
@@ -83,7 +83,7 @@ export function EditarOrdenForm({
         {
           producto_id: producto.id,
           cantidad_solicitada: qty,
-          valor_unitario_recaudar:
+          valor_unitario_usd:
             producto.precio_lista1 ?? producto.precio ?? 0,
         },
       ];
@@ -265,19 +265,19 @@ export function EditarOrdenForm({
                         }
                       />
                       <Input
-                        label="Precio unitario"
+                        label="Precio unitario (USD)"
                         type="number"
                         min={0}
                         step="0.01"
                         required
-                        value={linea.valor_unitario_recaudar}
+                        value={linea.valor_unitario_usd}
                         onChange={(e) =>
                           setLineas((prev) =>
                             prev.map((l) =>
                               l.producto_id === linea.producto_id
                                 ? {
                                     ...l,
-                                    valor_unitario_recaudar: Number(
+                                    valor_unitario_usd: Number(
                                       e.target.value,
                                     ),
                                   }

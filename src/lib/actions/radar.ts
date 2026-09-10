@@ -393,7 +393,6 @@ export async function solicitaAprobarRadarAction(
       data?: {
         radar_id?: string;
         status_radar?: boolean;
-        aprobado?: boolean;
         contenedores_procesados?: number;
         ordenes_anuladas?: number;
       };
@@ -422,7 +421,6 @@ export async function solicitaAprobarRadarAction(
   const response = await callDbProcedure<{
     radar_id?: string;
     status_radar?: boolean;
-    aprobado?: boolean;
     contenedores_procesados?: number;
     ordenes_anuladas?: number;
   }>("solicita_aprobar_radar", { p_radar_id: id });
@@ -565,7 +563,6 @@ function mapRadarListaRango(raw: unknown): RadarListaRangoItem | null {
     items: Number(r.items ?? 0),
     sku: Number(r.sku ?? 0),
     status_radar: Boolean(r.status_radar),
-    aprobado: Boolean(r.aprobado),
   };
 }
 

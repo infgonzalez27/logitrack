@@ -3,6 +3,7 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { getOrdenDistribucionDetalle } from "@/lib/data/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
+import { retornaEstadoCuentaVaciosOrden } from "@/lib/ordenes/estado-cuenta-vacios";
 import { joinOne } from "@/lib/supabase/join";
 import { OrdenTicket } from "@/components/print/orden-ticket";
 import { OrdenPrintControls } from "./orden-print-controls";
@@ -13,11 +14,24 @@ export default async function OrdenImprimirPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ de_vuelta?: string }>;
+  searchParams: Promise<{
+    de_vuelta?: string;
+    estado_cuenta?: string;
+    volver?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { de_vuelta } = await searchParams;
+  const {
+    de_vuelta,
+    estado_cuenta,
+    volver: volverParam,
+  } = await searchParams;
   const esDeVuelta = de_vuelta === "1" || de_vuelta === "true";
+  const pedirEstadoCuenta =
+    estado_cuenta === "1" ||
+    estado_cuenta === "true" ||
+    esDeVuelta;
+
   const [user, profile] = await Promise.all([
     getSessionUser(),
     getCurrentProfile(),
@@ -52,22 +66,53 @@ export default async function OrdenImprimirPage({
 
   const lineas = detalle.map((linea) => {
     const producto = joinOne(linea.productos);
+    const unitarioUsd = Number(
+      linea.valor_unitario_usd != null && Number(linea.valor_unitario_usd) > 0
+        ? linea.valor_unitario_usd
+        : 0,
+    );
+    const subtotalUsd = Number(
+      linea.subtotal_recaudar_usd != null &&
+        Number(linea.subtotal_recaudar_usd) > 0
+        ? linea.subtotal_recaudar_usd
+        : unitarioUsd * Number(linea.cantidad_solicitada ?? 0),
+    );
     return {
       id: linea.id,
       secuencia: linea.secuencia_entrega ?? "—",
       codigo: producto?.codigo_producto ?? "—",
       producto: producto?.nombre ?? "—",
       cantidad: linea.cantidad_solicitada,
-      unitario: linea.valor_unitario_recaudar,
-      subtotal: linea.subtotal_recaudar,
+      unitario: unitarioUsd,
+      subtotal: subtotalUsd,
     };
   });
 
   const totalRecaudar = lineas.reduce((sum, linea) => sum + linea.subtotal, 0);
 
+  const estadoCuenta = pedirEstadoCuenta
+    ? await retornaEstadoCuentaVaciosOrden({
+        clienteId: orden.cliente_id,
+        radarId: orden.radar_id ?? null,
+        detalle,
+      })
+    : null;
+
+  const volverHref =
+    volverParam && volverParam.startsWith("/")
+      ? volverParam
+      : `/ordenes/${orden.id}`;
+
   return (
     <div className="lt-ticket-page mx-auto max-w-[22rem] space-y-4 px-2 py-4">
-      <OrdenPrintControls volverHref={`/ordenes/${orden.id}`} />
+      <OrdenPrintControls
+        volverHref={volverHref}
+        volverLabel={
+          volverParam?.startsWith("/radar")
+            ? "Volver al radar"
+            : "Volver a la orden"
+        }
+      />
 
       {esDeVuelta ? (
         <p className="rounded-xl border border-lt-warning-border bg-lt-warning-bg px-3 py-2 text-center text-sm font-semibold text-lt-warning-text print:border-black print:bg-transparent print:text-black">
@@ -88,6 +133,8 @@ export default async function OrdenImprimirPage({
         pesoKg={orden.peso_total_calculado}
         lineas={lineas}
         totalRecaudar={totalRecaudar}
+        estadoCuentaVacios={estadoCuenta?.lineas}
+        estadoCuentaProvisional={estadoCuenta?.provisional}
       />
     </div>
   );

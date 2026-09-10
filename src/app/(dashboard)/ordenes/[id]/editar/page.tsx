@@ -85,7 +85,11 @@ export default async function EditarOrdenPage({
           lineas: detalle.map((l) => ({
             producto_id: l.producto_id,
             cantidad_solicitada: l.cantidad_solicitada,
-            valor_unitario_recaudar: Number(l.valor_unitario_recaudar),
+            valor_unitario_usd: Number(
+              l.valor_unitario_usd != null && Number(l.valor_unitario_usd) > 0
+                ? l.valor_unitario_usd
+                : l.valor_unitario_recaudar ?? 0,
+            ),
           })),
         }}
         clientes={(clientes ?? []).map((c) => ({

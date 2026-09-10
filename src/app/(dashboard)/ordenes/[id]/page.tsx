@@ -66,25 +66,23 @@ export default async function OrdenDetallePage({
     (a, b) => (a.secuencia_entrega ?? 0) - (b.secuencia_entrega ?? 0),
   );
 
-  const totalRecaudar = detalle.reduce(
-    (sum, linea) => sum + Number(linea.subtotal_recaudar ?? 0),
-    0,
-  );
   const totalRecaudarUsd = detalle.reduce(
-    (sum, linea) => sum + Number(linea.subtotal_recaudar_usd ?? 0),
+    (sum, linea) =>
+      sum +
+      Number(
+        linea.subtotal_recaudar_usd != null &&
+          Number(linea.subtotal_recaudar_usd) > 0
+          ? linea.subtotal_recaudar_usd
+          : Number(linea.valor_unitario_usd ?? 0) *
+              Number(linea.cantidad_solicitada ?? 0),
+      ),
     0,
   );
   const { usd: totalUsd, bs: totalBs } = resolverMontosOrden({
     total_recaudar_usd: orden.total_recaudar_usd,
-    total_recaudar_bs: orden.total_recaudar_bs,
     tasa_cambio: orden.tasa_cambio,
-    sum_lineas_recaudar: totalRecaudar,
     sum_lineas_usd: totalRecaudarUsd,
   });
-  const tasa =
-    orden.tasa_cambio != null && Number(orden.tasa_cambio) > 0
-      ? Number(orden.tasa_cambio)
-      : null;
 
   const puedeEditar = canEditarOrdenBorrador(rol, orden.estado, {
     esCreador: !!user && orden.creado_por === user.id,
@@ -124,7 +122,7 @@ export default async function OrdenDetallePage({
               <PrintButton label="Imprimir orden" />
               <PrintButton
                 label="Ticket"
-                href={`/ordenes/${orden.id}/imprimir`}
+                href={`/ordenes/${orden.id}/imprimir?estado_cuenta=1`}
               />
               <OrdenEstadoActions
                 ordenId={orden.id}
@@ -164,7 +162,7 @@ export default async function OrdenDetallePage({
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-lt-text-muted">Total Bs</dt>
+              <dt className="text-lt-text-muted">Total Bs (ref.)</dt>
               <dd>{formatNumber(totalBs)}</dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -212,16 +210,18 @@ export default async function OrdenDetallePage({
           ]}
           rows={detalle.map((linea) => {
             const producto = joinOne(linea.productos);
-            const { usd: unitUsd } = resolverMontosOrden({
-              total_recaudar_bs: linea.valor_unitario_recaudar,
-              total_recaudar_usd: linea.valor_unitario_usd,
-              tasa_cambio: tasa,
-            });
-            const { usd: subUsd } = resolverMontosOrden({
-              total_recaudar_bs: linea.subtotal_recaudar,
-              total_recaudar_usd: linea.subtotal_recaudar_usd,
-              tasa_cambio: tasa,
-            });
+            const unitUsd = Number(
+              linea.valor_unitario_usd != null &&
+                Number(linea.valor_unitario_usd) > 0
+                ? linea.valor_unitario_usd
+                : 0,
+            );
+            const subUsd = Number(
+              linea.subtotal_recaudar_usd != null &&
+                Number(linea.subtotal_recaudar_usd) > 0
+                ? linea.subtotal_recaudar_usd
+                : unitUsd * Number(linea.cantidad_solicitada ?? 0),
+            );
             return {
               id: linea.id,
               cells: {
@@ -238,11 +238,11 @@ export default async function OrdenDetallePage({
           })}
         />
         <p className="mt-4 text-right text-sm font-medium">
-          Total a recaudar (Bs): {formatNumber(totalBs)}
-          {totalUsd > 0 ? (
+          Total a recaudar (USD): {formatCurrency(totalUsd)}
+          {totalBs > 0 ? (
             <>
               {" "}
-              · USD: {formatCurrency(totalUsd)}
+              · Bs (ref.): {formatNumber(totalBs)}
             </>
           ) : null}
         </p>

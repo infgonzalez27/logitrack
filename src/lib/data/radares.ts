@@ -10,7 +10,6 @@ type RadarRow = {
   total_cantidad_despachada: number | null;
   total_contenedores_retirados: number | null;
   status_radar: boolean;
-  aprobado?: boolean | null;
   created_at: string;
   perfiles_usuario:
     | { nombre_completo: string }
@@ -97,23 +96,7 @@ export async function listarRadaresPorRangoLocal(opts: {
 }): Promise<RadarListaRangoItem[]> {
   const supabase = await createClient();
 
-  async function fetchRows(includeAprobado: boolean) {
-    if (includeAprobado) {
-      let q = supabase
-        .from("radars")
-        .select(
-          "id, correlativo, despachador_id, fecha_despacho, status_radar, aprobado",
-        )
-        .gte("fecha_despacho", opts.fechaInicial)
-        .lte("fecha_despacho", opts.fechaLimite)
-        .order("fecha_despacho", { ascending: false })
-        .order("correlativo", { ascending: false })
-        .limit(200);
-      if (opts.despachadorId) {
-        q = q.eq("despachador_id", opts.despachadorId);
-      }
-      return q;
-    }
+  async function fetchRows() {
     let q = supabase
       .from("radars")
       .select("id, correlativo, despachador_id, fecha_despacho, status_radar")
@@ -128,10 +111,7 @@ export async function listarRadaresPorRangoLocal(opts: {
     return q;
   }
 
-  let { data, error } = await fetchRows(true);
-  if (error?.message?.toLowerCase().includes("aprobado")) {
-    ({ data, error } = await fetchRows(false));
-  }
+  const { data, error } = await fetchRows();
 
   if (error) {
     console.error("[listarRadaresPorRangoLocal]", error.message);
@@ -197,7 +177,6 @@ export async function listarRadaresPorRangoLocal(opts: {
       items: s?.items ?? 0,
       sku: s?.skus.size ?? 0,
       status_radar: Boolean(row.status_radar),
-      aprobado: Boolean(row.aprobado),
     };
   });
 }

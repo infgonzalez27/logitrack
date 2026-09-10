@@ -13,7 +13,7 @@ const ORDEN_DETALLE_SELECT = `
   *,
   clientes(razon_social, rif_nit, direccion_fiscal, vendedor_id, despachador_id),
   camiones(placa, modelo),
-  detalle_distribucion(*, productos(nombre, unidad_medida, codigo_producto))
+  detalle_distribucion(*, productos(nombre, unidad_medida, codigo_producto, contenedor_id))
 `;
 
 const ORDEN_LISTA_SELECT = `

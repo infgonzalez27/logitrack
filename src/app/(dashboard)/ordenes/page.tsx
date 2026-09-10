@@ -109,7 +109,6 @@ export default async function OrdenesPage({
           rows={ordenes.map((o) => {
             const { usd, bs } = resolverMontosOrden({
               total_recaudar_usd: o.total_recaudar_usd,
-              total_recaudar_bs: o.total_recaudar_bs,
               tasa_cambio: o.tasa_cambio,
             });
             const tasa =
