@@ -8,13 +8,12 @@ export type EstadoCuentaVacioLinea = {
   entregado: number;
   saldo_anterior: number;
   retirado: number;
-  /** Saldo a mostrar: proyectado si radar no aprobado; DB si ya aprobado. */
+  /** Saldo a mostrar: proyectado si radar no aprobado; consolidado si ya aprobado. */
   saldo_nuevo: number;
 };
 
 export type EstadoCuentaVacios = {
   lineas: EstadoCuentaVacioLinea[];
-  /** true = saldos DB ya reflejan retiros; no restar de nuevo. */
   radarAprobado: boolean;
   provisional: boolean;
 };
@@ -93,9 +92,12 @@ async function dbClient(): Promise<SupabaseClient> {
 
 /**
  * Estado de cuenta de vacíos para ticket.
- * Prefiere service role (despachador a menudo no lee saldos por RLS).
- * Antes de aprobar radar: proyecta saldo_DB − retiros de la orden.
- * Después de aprobar: muestra saldo DB (ya actualizado).
+ *
+ * Importante: `saldo_contenedores_clientes` se consolida al liquidar / al
+ * aprobar radar (retiros). Durante la ruta el crédito vive en
+ * `movimientos_contenedores` (p. ej. al cargar/despachar). Por eso el ticket
+ * prioriza la suma de movimientos y proyecta retiros del detalle hasta que
+ * gerencia apruebe el radar.
  */
 export async function retornaEstadoCuentaVaciosOrden(input: {
   clienteId: string;
@@ -104,8 +106,8 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
   detalle: DetalleVacios[];
 }): Promise<EstadoCuentaVacios> {
   const db = await dbClient();
-  const retiros = agregarRetirosPorContenedor(input.detalle);
-  const entregados = agregarEntregadosPorContenedor(input.detalle);
+  const retirosDetalle = agregarRetirosPorContenedor(input.detalle);
+  const entregadosDetalle = agregarEntregadosPorContenedor(input.detalle);
 
   let radarAprobado = false;
   if (input.radarId) {
@@ -117,32 +119,57 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
     radarAprobado = Boolean(radar?.status_radar);
   }
 
+  // Fuente viva: movimientos (entregas al cargar + retiros ya oficializados).
+  const { data: movimientos } = await db
+    .from("movimientos_contenedores")
+    .select("orden_id, contenedor_id, cantidad_entregada, cantidad_retirada")
+    .eq("cliente_id", input.clienteId);
+
+  const saldoMovById = new Map<string, number>();
+  const entregadoOrdenMov = new Map<string, number>();
+  const retiradoOrdenMov = new Map<string, number>();
+
+  for (const m of movimientos ?? []) {
+    const id = String(m.contenedor_id ?? "").trim();
+    if (!id) continue;
+    const ent = Number(m.cantidad_entregada) || 0;
+    const ret = Number(m.cantidad_retirada) || 0;
+    saldoMovById.set(id, (saldoMovById.get(id) ?? 0) + ent - ret);
+    if (input.ordenId && String(m.orden_id) === input.ordenId) {
+      if (ent > 0) {
+        entregadoOrdenMov.set(id, (entregadoOrdenMov.get(id) ?? 0) + ent);
+      }
+      if (ret > 0) {
+        retiradoOrdenMov.set(id, (retiradoOrdenMov.get(id) ?? 0) + ret);
+      }
+    }
+  }
+
+  // Fallback / complemento: tabla consolidada (liquidación / radar aprobado).
   const { data: saldos } = await db
     .from("saldo_contenedores_clientes")
     .select("contenedor_id, saldo_pendiente")
     .eq("cliente_id", input.clienteId);
 
-  const saldoById = new Map<string, number>();
+  const saldoTablaById = new Map<string, number>();
   for (const row of saldos ?? []) {
     const id = String(row.contenedor_id ?? "").trim();
     if (!id) continue;
-    saldoById.set(id, Number(row.saldo_pendiente ?? 0));
-  }
-
-  // Incluir tipos de envase de la orden aunque saldo/retiro aún no existan.
-  for (const d of input.detalle) {
-    const cid = contenedorIdDeLinea(d);
-    if (!cid) continue;
-    if (!saldoById.has(cid) && !retiros.has(cid) && !entregados.has(cid)) {
-      entregados.set(cid, 0);
-    }
+    saldoTablaById.set(id, Number(row.saldo_pendiente ?? 0));
   }
 
   const ids = new Set<string>([
-    ...saldoById.keys(),
-    ...retiros.keys(),
-    ...entregados.keys(),
+    ...saldoMovById.keys(),
+    ...saldoTablaById.keys(),
+    ...retirosDetalle.keys(),
+    ...entregadosDetalle.keys(),
   ]);
+
+  // Envases de la orden aunque aún no haya movimiento/saldo.
+  for (const d of input.detalle) {
+    const cid = contenedorIdDeLinea(d);
+    if (cid) ids.add(cid);
+  }
 
   const nombres = new Map<string, string>();
   if (ids.size) {
@@ -162,20 +189,46 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
 
   const lineas: EstadoCuentaVacioLinea[] = [...ids]
     .map((contenedor_id) => {
-      const entregado = entregados.get(contenedor_id) ?? 0;
-      const retirado = retiros.get(contenedor_id) ?? 0;
-      const saldoDb = saldoById.get(contenedor_id) ?? 0;
-      // Si el crédito de esta orden aún no figura en DB, usa entregado como piso.
-      const saldo_anterior =
-        saldoDb > 0 || radarAprobado ? saldoDb : Math.max(saldoDb, entregado);
+      const entregado =
+        (entregadoOrdenMov.get(contenedor_id) ?? 0) ||
+        (entregadosDetalle.get(contenedor_id) ?? 0);
+      const retiradoDetalle = retirosDetalle.get(contenedor_id) ?? 0;
+      const retiradoMov = retiradoOrdenMov.get(contenedor_id) ?? 0;
+      // Hasta aprobar radar, los retiros viven en detalle, no en movimientos.
+      const retirado = Math.max(retiradoDetalle, retiradoMov);
+
+      const saldoMov = saldoMovById.get(contenedor_id);
+      const saldoTabla = saldoTablaById.get(contenedor_id);
+      // Preferir movimientos si existen; si no, tabla; si no, entregado de esta orden.
+      let saldo_anterior =
+        saldoMov != null
+          ? saldoMov
+          : saldoTabla != null
+            ? saldoTabla
+            : entregado;
+
+      // Si hay movimientos pero aún no incluyen la entrega de esta orden
+      // (crédito best-effort falló), sumar el estimado del detalle.
+      if (
+        saldoMov != null &&
+        (entregadoOrdenMov.get(contenedor_id) ?? 0) === 0 &&
+        (entregadosDetalle.get(contenedor_id) ?? 0) > 0
+      ) {
+        saldo_anterior += entregadosDetalle.get(contenedor_id) ?? 0;
+      }
+
       const saldo_nuevo = radarAprobado
-        ? saldoDb
-        : Math.max(0, saldo_anterior - retirado);
+        ? Math.max(
+            0,
+            saldoTabla != null ? saldoTabla : saldo_anterior - retiradoMov,
+          )
+        : Math.max(0, saldo_anterior - (retiradoDetalle - retiradoMov));
+
       return {
         contenedor_id,
         nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
         entregado,
-        saldo_anterior,
+        saldo_anterior: Math.max(0, saldo_anterior),
         retirado,
         saldo_nuevo,
       };
@@ -186,7 +239,6 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
         l.retirado > 0 ||
         l.saldo_nuevo > 0 ||
         l.entregado > 0 ||
-        // Mostrar envase de la orden aunque todo esté en 0.
         nombres.has(l.contenedor_id),
     )
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
