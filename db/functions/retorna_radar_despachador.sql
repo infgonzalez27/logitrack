@@ -47,13 +47,13 @@ BEGIN
                         'despacho_permitido', (
                             COALESCE(c.excepcion_despacho_gerencia, FALSE) = TRUE OR (
                                 COALESCE(c.permiso_despacho_manual, TRUE) = TRUE
-                                AND (COALESCE(c.limite_credito, 0.00) = 0.00 OR COALESCE(o.total_recaudar_bs, 0.00) <= COALESCE(c.limite_credito, 0.00))
+                                AND (COALESCE(c.limite_credito, 0.00) = 0.00 OR COALESCE(o.total_recaudar_bs, (COALESCE(o.total_recaudar_usd, 0.00) * COALESCE(o.tasa_cambio, 1.00)), 0.00) <= COALESCE(c.limite_credito, 0.00))
                             )
                         ),
                         'motivo_bloqueo', CASE
                             WHEN COALESCE(c.excepcion_despacho_gerencia, FALSE) = TRUE THEN NULL
                             WHEN COALESCE(c.permiso_despacho_manual, TRUE) = FALSE THEN 'Despacho bloqueado manualmente por política de crédito'
-                            WHEN COALESCE(c.limite_credito, 0.00) > 0.00 AND COALESCE(o.total_recaudar_bs, 0.00) > COALESCE(c.limite_credito, 0.00) THEN 'Monto de la orden supera el límite de crédito del cliente'
+                            WHEN COALESCE(c.limite_credito, 0.00) > 0.00 AND COALESCE(o.total_recaudar_bs, (COALESCE(o.total_recaudar_usd, 0.00) * COALESCE(o.tasa_cambio, 1.00)), 0.00) > COALESCE(c.limite_credito, 0.00) THEN 'Monto de la orden supera el límite de crédito del cliente'
                             ELSE NULL
                         END
                     ),

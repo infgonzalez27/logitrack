@@ -1,0 +1,14 @@
+## Registro de calculos en detalle_distribucion
+Cuando se registre la orden, Function crear_orden_distribucion o al actualizar una orden actualiza_orden_distribucion_segun_correlativo.sql
+en la tabla detalle_distribucion no vamos a registrar valores en los campos:
+valor_unitario_recaudar, subtotal_recaudar
+y en la tabla ordenes_distribucion tampoco vamos a registrar valores en total_recaudar_bs.
+
+Esto es debido a que esas ordenes de distribucion siempre están por liquidar, y al momento de liquidar, la tasa es otra y puede traer confusión
+si colocamos montos expresados en bolívares en la orden.
+
+Verifica que se esté registrando correctamente los siguientes campos:
+valor_unitario_usd es el precio en USD como lo trae la tabla productos.precio_lista1
+subtotal_recaudar_usd es la multiplicacion del campo cantidad_solicitada por el valor_unitario_usd
+
+Actualiza las registros existentes bajo estas nuevas condiciones

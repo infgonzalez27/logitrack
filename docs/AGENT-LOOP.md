@@ -340,3 +340,8 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Migración:** `20260909170000_fix_totales_multimoneda_ordenes.sql` aplicada en Supabase.
   - **Documentación:** Actualizada en `docs/INTEGRACION-RPC.md`.
 
+- `[x]` **Tarea DB-032: Omitir Registro de Campos en Bolívares en Órdenes de Distribución (Campos Calculados Exclusivamente en USD)**
+  - **Función:** Modificar `crear_orden_distribucion` y `actualiza_orden_distribucion_segun_correlativo` para no registrar valores en `valor_unitario_recaudar`, `subtotal_recaudar` ni `total_recaudar_bs` (fijados como `NULL`). Garantizar la correcta asignación de `valor_unitario_usd` (desde `productos.precio_lista1`), `subtotal_recaudar_usd` y `total_recaudar_usd`. Ejecutar script de actualización de registros existentes y ajustar la interfaz frontend en Next.js.
+  - **Migración:** `20260910123500_campos_calculados_ordenes_usd_only.sql`.
+
+

@@ -61,6 +61,7 @@ function mapProductosJson(lineas: LineaOrdenInput[]): ProductoOrdenRpc[] {
   return lineas.map((linea) => ({
     producto_id: linea.producto_id.trim(),
     cantidad: linea.cantidad_solicitada,
+    valor_unitario_usd: linea.valor_unitario_recaudar,
     precio_unitario: linea.valor_unitario_recaudar,
   }));
 }

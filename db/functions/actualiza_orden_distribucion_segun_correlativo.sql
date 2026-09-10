@@ -11,7 +11,6 @@ DECLARE
     v_orden_id UUID;
     v_estado_actual TEXT;
     v_creado_por UUID;
-    v_vendedor_cliente_id UUID;
     v_user_id UUID := auth.uid();
     
     v_cliente_id UUID;
@@ -22,16 +21,14 @@ DECLARE
     v_tasa_cambio NUMERIC(14,4);
     
     v_peso_total NUMERIC(14,2) := 0.00;
-    v_total_bs NUMERIC(14,2) := 0.00;
     v_total_usd NUMERIC(14,2) := 0.00;
     
     v_item JSONB;
     v_secuencia INT := 1;
     v_producto_id UUID;
     v_cantidad INT;
-    v_val_recaudar_bs NUMERIC(14,2);
     v_val_usd NUMERIC(14,2);
-    v_subtotal_bs NUMERIC(14,2);
+    v_val_usd_prod NUMERIC(14,2);
     v_subtotal_usd NUMERIC(14,2);
     v_peso_unitario NUMERIC(14,2);
 BEGIN
@@ -79,7 +76,7 @@ BEGIN
         );
     END IF;
 
-    -- Validar permisos por rol (DB-012)
+    -- Validar permisos por rol
     IF public.user_has_role(ARRAY['vendedor']) AND NOT public.user_has_role(ARRAY['admin', 'gerente', 'despachador']) THEN
         IF v_user_id IS NOT NULL AND v_creado_por IS DISTINCT FROM v_user_id THEN
             RETURN json_build_object(
@@ -118,38 +115,29 @@ BEGIN
         );
     END IF;
 
-    -- Re-calcular totales recorriendo el detalle
+    -- Re-calcular totales recorriendo el detalle exclusivamente en USD
     IF p_detalle IS NOT NULL AND jsonb_array_length(p_detalle) > 0 THEN
         FOR v_item IN SELECT * FROM jsonb_array_elements(p_detalle) LOOP
             v_producto_id := (v_item->>'producto_id')::UUID;
             v_cantidad := (v_item->>'cantidad_solicitada')::INT;
             
-            v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, 0.00);
-            v_val_recaudar_bs := COALESCE((v_item->>'valor_unitario_recaudar')::NUMERIC, 0.00);
+            SELECT COALESCE(precio_lista1, 0.00), COALESCE(peso_unitario_kg, 0.00)
+            INTO v_val_usd_prod, v_peso_unitario
+            FROM public.productos WHERE id = v_producto_id;
 
-            IF v_val_usd > 0 AND (v_val_recaudar_bs IS NULL OR v_val_recaudar_bs = 0) THEN
-                v_val_recaudar_bs := ROUND(v_val_usd * v_tasa_cambio, 2);
-            ELSIF v_val_recaudar_bs > 0 AND (v_val_usd IS NULL OR v_val_usd = 0) THEN
-                v_val_usd := ROUND(v_val_recaudar_bs / v_tasa_cambio, 2);
-            ELSIF v_val_usd > 0 AND v_val_recaudar_bs > 0 THEN
-                v_val_recaudar_bs := ROUND(v_val_usd * v_tasa_cambio, 2);
+            v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, v_val_usd_prod);
+            IF v_val_usd <= 0 OR (v_val_usd < 1.00 AND v_val_usd_prod >= 1.00) THEN
+                v_val_usd := v_val_usd_prod;
             END IF;
 
             v_subtotal_usd := ROUND(v_cantidad * v_val_usd, 2);
-            v_subtotal_bs := ROUND(v_cantidad * v_val_recaudar_bs, 2);
 
             v_total_usd := v_total_usd + v_subtotal_usd;
-            v_total_bs := v_total_bs + v_subtotal_bs;
-
-            -- Peso unitario
-            SELECT COALESCE(peso_unitario_kg, 0) INTO v_peso_unitario
-            FROM public.productos WHERE id = v_producto_id;
-
             v_peso_total := v_peso_total + (v_peso_unitario * v_cantidad);
         END LOOP;
     END IF;
 
-    -- Actualizar Cabecera de la Orden
+    -- Actualizar Cabecera de la Orden (total_recaudar_bs en NULL)
     UPDATE public.ordenes_distribucion
     SET cliente_id = COALESCE(v_cliente_id, cliente_id),
         camion_id = COALESCE(v_camion_id, camion_id),
@@ -157,11 +145,11 @@ BEGIN
         factura_origen_numero = COALESCE(v_factura_origen, factura_origen_numero),
         tasa_cambio = v_tasa_cambio,
         peso_total_calculado = v_peso_total,
-        total_recaudar_bs = v_total_bs,
+        total_recaudar_bs = NULL,
         total_recaudar_usd = v_total_usd
     WHERE id = v_orden_id;
 
-    -- Reemplazar Detalle si fue provisto
+    -- Reemplazar Detalle si fue provisto (valor_unitario_recaudar y subtotal_recaudar en NULL)
     IF p_detalle IS NOT NULL AND jsonb_array_length(p_detalle) > 0 THEN
         DELETE FROM public.detalle_distribucion WHERE orden_id = v_orden_id;
 
@@ -169,19 +157,15 @@ BEGIN
             v_producto_id := (v_item->>'producto_id')::UUID;
             v_cantidad := (v_item->>'cantidad_solicitada')::INT;
             
-            v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, 0.00);
-            v_val_recaudar_bs := COALESCE((v_item->>'valor_unitario_recaudar')::NUMERIC, 0.00);
+            SELECT COALESCE(precio_lista1, 0.00) INTO v_val_usd_prod
+            FROM public.productos WHERE id = v_producto_id;
 
-            IF v_val_usd > 0 AND (v_val_recaudar_bs IS NULL OR v_val_recaudar_bs = 0) THEN
-                v_val_recaudar_bs := ROUND(v_val_usd * v_tasa_cambio, 2);
-            ELSIF v_val_recaudar_bs > 0 AND (v_val_usd IS NULL OR v_val_usd = 0) THEN
-                v_val_usd := ROUND(v_val_recaudar_bs / v_tasa_cambio, 2);
-            ELSIF v_val_usd > 0 AND v_val_recaudar_bs > 0 THEN
-                v_val_recaudar_bs := ROUND(v_val_usd * v_tasa_cambio, 2);
+            v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, v_val_usd_prod);
+            IF v_val_usd <= 0 OR (v_val_usd < 1.00 AND v_val_usd_prod >= 1.00) THEN
+                v_val_usd := v_val_usd_prod;
             END IF;
 
             v_subtotal_usd := ROUND(v_cantidad * v_val_usd, 2);
-            v_subtotal_bs := ROUND(v_cantidad * v_val_recaudar_bs, 2);
 
             INSERT INTO public.detalle_distribucion (
                 id,
@@ -201,8 +185,8 @@ BEGIN
                 v_producto_id,
                 v_cantidad,
                 0,
-                v_val_recaudar_bs,
-                v_subtotal_bs,
+                NULL,
+                NULL,
                 v_val_usd,
                 v_subtotal_usd,
                 v_secuencia,
@@ -219,7 +203,7 @@ BEGIN
             'correlativo', p_correlativo,
             'orden_id', v_orden_id,
             'tasa_cambio', v_tasa_cambio,
-            'total_recaudar_bs', v_total_bs,
+            'total_recaudar_bs', NULL,
             'total_recaudar_usd', v_total_usd
         ),
         'error', NULL

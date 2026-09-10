@@ -14,3 +14,6 @@ Id Cliente  Días vencidos		Cant. Ordenes		Por liquidar
 1. Eliminar ordenes de distribucion que no tenga registros en la tabla hija detalle_distribucion
 2. De la tabla de camiones solo deja los tres primeros registros y elimina los demás
 Ejecútalo en SUPABASE
+
+### Depuracion tabla ordenes_distribucion y detalle_distribucion
+Eliminar registros donde camion_id = NULL, vendedor_id = NULL

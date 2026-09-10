@@ -61,10 +61,13 @@ export default async function OrdenDetallePage({
     (a, b) => (a.secuencia_entrega ?? 0) - (b.secuencia_entrega ?? 0),
   );
 
-  const totalRecaudar = detalle.reduce(
-    (sum, linea) => sum + linea.subtotal_recaudar,
-    0,
-  );
+  const totalRecaudar =
+    orden.total_recaudar_usd ??
+    detalle.reduce(
+      (sum, linea) =>
+        sum + (linea.subtotal_recaudar_usd ?? linea.subtotal_recaudar ?? 0),
+      0,
+    );
 
   return (
     <div className="lt-print-document space-y-6">
@@ -143,8 +146,8 @@ export default async function OrdenDetallePage({
             { key: "producto", label: "Producto" },
             { key: "solicitada", label: "Solicitada" },
             { key: "despachada", label: "Despachada" },
-            { key: "unitario", label: "Unit. recaudar" },
-            { key: "subtotal", label: "Subtotal" },
+            { key: "unitario", label: "Unit. USD" },
+            { key: "subtotal", label: "Subtotal USD" },
             { key: "entrega", label: "Estado entrega" },
           ]}
           rows={detalle.map((linea) => {
@@ -157,8 +160,8 @@ export default async function OrdenDetallePage({
                 producto: producto?.nombre ?? "—",
                 solicitada: formatNumber(linea.cantidad_solicitada),
                 despachada: formatNumber(linea.cantidad_despachada),
-                unitario: formatCurrency(linea.valor_unitario_recaudar),
-                subtotal: formatCurrency(linea.subtotal_recaudar),
+                unitario: formatCurrency(linea.valor_unitario_usd ?? linea.valor_unitario_recaudar),
+                subtotal: formatCurrency(linea.subtotal_recaudar_usd ?? linea.subtotal_recaudar),
                 entrega: labelEstadoEntrega(linea.estado_entrega),
               },
             };

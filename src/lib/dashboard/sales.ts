@@ -22,7 +22,10 @@ export function ventaScopeLabel(rol: RolNombre | null): string {
     : "toda la empresa";
 }
 
-type DetalleLinea = { subtotal_recaudar: number | null };
+type DetalleLinea = {
+  subtotal_recaudar?: number | null;
+  subtotal_recaudar_usd?: number | null;
+};
 type RendicionOrden = { recaudado: number | null };
 
 export type OrdenFinanciera = {
@@ -65,7 +68,10 @@ export function ordenMontoVenta(orden: OrdenFinanciera): number {
     : orden.detalle_distribucion
       ? [orden.detalle_distribucion]
       : [];
-  return lineas.reduce((sum, l) => sum + Number(l.subtotal_recaudar ?? 0), 0);
+  return lineas.reduce(
+    (sum, l) => sum + Number(l.subtotal_recaudar_usd ?? l.subtotal_recaudar ?? 0),
+    0,
+  );
 }
 
 export function ordenMontoCobrado(orden: OrdenFinanciera): number {

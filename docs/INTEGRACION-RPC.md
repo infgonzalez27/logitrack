@@ -1084,12 +1084,11 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.35. Reglas de Cálculo y Conversión Multimoneda en Órdenes de Distribución
 - **Descripción:** Los precios base de lista de productos en LogiTrack están cotizados en **USD** (`precio_lista1` en `productos`). Al crear (`crear_orden_distribucion`) o actualizar (`actualiza_orden_distribucion_segun_correlativo`) una orden:
-  - `valor_unitario_usd`: Es el precio unitario del producto en USD.
-  - `valor_unitario_recaudar`: Es el precio unitario del producto en Bolívares (`ROUND(valor_unitario_usd * tasa_cambio, 2)`).
-  - `subtotal_recaudar_usd`: Suma en USD por producto (`cantidad * valor_unitario_usd`).
-  - `subtotal_recaudar`: Suma en Bs por producto (`ROUND(subtotal_recaudar_usd * tasa_cambio, 2)`).
-  - `total_recaudar_usd`: Suma total en USD de la orden.
-  - `total_recaudar_bs`: Suma total a recaudar en Bolívares (`ROUND(total_recaudar_usd * tasa_cambio, 2)`).
+  - Las órdenes de distribución siempre nacen en estado por liquidar (o aprobadas/pendientes). Debido a que la tasa de cambio puede variar al momento de la liquidación final, los montos en Bolívares (`valor_unitario_recaudar`, `subtotal_recaudar` y `total_recaudar_bs`) se registran como `NULL` para evitar confusiones.
+  - `valor_unitario_usd`: Es el precio unitario del producto en USD (tomado de `precio_lista1` o parámetro explícito).
+  - `subtotal_recaudar_usd`: Suma en USD por línea de producto (`cantidad * valor_unitario_usd`).
+  - `total_recaudar_usd`: Suma total en USD de la cabecera de la orden (`SUM(subtotal_recaudar_usd)`).
+  - `valor_unitario_recaudar`, `subtotal_recaudar`, `total_recaudar_bs`: Se registran en `NULL` durante la creación/edición y se determinan al liquidar la orden.
 
 ---
 

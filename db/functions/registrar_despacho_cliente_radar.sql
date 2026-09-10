@@ -43,7 +43,7 @@ BEGIN
            COALESCE(c.excepcion_despacho_gerencia, FALSE),
            (COALESCE(c.excepcion_despacho_gerencia, FALSE) = TRUE OR (
                COALESCE(c.permiso_despacho_manual, TRUE) = TRUE
-               AND (COALESCE(c.limite_credito, 0.00) = 0.00 OR COALESCE(o.total_recaudar_bs, 0.00) <= COALESCE(c.limite_credito, 0.00))
+               AND (COALESCE(c.limite_credito, 0.00) = 0.00 OR COALESCE(o.total_recaudar_bs, (COALESCE(o.total_recaudar_usd, 0.00) * COALESCE(o.tasa_cambio, 1.00)), 0.00) <= COALESCE(c.limite_credito, 0.00))
            ))
     INTO v_estado_orden, v_camion_id, v_cliente_id, v_radar_id, v_excepcion_gerencia, v_despacho_permitido
     FROM public.ordenes_distribucion o
