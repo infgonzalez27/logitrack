@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   ActualizarProductoRpcInput,
   ProductoListaRpc,
+  RegistrarProductoRpcInput,
 } from "@/types/database";
 
 const UUID_RE =
@@ -248,6 +249,49 @@ export async function obtenerProductoParaEditarAction(
   };
 }
 
+export async function registrarProductoAction(
+  input: RegistrarProductoRpcInput,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!input.nombre?.trim()) {
+    return { ok: false, error: "El nombre del producto es requerido." };
+  }
+  if (!input.codigo_producto?.trim()) {
+    return { ok: false, error: "El código de producto es requerido." };
+  }
+
+  const contenedorId = input.contenedor_id?.trim() || null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(
+    "registra_nuevo_producto_retorna_id",
+    {
+      p_codigo_producto: input.codigo_producto.trim(),
+      p_nombre: input.nombre.trim(),
+      p_codigo_barras: input.codigo_barras?.trim() || null,
+      p_descripcion: input.descripcion?.trim() || null,
+      p_cant_unidad_medida: input.cant_unidad_medida ?? null,
+      p_precio_lista1: input.precio_lista1 ?? 0,
+      p_precio_lista2: input.precio_lista2 ?? 0,
+      p_precio_lista3: input.precio_lista3 ?? 0,
+      p_contenedor_id: contenedorId,
+      p_unidades_por_contenedor: contenedorId
+        ? Math.max(1, Number(input.unidades_por_contenedor) || 1)
+        : 1,
+      p_imagen_path: input.imagen_path?.trim() || null,
+    },
+  );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  if (!data) {
+    return { ok: false, error: "No se pudo registrar el producto." };
+  }
+
+  revalidatePath("/productos");
+  return { ok: true, id: String(data) };
+}
+
 function validateActualizarProductoInput(
   input: ActualizarProductoRpcInput,
 ): string | null {
@@ -265,9 +309,9 @@ function validateActualizarProductoInput(
   }
 
   for (const [label, value] of [
-    ["precio lista 1", input.precio_lista1],
-    ["precio lista 2", input.precio_lista2],
-    ["precio lista 3", input.precio_lista3],
+    ["precio lista 1", input.precio_lista1 ?? 0],
+    ["precio lista 2", input.precio_lista2 ?? 0],
+    ["precio lista 3", input.precio_lista3 ?? 0],
   ] as const) {
     if (!Number.isFinite(value) || value < 0) {
       return `El ${label} no puede ser negativo.`;
@@ -297,6 +341,7 @@ export async function actualizarProductoAction(
     return { ok: false, error: validationError };
   }
 
+  const contenedorId = input.contenedor_id?.trim() || null;
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(
     "actualizar_registro_productos_segun_id",
@@ -304,10 +349,17 @@ export async function actualizarProductoAction(
       p_id: input.id.trim(),
       p_codigo_producto: input.codigo_producto.trim(),
       p_nombre: input.nombre.trim(),
-      p_codigo_barras: input.codigo_barras.trim(),
-      p_precio_lista1: input.precio_lista1,
-      p_precio_lista2: input.precio_lista2,
-      p_precio_lista3: input.precio_lista3,
+      p_codigo_barras: input.codigo_barras?.trim() || null,
+      p_precio_lista1: input.precio_lista1 ?? 0,
+      p_precio_lista2: input.precio_lista2 ?? 0,
+      p_precio_lista3: input.precio_lista3 ?? 0,
+      p_descripcion: input.descripcion?.trim() || null,
+      p_cant_unidad_medida: input.cant_unidad_medida ?? null,
+      p_contenedor_id: contenedorId,
+      p_unidades_por_contenedor: contenedorId
+        ? Math.max(1, Number(input.unidades_por_contenedor) || 1)
+        : 1,
+      p_imagen_path: input.imagen_path?.trim() || null,
     },
   );
 
@@ -317,29 +369,6 @@ export async function actualizarProductoAction(
 
   if (!data) {
     return { ok: false, error: "No se encontró un producto con ese ID." };
-  }
-
-  const contenedorId = input.contenedor_id?.trim() || null;
-  const unidades =
-    contenedorId != null
-      ? Math.max(1, Number(input.unidades_por_contenedor) || 1)
-      : null;
-  const imagenPath = input.imagen_path?.trim() || null;
-
-  const { error: extraError } = await createAdminClient()
-    .from("productos")
-    .update({
-      contenedor_id: contenedorId,
-      unidades_por_contenedor: unidades,
-      imagen_path: imagenPath,
-    })
-    .eq("id", input.id.trim());
-
-  if (extraError) {
-    return {
-      ok: false,
-      error: `Producto actualizado, pero no se pudieron guardar empaque/imagen: ${extraError.message}`,
-    };
   }
 
   revalidatePath("/productos");

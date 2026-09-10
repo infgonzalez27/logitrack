@@ -144,24 +144,53 @@ export async function createProductoAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase } = await getUserId();
+  const codigoProducto =
+    String(formData.get("codigo_producto") || "").trim() ||
+    `PROD-${Date.now()}`;
+  const nombre = String(formData.get("nombre") || "").trim();
+  if (!nombre) return { error: "El nombre del producto es requerido." };
+
+  const codigoBarras =
+    String(formData.get("codigo_barras") || "").trim() || null;
+  const descripcion =
+    String(formData.get("descripcion") || "").trim() || null;
+  const cantRaw = formData.get("cant_unidad_medida");
+  const cantUnidadMedida =
+    cantRaw != null && String(cantRaw).trim() !== ""
+      ? Number(cantRaw)
+      : null;
   const contenedorRaw = String(formData.get("contenedor_id") || "").trim();
   const unidadesRaw = Number(formData.get("unidades_por_contenedor") || 1);
   const unidadesPorContenedor =
     Number.isFinite(unidadesRaw) && unidadesRaw > 0 ? unidadesRaw : 1;
+  const imagenPath =
+    String(formData.get("imagen_path") || "").trim() || null;
 
-  const { error } = await supabase.from("productos").insert({
-    codigo_barras: String(formData.get("codigo_barras") || "") || null,
-    nombre: String(formData.get("nombre")).trim(),
-    descripcion: String(formData.get("descripcion") || "") || null,
-    unidad_medida: String(formData.get("unidad_medida") || "unidades"),
-    peso_unitario_kg: Number(formData.get("peso_unitario_kg") || 0),
-    cant_unidad_medida: Number(formData.get("cant_unidad_medida") || 0),
-    contenedor_id: contenedorRaw || null,
-    unidades_por_contenedor: contenedorRaw ? unidadesPorContenedor : null,
-    imagen_path: String(formData.get("imagen_path") || "").trim() || null,
-  });
+  const { data, error } = await supabase.rpc(
+    "registra_nuevo_producto_retorna_id",
+    {
+      p_codigo_producto: codigoProducto,
+      p_nombre: nombre,
+      p_codigo_barras: codigoBarras,
+      p_descripcion: descripcion,
+      p_cant_unidad_medida:
+        cantUnidadMedida != null && Number.isFinite(cantUnidadMedida)
+          ? cantUnidadMedida
+          : null,
+      p_precio_lista1: 0,
+      p_precio_lista2: 0,
+      p_precio_lista3: 0,
+      p_contenedor_id: contenedorRaw || null,
+      p_unidades_por_contenedor: contenedorRaw
+        ? unidadesPorContenedor
+        : 1,
+      p_imagen_path: imagenPath,
+    },
+  );
 
   if (error) return { error: error.message };
+  if (!data) return { error: "No se pudo registrar el producto." };
+
   revalidatePath("/productos");
   return { success: true };
 }

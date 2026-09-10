@@ -23,7 +23,9 @@ export function ProductoEditarForm({
   const router = useRouter();
   const [codigoProducto, setCodigoProducto] = useState(producto.codigo_producto);
   const [nombre, setNombre] = useState(producto.nombre);
-  const [codigoBarras, setCodigoBarras] = useState(producto.codigo_barras);
+  const [codigoBarras, setCodigoBarras] = useState(
+    producto.codigo_barras ?? "",
+  );
   const [precioLista1, setPrecioLista1] = useState(producto.precio_lista1);
   const [precioLista2, setPrecioLista2] = useState(producto.precio_lista2);
   const [precioLista3, setPrecioLista3] = useState(producto.precio_lista3);
@@ -46,7 +48,7 @@ export function ProductoEditarForm({
       id: producto.id,
       codigo_producto: codigoProducto,
       nombre,
-      codigo_barras: codigoBarras,
+      codigo_barras: codigoBarras.trim() || null,
       precio_lista1: precioLista1,
       precio_lista2: precioLista2,
       precio_lista3: precioLista3,
@@ -149,6 +151,9 @@ export function ProductoEditarForm({
           />
         </div>
 
+        <p className="rounded-xl bg-lt-surface-muted px-3 py-2 text-sm text-lt-text-muted">
+          Verifique si el producto se le debe asignar un contenedor.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Select
             label="Empaque / contenedor (opcional)"

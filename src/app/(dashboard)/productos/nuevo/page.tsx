@@ -18,6 +18,7 @@ export default async function NuevoProductoPage() {
       <PageHeader title="Nuevo producto" />
       <Card>
         <ActionForm action={createProductoAction} redirectTo="/productos">
+          <Input label="Código de producto" name="codigo_producto" />
           <Input label="Código de barras" name="codigo_barras" />
           <Input label="Nombre" name="nombre" required />
           <Input label="Descripción" name="descripcion" />
@@ -46,6 +47,9 @@ export default async function NuevoProductoPage() {
               /productos/nombre.webp
             </code>
             ) o URL pública. Preferir fotos de caja/empaque.
+          </p>
+          <p className="rounded-xl bg-lt-surface-muted px-3 py-2 text-sm text-lt-text-muted">
+            Verifique si el producto se le debe asignar un contenedor.
           </p>
           <Select
             label="Empaque / contenedor (opcional)"

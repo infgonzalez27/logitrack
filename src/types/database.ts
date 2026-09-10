@@ -579,14 +579,30 @@ export type UsuarioListaRpc = {
   rol_nombre?: string | null;
 };
 
+export type RegistrarProductoRpcInput = {
+  codigo_producto: string;
+  nombre: string;
+  codigo_barras?: string | null;
+  descripcion?: string | null;
+  cant_unidad_medida?: number | null;
+  precio_lista1?: number;
+  precio_lista2?: number;
+  precio_lista3?: number;
+  contenedor_id?: string | null;
+  unidades_por_contenedor?: number | null;
+  imagen_path?: string | null;
+};
+
 export type ActualizarProductoRpcInput = {
   id: string;
   codigo_producto: string;
   nombre: string;
-  codigo_barras: string;
-  precio_lista1: number;
-  precio_lista2: number;
-  precio_lista3: number;
+  codigo_barras?: string | null;
+  precio_lista1?: number;
+  precio_lista2?: number;
+  precio_lista3?: number;
+  descripcion?: string | null;
+  cant_unidad_medida?: number | null;
   contenedor_id?: string | null;
   unidades_por_contenedor?: number | null;
   /** Ruta relativa Storage o URL pública (`/productos/...`). */
@@ -844,15 +860,36 @@ export interface Database {
         };
         Returns: boolean;
       };
+      registra_nuevo_producto_retorna_id: {
+        Args: {
+          p_codigo_producto: string;
+          p_nombre: string;
+          p_codigo_barras?: string | null;
+          p_descripcion?: string | null;
+          p_cant_unidad_medida?: number | null;
+          p_precio_lista1?: number;
+          p_precio_lista2?: number;
+          p_precio_lista3?: number;
+          p_contenedor_id?: string | null;
+          p_unidades_por_contenedor?: number;
+          p_imagen_path?: string | null;
+        };
+        Returns: string;
+      };
       actualizar_registro_productos_segun_id: {
         Args: {
           p_id: string;
           p_codigo_producto: string;
           p_nombre: string;
-          p_codigo_barras: string;
-          p_precio_lista1: number;
-          p_precio_lista2: number;
-          p_precio_lista3: number;
+          p_codigo_barras?: string | null;
+          p_precio_lista1?: number;
+          p_precio_lista2?: number;
+          p_precio_lista3?: number;
+          p_descripcion?: string | null;
+          p_cant_unidad_medida?: number | null;
+          p_contenedor_id?: string | null;
+          p_unidades_por_contenedor?: number;
+          p_imagen_path?: string | null;
         };
         Returns: boolean;
       };

@@ -934,6 +934,55 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   });
   ```
 
+### 2.36. Registro de Nuevo Producto (`registra_nuevo_producto_retorna_id`)
+- **Firma SQL:** `registra_nuevo_producto_retorna_id(p_codigo_producto TEXT, p_nombre TEXT, p_codigo_barras TEXT DEFAULT NULL, p_descripcion TEXT DEFAULT NULL, p_cant_unidad_medida NUMERIC DEFAULT NULL, p_precio_lista1 NUMERIC DEFAULT 0, p_precio_lista2 NUMERIC DEFAULT 0, p_precio_lista3 NUMERIC DEFAULT 0, p_contenedor_id UUID DEFAULT NULL, p_unidades_por_contenedor NUMERIC DEFAULT 1, p_imagen_path TEXT DEFAULT NULL)`
+- **Descripción:** Registra un nuevo producto en la tabla `public.productos` y devuelve el `UUID` generado. Si `p_codigo_barras` viene vacío o con espacios, se guarda automáticamente como `NULL` para evitar violaciones de la restricción de unicidad (`UNIQUE`).
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data: productoId, error } = await supabase.rpc('registra_nuevo_producto_retorna_id', {
+    p_codigo_producto: 'HAR-001',
+    p_nombre: 'Harina PAN 1kg',
+    p_codigo_barras: '7591000123456', // opcional / null
+    p_descripcion: 'Harina de maíz blanco precozida', // opcional / null
+    p_cant_unidad_medida: 1, // opcional / null
+    p_precio_lista1: 1.20, // opcional, default 0
+    p_precio_lista2: 1.10, // opcional, default 0
+    p_precio_lista3: 1.00, // opcional, default 0
+    p_contenedor_id: 'uuid-del-contenedor', // opcional / null
+    p_unidades_por_contenedor: 20, // opcional, default 1
+    p_imagen_path: '/productos/harina.png' // opcional / null
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  "a1b2c3d4-e5f6-7890-abcd-1234567890ab"
+  ```
+
+### 2.37. Actualización de Registro de Producto (`actualizar_registro_productos_segun_id`)
+- **Firma SQL:** `actualizar_registro_productos_segun_id(p_id UUID, p_codigo_producto TEXT, p_nombre TEXT, p_codigo_barras TEXT DEFAULT NULL, p_precio_lista1 NUMERIC DEFAULT 0, p_precio_lista2 NUMERIC DEFAULT 0, p_precio_lista3 NUMERIC DEFAULT 0, p_descripcion TEXT DEFAULT NULL, p_cant_unidad_medida NUMERIC DEFAULT NULL, p_contenedor_id UUID DEFAULT NULL, p_unidades_por_contenedor NUMERIC DEFAULT 1, p_imagen_path TEXT DEFAULT NULL)`
+- **Descripción:** Actualiza la información de un producto existente identificado por `p_id`. Si `p_codigo_barras` viene vacío o con espacios, se convierte a `NULL`.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data: exito, error } = await supabase.rpc('actualizar_registro_productos_segun_id', {
+    p_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab',
+    p_codigo_producto: 'HAR-001',
+    p_nombre: 'Harina PAN 1kg Modificada',
+    p_codigo_barras: '7591000123456',
+    p_precio_lista1: 1.25,
+    p_precio_lista2: 1.15,
+    p_precio_lista3: 1.05,
+    p_descripcion: 'Harina de maíz blanco enriquecida',
+    p_cant_unidad_medida: 1,
+    p_contenedor_id: 'uuid-del-contenedor',
+    p_unidades_por_contenedor: 24,
+    p_imagen_path: '/productos/harina_v2.png'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  true
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
