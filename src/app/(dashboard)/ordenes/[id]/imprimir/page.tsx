@@ -21,16 +21,8 @@ export default async function OrdenImprimirPage({
   }>;
 }) {
   const { id } = await params;
-  const {
-    de_vuelta,
-    estado_cuenta,
-    volver: volverParam,
-  } = await searchParams;
+  const { de_vuelta, volver: volverParam } = await searchParams;
   const esDeVuelta = de_vuelta === "1" || de_vuelta === "true";
-  const pedirEstadoCuenta =
-    estado_cuenta === "1" ||
-    estado_cuenta === "true" ||
-    esDeVuelta;
 
   const [user, profile] = await Promise.all([
     getSessionUser(),
@@ -90,9 +82,10 @@ export default async function OrdenImprimirPage({
 
   const totalRecaudar = lineas.reduce((sum, linea) => sum + linea.subtotal, 0);
 
-  const estadoCuenta = pedirEstadoCuenta
+  const estadoCuenta = orden.cliente_id
     ? await retornaEstadoCuentaVaciosOrden({
         clienteId: orden.cliente_id,
+        ordenId: orden.id,
         radarId: orden.radar_id ?? null,
         detalle,
       })

@@ -88,18 +88,20 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
   lines.push(LINE);
   lines.push(`TOTAL: ${moneyThermal(data.totalRecaudar)}`);
 
+  lines.push(LINE);
+  lines.push("ESTADO DE CUENTA - VACIOS");
   if (data.estadoCuentaVacios && data.estadoCuentaVacios.length > 0) {
-    lines.push(LINE);
-    lines.push("ESTADO DE CUENTA - VACIOS");
     for (const v of data.estadoCuentaVacios) {
       lines.push(v.nombre);
       lines.push(
-        `  Ant:${formatNumber(v.saldo_anterior)} Ret:${formatNumber(v.retirado)} Nuevo:${formatNumber(v.saldo_nuevo)}`,
+        `  Ent:${formatNumber(v.entregado)} Ret:${formatNumber(v.retirado)} Saldo:${formatNumber(v.saldo_nuevo)}`,
       );
     }
     if (data.estadoCuentaProvisional) {
       lines.push("(provisional hasta aprobar radar)");
     }
+  } else {
+    lines.push("(sin saldo de vacios)");
   }
 
   lines.push(LINE);
@@ -196,38 +198,40 @@ export function OrdenTicket(data: OrdenTicketData) {
         <span>{formatCurrency(totalRecaudar)}</span>
       </p>
 
-      {estadoCuentaVacios && estadoCuentaVacios.length > 0 ? (
-        <>
-          <div className="lt-ticket__rule" />
-          <section className="lt-ticket__block">
-            <p className="lt-ticket__label">ESTADO DE CUENTA — VACÍOS</p>
-            {estadoCuentaVacios.map((v) => (
-              <div key={v.contenedor_id} className="lt-ticket__item">
-                <p className="lt-ticket__strong">{v.nombre}</p>
-                <p className="lt-ticket__row">
-                  <span>Anterior</span>
-                  <span>{formatNumber(v.saldo_anterior)}</span>
-                </p>
-                <p className="lt-ticket__row">
-                  <span>Retirado</span>
-                  <span>{formatNumber(v.retirado)}</span>
-                </p>
-                <p className="lt-ticket__row">
-                  <span>Saldo nuevo</span>
-                  <span className="lt-ticket__strong">
-                    {formatNumber(v.saldo_nuevo)}
-                  </span>
-                </p>
-              </div>
-            ))}
-            {estadoCuentaProvisional ? (
-              <p className="lt-ticket__muted">
-                Provisional hasta que gerencia apruebe el radar.
+      <div className="lt-ticket__rule" />
+      <section className="lt-ticket__block">
+        <p className="lt-ticket__label">ESTADO DE CUENTA — VACÍOS</p>
+        {estadoCuentaVacios && estadoCuentaVacios.length > 0 ? (
+          estadoCuentaVacios.map((v) => (
+            <div key={v.contenedor_id} className="lt-ticket__item">
+              <p className="lt-ticket__strong">{v.nombre}</p>
+              <p className="lt-ticket__row">
+                <span>Entregado</span>
+                <span>{formatNumber(v.entregado)}</span>
               </p>
-            ) : null}
-          </section>
-        </>
-      ) : null}
+              <p className="lt-ticket__row">
+                <span>Retirado</span>
+                <span>{formatNumber(v.retirado)}</span>
+              </p>
+              <p className="lt-ticket__row">
+                <span>Saldo pendiente</span>
+                <span className="lt-ticket__strong">
+                  {formatNumber(v.saldo_nuevo)}
+                </span>
+              </p>
+            </div>
+          ))
+        ) : (
+          <p className="lt-ticket__muted">Sin saldo de vacíos</p>
+        )}
+        {estadoCuentaProvisional &&
+        estadoCuentaVacios &&
+        estadoCuentaVacios.length > 0 ? (
+          <p className="lt-ticket__muted">
+            Provisional hasta que gerencia apruebe el radar.
+          </p>
+        ) : null}
+      </section>
 
       <div className="lt-ticket__rule" />
 
