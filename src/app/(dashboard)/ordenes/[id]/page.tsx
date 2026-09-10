@@ -308,12 +308,11 @@ export default async function OrdenDetallePage({
 
       {orden.estado === "por_liquidar" ? (
         <p className="lt-no-print text-sm text-lt-text-muted">
-          Para liquidar: debe existir una{" "}
-          <a href="/rendiciones" className="text-lt-primary underline">
-            rendición de cuentas
-          </a>{" "}
-          vinculada a esta orden y en estado <strong>aprobada</strong>. Luego
-          usa el botón <strong>Liquidar (recaudación aprobada)</strong>.
+          Esta orden se liquida mediante{" "}
+          <a href="/rendiciones/nuevo" className="text-lt-primary underline">
+            Rendición de cuentas
+          </a>
+          .
         </p>
       ) : null}
     </div>

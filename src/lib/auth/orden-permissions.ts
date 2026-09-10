@@ -48,13 +48,7 @@ const TRANSICIONES_UI: Partial<
     },
   ],
   devuelta: [],
-  por_liquidar: [
-    {
-      next: "liquidada",
-      label: "Liquidar (recaudación aprobada)",
-      rpc: "liquidar_orden_distribucion",
-    },
-  ],
+  por_liquidar: [],
   liquidada: [],
   anulada: [],
 };
