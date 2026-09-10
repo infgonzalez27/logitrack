@@ -351,5 +351,10 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Inputs:** `p_radar_id UUID`.
   - **Output:** JSON `{ success: boolean, message: text, data: { radar_id: UUID, status_radar: true, contenedores_entregados_procesados: INT, contenedores_retirados_procesados: INT, clientes_deshabilitados_credito: INT, ordenes_anuladas: INT, inventario_reintegrado: ARRAY }, error: object }`.
 
+- `[x]` **Tarea DB-034: Recálculo Masivo de Contenedores (`movimientos_contenedores` y `saldo_contenedores_clientes`)**
+  - **Función:** Ejecutar un script masivo PL/pgSQL para recalcular atómicamente todos los movimientos de entrega (`CEIL(cantidad_despachada * unidades_por_contenedor)`) y retiros de envases de todas las órdenes despachadas en radares aprobados de la base de datos, resincronizando `saldo_contenedores_clientes`.
+  - **Migración:** `20260910181500_recalcular_movimientos_y_saldos_contenedores_masivo.sql`.
+
+
 
 
