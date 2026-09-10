@@ -16,7 +16,7 @@ export function ProductoEditarForm({
   const router = useRouter();
   const [codigoProducto, setCodigoProducto] = useState(producto.codigo_producto);
   const [nombre, setNombre] = useState(producto.nombre);
-  const [codigoBarras, setCodigoBarras] = useState(producto.codigo_barras);
+  const [codigoBarras, setCodigoBarras] = useState(producto.codigo_barras ?? "");
   const [precioLista1, setPrecioLista1] = useState(producto.precio_lista1);
   const [precioLista2, setPrecioLista2] = useState(producto.precio_lista2);
   const [precioLista3, setPrecioLista3] = useState(producto.precio_lista3);

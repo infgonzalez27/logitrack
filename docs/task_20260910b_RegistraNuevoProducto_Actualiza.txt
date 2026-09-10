@@ -1,0 +1,29 @@
+## Tabla productos
+#1 Crea una Functions Registra_nuevo_producto_retorna_id()
+basado en este script que hizo Nextjs:
+await supabase.from("productos").insert({
+  codigo_barras,           // null si viene vacío
+  codigo_producto,
+  nombre,
+  descripcion,
+  cant_unidad_medida,
+  p_precio_lista1 NUMERIC,
+  p_precio_lista2 NUMERIC,
+  p_precio_lista3 NUMERIC  
+  contenedor_id,
+  unidades_por_contenedor,
+  imagen_path,
+});
+
+#2 Modifica la Funtions actualizar_registro_productos_segun_id.sql
+Incluye:
+  descripcion,
+  cant_unidad_medida,
+  contenedor_id,
+  unidades_por_contenedor,
+  imagen_path
+  
+Deja los demás campos
+
+# 3 Informa al Front
+Informa de los campos que solo debe registrar y actualizar y lo que tu veas conveniente

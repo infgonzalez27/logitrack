@@ -77,16 +77,26 @@ export async function createProductoAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase } = await getUserId();
-  const { error } = await supabase.from("productos").insert({
-    codigo_barras: String(formData.get("codigo_barras") || "") || null,
-    nombre: String(formData.get("nombre")).trim(),
-    descripcion: String(formData.get("descripcion") || "") || null,
-    unidad_medida: String(formData.get("unidad_medida") || "unidades"),
-    peso_unitario_kg: Number(formData.get("peso_unitario_kg") || 0),
-    cant_unidad_medida: Number(formData.get("cant_unidad_medida") || 0),
-  });
+  const codigoProducto = String(formData.get("codigo_producto") || "").trim() || `PROD-${Date.now()}`;
+  const nombre = String(formData.get("nombre") || "").trim();
+  const codigoBarras = String(formData.get("codigo_barras") || "").trim() || null;
+  const descripcion = String(formData.get("descripcion") || "").trim() || null;
+  const cantUnidadMedida = formData.get("cant_unidad_medida") ? Number(formData.get("cant_unidad_medida")) : null;
+
+  const { data, error } = await supabase.rpc(
+    "registra_nuevo_producto_retorna_id",
+    {
+      p_codigo_producto: codigoProducto,
+      p_nombre: nombre,
+      p_codigo_barras: codigoBarras,
+      p_descripcion: descripcion,
+      p_cant_unidad_medida: cantUnidadMedida,
+    },
+  );
 
   if (error) return { error: error.message };
+  if (!data) return { error: "No se pudo registrar el producto." };
+
   revalidatePath("/productos");
   return { success: true };
 }
