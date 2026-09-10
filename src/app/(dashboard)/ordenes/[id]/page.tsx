@@ -206,30 +206,22 @@ export default async function OrdenDetallePage({
             { key: "producto", label: "Producto" },
             { key: "solicitada", label: "Solicitada" },
             { key: "despachada", label: "Despachada" },
-            { key: "unitario", label: "Unit. Bs" },
             { key: "unitario_usd", label: "Unit. USD" },
-            { key: "subtotal", label: "Subtotal Bs" },
             { key: "subtotal_usd", label: "Subtotal USD" },
             { key: "entrega", label: "Estado entrega" },
           ]}
           rows={detalle.map((linea) => {
             const producto = joinOne(linea.productos);
-            const unitBs = Number(linea.valor_unitario_recaudar ?? 0);
-            const subBs = Number(linea.subtotal_recaudar ?? 0);
-            const unitUsd =
-              linea.valor_unitario_usd != null &&
-              Number(linea.valor_unitario_usd) > 0
-                ? Number(linea.valor_unitario_usd)
-                : tasa != null && unitBs > 0
-                  ? Math.round((unitBs / tasa) * 100) / 100
-                  : null;
-            const subUsd =
-              linea.subtotal_recaudar_usd != null &&
-              Number(linea.subtotal_recaudar_usd) > 0
-                ? Number(linea.subtotal_recaudar_usd)
-                : tasa != null && subBs > 0
-                  ? Math.round((subBs / tasa) * 100) / 100
-                  : null;
+            const { usd: unitUsd } = resolverMontosOrden({
+              total_recaudar_bs: linea.valor_unitario_recaudar,
+              total_recaudar_usd: linea.valor_unitario_usd,
+              tasa_cambio: tasa,
+            });
+            const { usd: subUsd } = resolverMontosOrden({
+              total_recaudar_bs: linea.subtotal_recaudar,
+              total_recaudar_usd: linea.subtotal_recaudar_usd,
+              tasa_cambio: tasa,
+            });
             return {
               id: linea.id,
               cells: {
@@ -238,10 +230,8 @@ export default async function OrdenDetallePage({
                 producto: producto?.nombre ?? "—",
                 solicitada: formatNumber(linea.cantidad_solicitada),
                 despachada: formatNumber(linea.cantidad_despachada),
-                unitario: formatNumber(unitBs),
-                unitario_usd: unitUsd != null ? formatCurrency(unitUsd) : "—",
-                subtotal: formatNumber(subBs),
-                subtotal_usd: subUsd != null ? formatCurrency(subUsd) : "—",
+                unitario_usd: unitUsd > 0 ? formatCurrency(unitUsd) : "—",
+                subtotal_usd: subUsd > 0 ? formatCurrency(subUsd) : "—",
                 entrega: labelEstadoEntrega(linea.estado_entrega),
               },
             };
