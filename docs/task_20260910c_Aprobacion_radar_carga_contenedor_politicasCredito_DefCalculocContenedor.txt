@@ -1,0 +1,10 @@
+## Aprobacion gerencial de Radar
+**Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
+# 1 Al aprobar el radar debe cargar al estado de cuenta de contenedores del cliente, los contenedores entregados en el despacho si el producto tiene un contenedor asignado
+# 2 Se debe verificar las políticas de crédito con respecto a la cantidad de clientes.max_facturas_vencidas, que son las ordenes maximas permitidas por liquidar 
+y dependiendo de la política deshabilitarlo en el campo clientes.permiso_despacho_manual
+
+## Definición de Cálculo de Contenedores
+La cantidad de envases/contenedores entregados se calcula en base a 
+CEIL(cantidad_despachada * unidades_por_contenedor). 
+Por ejemplo: si un producto tiene unidades_por_contenedor = 1 y se despachan 25 unidades, equivale a 25 contenedores entregados.

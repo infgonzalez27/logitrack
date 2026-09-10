@@ -1057,7 +1057,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.33. Aprobación Gerencial de Radar (`solicita_aprobar_radar`)
 - **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
-- **Descripción:** Aprueba el radar (`status_radar = true`), liquida los envases retirados provisionales acreditándolos a `saldo_contenedores_clientes`, restituye la mercancía no entregada al almacén principal (`productos.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`.
+- **Descripción:** Aprueba el radar (`status_radar = true`), liquida los envases entregados (`CEIL(cantidad_despachada * unidades_por_contenedor)`) y envases retirados acreditándolos al estado de cuenta del cliente (`saldo_contenedores_clientes`), evalúa las políticas de crédito deshabilitando `permiso_despacho_manual` si `ordenes_por_liquidar >= max_facturas_vencidas`, restituye la mercancía no entregada al almacén principal (`productos.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
@@ -1068,11 +1068,13 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   ```json
   {
     "success": true,
-    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, inventario restituido a almacén y órdenes devueltas anuladas.",
+    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, políticas de crédito evaluadas, inventario restituido a almacén y órdenes devueltas anuladas.",
     "data": {
       "radar_id": "f1e2d3c4-b5a6-7890-1234-567890abcdef",
       "status_radar": true,
-      "contenedores_procesados": 15,
+      "contenedores_entregados_procesados": 25,
+      "contenedores_retirados_procesados": 15,
+      "clientes_deshabilitados_credito": 1,
       "ordenes_anuladas": 2,
       "inventario_reintegrado": [
         { "producto_id": "...", "codigo_producto": "HAR-001", "nombre_producto": "Harina PAN", "cantidad_devuelta": 50 }
@@ -1081,6 +1083,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "error": null
   }
   ```
+
 
 ### 2.35. Reglas de Cálculo y Conversión Multimoneda en Órdenes de Distribución
 - **Descripción:** Los precios base de lista de productos en LogiTrack están cotizados en **USD** (`precio_lista1` en `productos`). Al crear (`crear_orden_distribucion`) o actualizar (`actualiza_orden_distribucion_segun_correlativo`) una orden:

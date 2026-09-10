@@ -1,3 +1,5 @@
+-- Migración: Actualizar RPC solicita_aprobar_radar para carga de contenedores entregados y políticas de crédito por max_facturas_vencidas
+
 CREATE OR REPLACE FUNCTION public.solicita_aprobar_radar(
     p_radar_id UUID
 )

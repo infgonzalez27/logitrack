@@ -344,4 +344,12 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Función:** Modificar `crear_orden_distribucion` y `actualiza_orden_distribucion_segun_correlativo` para no registrar valores en `valor_unitario_recaudar`, `subtotal_recaudar` ni `total_recaudar_bs` (fijados como `NULL`). Garantizar la correcta asignación de `valor_unitario_usd` (desde `productos.precio_lista1`), `subtotal_recaudar_usd` y `total_recaudar_usd`. Ejecutar script de actualización de registros existentes y ajustar la interfaz frontend en Next.js.
   - **Migración:** `20260910123500_campos_calculados_ordenes_usd_only.sql`.
 
+- `[x]` **Tarea DB-033: Actualización de Aprobación Gerencial de Radar (`solicita_aprobar_radar`) con Carga de Contenedores Entregados y Políticas de Crédito**
+  - **Función:** Actualizar `solicita_aprobar_radar(p_radar_id UUID)` para:
+    1. Cargar en el estado de cuenta del cliente (`saldo_contenedores_clientes`) y registrar en `movimientos_contenedores` (`cantidad_entregada`) los envases entregados calculados como `CEIL(cantidad_despachada * unidades_por_contenedor)` para todos los productos despachados con contenedor asignado.
+    2. Evaluar para cada cliente participante en el radar si la cantidad de órdenes pendientes por liquidar (`estado = 'por_liquidar'`) alcanza o supera su límite (`max_facturas_vencidas > 0`), en cuyo caso deshabilita su permiso de despacho manual (`clientes.permiso_despacho_manual = FALSE`).
+  - **Inputs:** `p_radar_id UUID`.
+  - **Output:** JSON `{ success: boolean, message: text, data: { radar_id: UUID, status_radar: true, contenedores_entregados_procesados: INT, contenedores_retirados_procesados: INT, clientes_deshabilitados_credito: INT, ordenes_anuladas: INT, inventario_reintegrado: ARRAY }, error: object }`.
+
+
 
