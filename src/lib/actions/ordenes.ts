@@ -675,7 +675,7 @@ export async function actualizaOrdenDistribucionAction(input: {
     correlativo: number;
     orden_id: string;
     tasa_cambio: number;
-    total_recaudar_bs: number;
+    total_recaudar_bs: number | null;
     total_recaudar_usd: number;
   }>("actualiza_orden_distribucion_segun_correlativo", {
     p_correlativo: input.correlativo,

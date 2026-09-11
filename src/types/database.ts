@@ -667,6 +667,25 @@ export interface Database {
           orden_id?: string;
         };
       };
+      /** INTEGRACION-RPC §2.39 — editar órdenes en `borrador` o `aprobada`. */
+      actualiza_orden_distribucion_segun_correlativo: {
+        Args: {
+          p_correlativo: number;
+          p_header: Record<string, unknown>;
+          p_detalle: unknown;
+        };
+        Returns: {
+          success: boolean;
+          data: {
+            correlativo: number;
+            orden_id: string;
+            tasa_cambio: number;
+            total_recaudar_bs: number | null;
+            total_recaudar_usd: number;
+          } | null;
+          error: { code: string; message: string; details: string | null } | null;
+        };
+      };
       retorna_lista_contenedores: {
         Args: Record<string, never>;
         Returns: {

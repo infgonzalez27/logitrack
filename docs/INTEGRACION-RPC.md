@@ -1022,6 +1022,43 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.39. Actualizar / Editar Orden de Distribución por Correlativo (`actualiza_orden_distribucion_segun_correlativo`)
+- **Firma SQL:** `actualiza_orden_distribucion_segun_correlativo(p_correlativo INT, p_header JSONB, p_detalle JSONB)`
+- **Descripción:** Permite la actualización y modificación de cabecera y detalles de órdenes de distribución que se encuentren en estado **`aprobada`** (o `borrador`). Permite ajustar cliente, camión, fecha de despacho, factura de origen y la lista de productos solicitados.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('actualiza_orden_distribucion_segun_correlativo', {
+    p_correlativo: 105,
+    p_header: {
+      cliente_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab',
+      camion_id: 'c1d2e3f4-a5b6-7890-cdef-1234567890cd',
+      fecha_despacho: '2026-09-15T08:00:00Z',
+      factura_origen_numero: 'FAC-000105'
+    },
+    p_detalle: [
+      {
+        producto_id: 'd4e5f6a7-b8c9-0123-def0-4567890abcde',
+        cantidad_solicitada: 15,
+        valor_unitario_usd: 5.00
+      }
+    ]
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "correlativo": 105,
+      "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+      "tasa_cambio": 50.25,
+      "total_recaudar_bs": null,
+      "total_recaudar_usd": 75.00
+    },
+    "error": null
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
