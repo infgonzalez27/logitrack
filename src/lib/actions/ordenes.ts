@@ -351,8 +351,8 @@ export async function updateOrdenEstadoAction(
       };
     }
 
-    // Al despachar: acreditar vacíos al cliente según productos con empaque.
-    await registrarVaciosEntregaAlDespachar(ordenIdTrim, user.id);
+    // Vacíos entregados se acreditan al aprobar el radar (§2.33/§2.38 DB-033),
+    // no al cargar inventario (evita duplicar movimientos_contenedores).
   } else if (estado === "por_liquidar") {
     const response = await callDbProcedure<{
       orden_id: string;
@@ -543,83 +543,6 @@ export async function listarTiposContenedoresAction(): Promise<
           ? err.message
           : "No se pudieron cargar los tipos de contenedores.",
     };
-  }
-}
-
-/**
- * Calcula vacíos a acreditar al cliente al despachar:
- * floor(cantidad_solicitada / unidades_por_contenedor) por tipo.
- * No falla el despacho si el movimiento no se puede registrar.
- */
-async function registrarVaciosEntregaAlDespachar(
-  ordenId: string,
-  creadoPor: string,
-): Promise<void> {
-  try {
-    const admin = createAdminClient();
-    const { data: orden } = await admin
-      .from("ordenes_distribucion")
-      .select("cliente_id")
-      .eq("id", ordenId)
-      .single();
-
-    if (!orden?.cliente_id) return;
-
-    const { data: detalles } = await admin
-      .from("detalle_distribucion")
-      .select(
-        "cantidad_solicitada, productos(contenedor_id, unidades_por_contenedor)",
-      )
-      .eq("orden_id", ordenId);
-
-    if (!detalles?.length) return;
-
-    const porContenedor = new Map<string, number>();
-
-    for (const detalle of detalles) {
-      const productoRaw = detalle.productos as
-        | {
-            contenedor_id?: string | null;
-            unidades_por_contenedor?: number | null;
-          }
-        | {
-            contenedor_id?: string | null;
-            unidades_por_contenedor?: number | null;
-          }[]
-        | null;
-
-      const producto = Array.isArray(productoRaw)
-        ? productoRaw[0]
-        : productoRaw;
-      const contenedorId = producto?.contenedor_id?.trim();
-      if (!contenedorId) continue;
-
-      const unidades = Math.max(
-        1,
-        Number(producto?.unidades_por_contenedor) || 1,
-      );
-      const cantidad = Number(detalle.cantidad_solicitada) || 0;
-      const vacios = Math.floor(cantidad / unidades);
-      if (vacios <= 0) continue;
-
-      porContenedor.set(
-        contenedorId,
-        (porContenedor.get(contenedorId) ?? 0) + vacios,
-      );
-    }
-
-    for (const [contenedorId, cantidadEntregada] of porContenedor) {
-      await callDbProcedure("registrar_movimiento_contenedores", {
-        p_cliente_id: orden.cliente_id,
-        p_orden_id: ordenId,
-        p_contenedor_id: contenedorId,
-        p_cantidad_entregada: cantidadEntregada,
-        p_cantidad_retirada: 0,
-        p_creado_por: creadoPor,
-      });
-    }
-  } catch {
-    // Best-effort: el despacho ya ocurrió.
   }
 }
 

@@ -178,8 +178,9 @@ export function ProductoEditarForm({
           />
         </div>
         <p className="text-xs text-lt-text-muted">
-          Si el producto usa envase retornable, al despachar se acreditarán
-          vacíos al cliente según cantidad ÷ unidades por contenedor.
+          Si el producto usa envase retornable, al aprobar el radar se
+          acreditarán vacíos al cliente según CEIL(cantidad × unidades por
+          contenedor).
         </p>
 
         {producto.stock_disponible !== undefined ? (

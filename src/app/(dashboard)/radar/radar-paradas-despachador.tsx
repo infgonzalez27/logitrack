@@ -9,9 +9,7 @@ function paradaEstado(orden: RadarOrden): {
   label: string;
   tone: "success" | "warning" | "default" | "danger";
 } {
-  if (orden.despacho_permitido === false) {
-    return { label: "Bloqueado", tone: "danger" };
-  }
+  // Temporal (00931f3): no bloquear por crédito en radar.
   const detalles = orden.detalles ?? [];
   if (!detalles.length) return { label: "Sin líneas", tone: "default" };
   const pendientes = detalles.filter(
@@ -42,8 +40,9 @@ function resumenCarga(detalles: RadarDetalle[]): string {
   return `${formatNumber(items)} Cant. Despachada · ${detalles.length} SKU`;
 }
 
-function despachoPermitido(orden: RadarOrden): boolean {
-  return orden.despacho_permitido !== false;
+function despachoPermitido(_orden: RadarOrden): boolean {
+  // Temporal (00931f3): bypass de crédito en radar.
+  return true;
 }
 
 export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) {

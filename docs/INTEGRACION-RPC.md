@@ -897,8 +897,8 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.33. Aprobación Gerencial de Radar (`solicita_aprobar_radar`)
 - **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
-- **Descripción:** Aprueba el radar (`status_radar = true`, `aprobado = true`), liquida los envases retirados provisionales acreditándolos a `saldo_contenedores_clientes`, restituye la mercancía no entregada al almacén principal (`productos.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`.
-- **Nota (despacho):** el registro de entrega (`registrar_despacho_cliente_radar`) no requiere que el front clasifique completo/parcial; recibe `cantidad_despachada`. Si el total despachado de la orden es `0`, el SP pasa la orden a `devuelta`; si hay cantidades > 0 y no quedan pendientes, pasa a `por_liquidar`.
+- **Descripción:** Aprueba el radar (`status_radar = true`), liquida los envases entregados (`CEIL(cantidad_despachada * unidades_por_contenedor)`) y envases retirados acreditándolos al estado de cuenta del cliente (`saldo_contenedores_clientes`), restituye la mercancía no entregada con movimiento doble (descuenta `inventario_movil` e incrementa `inventario_almacen.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`. El bloqueo por políticas de crédito al aprobar está desactivado temporalmente (`clientes_deshabilitados_credito` = 0).
+- **Nota (despacho):** el registro de entrega (`registrar_despacho_cliente_radar`) no requiere que el front clasifique completo/parcial; recibe `cantidad_despachada`. Si el total despachado de la orden es `0`, el SP pasa la orden a `devuelta`; si hay cantidades > 0 y no quedan pendientes, pasa a `por_liquidar`. Temporalmente el SP permite despacho aunque el cliente tenga crédito bloqueado.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
@@ -913,8 +913,9 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "data": {
       "radar_id": "f1e2d3c4-b5a6-7890-1234-567890abcdef",
       "status_radar": true,
-      "aprobado": true,
-      "contenedores_procesados": 15,
+      "contenedores_entregados_procesados": 25,
+      "contenedores_retirados_procesados": 15,
+      "clientes_deshabilitados_credito": 0,
       "ordenes_anuladas": 2,
       "inventario_reintegrado": [
         { "producto_id": "...", "codigo_producto": "HAR-001", "nombre_producto": "Harina PAN", "cantidad_devuelta": 50 }
@@ -981,6 +982,44 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 - **Respuesta esperada en `data` (Éxito):**
   ```json
   true
+  ```
+
+### 2.38. Solicitar Aprobación del Radar (`solicita_aprobar_radar`)
+- **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
+- **Descripción:** Aprueba y cierra un radar de despacho (`status_radar = true`). Ejecuta de forma atómica:
+  1. Registra movimientos de contenedores/envases entregados y retirados en `movimientos_contenedores` y actualiza `saldo_contenedores_clientes`.
+  2. **Movimiento Doble de Inventario:** Restituye la mercancía no despachada (órdenes devueltas), **descontándola del inventario móvil del camión (`inventario_movil`)** e **incrementando de vuelta el stock en el almacén principal (`inventario_almacen.stock_disponible`)**.
+  3. Transiciona las órdenes completamente devueltas a estado `anulada`.
+  4. Mantiene activos a todos los clientes involucrados sin aplicar bloqueos morosos temporales.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
+    p_radar_id: 'e1f2a3b4-c5d6-7890-ef01-234567890abc'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, inventario restituido a almacén y órdenes devueltas anuladas.",
+    "data": {
+      "radar_id": "e1f2a3b4-c5d6-7890-ef01-234567890abc",
+      "status_radar": true,
+      "contenedores_entregados_procesados": 12,
+      "contenedores_retirados_procesados": 8,
+      "clientes_deshabilitados_credito": 0,
+      "ordenes_anuladas": 1,
+      "inventario_reintegrado": [
+        {
+          "producto_id": "d4e5f6a7-b8c9-0123-def0-4567890abcde",
+          "codigo_producto": "PROD-001",
+          "nombre_producto": "Harina Pan 1kg",
+          "cantidad_devuelta": 5
+        }
+      ]
+    },
+    "error": null
+  }
   ```
 
 ---

@@ -240,7 +240,8 @@ export function RadarEntregaForm({
     router.refresh();
   }
 
-  const bloqueadoCredito = orden.despacho_permitido === false;
+  // Temporal (00931f3): bypass de crédito en radar — el SP también fuerza TRUE.
+  const bloqueadoCredito = false;
 
   if (bloqueadoCredito) {
     return (

@@ -27,7 +27,7 @@ export function RadarAprobarButton({
 
   function onClick() {
     const ok = window.confirm(
-      "¿Aprobar este radar?\nSe acreditarán vacíos retirados, se restituirá inventario no despachado al almacén y las órdenes de vuelta pasarán a anuladas.",
+      "¿Aprobar este radar?\nSe acreditarán vacíos entregados y retirados, se restituirá inventario no despachado (móvil → almacén) y las órdenes de vuelta pasarán a anuladas.",
     );
     if (!ok) return;
 
@@ -39,8 +39,13 @@ export function RadarAprobarButton({
         setError(result.error);
         return;
       }
-      const extra = result.data
-        ? ` Contenedores: ${result.data.contenedores_procesados ?? 0}. Órdenes anuladas: ${result.data.ordenes_anuladas ?? 0}.`
+      const d = result.data;
+      const entregados =
+        d?.contenedores_entregados_procesados ?? d?.contenedores_procesados ?? 0;
+      const retirados = d?.contenedores_retirados_procesados ?? 0;
+      const anuladas = d?.ordenes_anuladas ?? 0;
+      const extra = d
+        ? ` Entregados: ${entregados}. Retirados: ${retirados}. Órdenes anuladas: ${anuladas}.`
         : "";
       setSuccess(
         (result.message ?? "Radar aprobado exitosamente.") + extra,

@@ -380,9 +380,9 @@ export async function reportarIncidenciaRadarAction(input: {
 }
 
 /**
- * INTEGRACION-RPC §2.33 — `solicita_aprobar_radar`.
- * Gerencia/admin cierra el radar: acredita vacíos, restituye inventario
- * no despachado y anula órdenes en estado `devuelta`.
+ * INTEGRACION-RPC §2.33 / §2.38 — `solicita_aprobar_radar`.
+ * Gerencia/admin cierra el radar: acredita vacíos entregados/retirados,
+ * restituye inventario no despachado y anula órdenes en estado `devuelta`.
  */
 export async function solicitaAprobarRadarAction(
   radarId: string,
@@ -393,8 +393,13 @@ export async function solicitaAprobarRadarAction(
       data?: {
         radar_id?: string;
         status_radar?: boolean;
+        contenedores_entregados_procesados?: number;
+        contenedores_retirados_procesados?: number;
+        clientes_deshabilitados_credito?: number;
+        /** @deprecated usar contenedores_retirados_procesados */
         contenedores_procesados?: number;
         ordenes_anuladas?: number;
+        inventario_reintegrado?: unknown[];
       };
     }
   | { ok: false; error: string; code?: string }
@@ -421,8 +426,12 @@ export async function solicitaAprobarRadarAction(
   const response = await callDbProcedure<{
     radar_id?: string;
     status_radar?: boolean;
+    contenedores_entregados_procesados?: number;
+    contenedores_retirados_procesados?: number;
+    clientes_deshabilitados_credito?: number;
     contenedores_procesados?: number;
     ordenes_anuladas?: number;
+    inventario_reintegrado?: unknown[];
   }>("solicita_aprobar_radar", { p_radar_id: id });
 
   if (!response.success) {

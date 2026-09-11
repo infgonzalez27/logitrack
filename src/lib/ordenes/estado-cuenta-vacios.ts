@@ -72,10 +72,13 @@ function agregarEntregadosPorContenedor(
     const p = productoDeLinea(d);
     const cid = contenedorIdDeLinea(d);
     if (!cid) continue;
+    // Misma fórmula que solicita_aprobar_radar (DB-033):
+    // CEIL(cantidad_despachada * unidades_por_contenedor)
     const unidades = Math.max(1, Number(p?.unidades_por_contenedor) || 1);
     const cantidad =
       Number(d.cantidad_despachada) || Number(d.cantidad_solicitada) || 0;
-    const vacios = Math.floor(cantidad / unidades);
+    if (cantidad <= 0) continue;
+    const vacios = Math.ceil(cantidad * unidades);
     if (vacios <= 0) continue;
     map.set(cid, (map.get(cid) ?? 0) + vacios);
   }
