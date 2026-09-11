@@ -6,3 +6,6 @@
 # 5. Mantén el cambio del estado de la orden que pasé 'por_liquidar' como está actualmente
 
 Hoy tengo que presentar este proyecto hasta donde está y no quiero que ningún cliente quede desactivado, que le sigan haciendo ordenes de distribucion
+
+## Edición de ordenes de distribucion
+Las ordenes de distribución se crean por defecto en estado de aprobación, programa para que una orden bajo el estado de 'aprobada' se puedan editar

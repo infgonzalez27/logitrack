@@ -1,3 +1,6 @@
+-- Migration: 20260911133000_permitir_edicion_ordenes_aprobadas.sql
+-- Description: Permitir la actualización y edición de órdenes de distribución que estén en estado 'aprobada' (además de 'borrador').
+
 CREATE OR REPLACE FUNCTION public.actualiza_orden_distribucion_segun_correlativo(
     p_correlativo INT,
     p_header JSONB,
@@ -104,6 +107,13 @@ BEGIN
     WHERE fecha_tasa = v_fecha_tasa;
 
     IF NOT FOUND THEN
+        SELECT tasa_cambio INTO v_tasa_cambio
+        FROM public.tasa_cambio
+        ORDER BY fecha_tasa DESC
+        LIMIT 1;
+    END IF;
+
+    IF v_tasa_cambio IS NULL THEN
         RETURN json_build_object(
             'success', false,
             'data', NULL,
@@ -221,3 +231,5 @@ EXCEPTION WHEN OTHERS THEN
     );
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.actualiza_orden_distribucion_segun_correlativo TO authenticated, service_role;
