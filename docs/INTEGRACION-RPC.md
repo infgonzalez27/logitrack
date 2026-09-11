@@ -1142,6 +1142,44 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   true
   ```
 
+### 2.38. Solicitar Aprobación del Radar (`solicita_aprobar_radar`)
+- **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
+- **Descripción:** Aprueba y cierra un radar de despacho (`status_radar = true`). Ejecuta de forma atómica:
+  1. Registra movimientos de contenedores/envases entregados y retirados en `movimientos_contenedores` y actualiza `saldo_contenedores_clientes`.
+  2. **Movimiento Doble de Inventario:** Restituye la mercancía no despachada (órdenes devueltas), **descontándola del inventario móvil del camión (`inventario_movil`)** e **incrementando de vuelta el stock en el almacén principal (`inventario_almacen.stock_disponible`)**.
+  3. Transiciona las órdenes completamente devueltas a estado `anulada`.
+  4. Mantiene activos a todos los clientes involucrados sin aplicar bloqueos morosos temporales.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
+    p_radar_id: 'e1f2a3b4-c5d6-7890-ef01-234567890abc'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, inventario restituido a almacén y órdenes devueltas anuladas.",
+    "data": {
+      "radar_id": "e1f2a3b4-c5d6-7890-ef01-234567890abc",
+      "status_radar": true,
+      "contenedores_entregados_procesados": 12,
+      "contenedores_retirados_procesados": 8,
+      "clientes_deshabilitados_credito": 0,
+      "ordenes_anuladas": 1,
+      "inventario_reintegrado": [
+        {
+          "producto_id": "d4e5f6a7-b8c9-0123-def0-4567890abcde",
+          "codigo_producto": "PROD-001",
+          "nombre_producto": "Harina Pan 1kg",
+          "cantidad_devuelta": 5
+        }
+      ]
+    },
+    "error": null
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend

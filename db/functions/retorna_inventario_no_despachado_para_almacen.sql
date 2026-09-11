@@ -35,13 +35,26 @@ BEGIN
         GROUP BY d.producto_id, p.codigo_producto, p.nombre
         HAVING SUM(GREATEST(0, d.cantidad_solicitada - COALESCE(d.cantidad_despachada, 0))) > 0
     LOOP
-        -- Reingresar el stock no despachado al almacén principal (productos.stock_disponible)
-        UPDATE public.productos
-        SET stock_disponible = stock_disponible + v_rec.total_devuelto,
-            updated_at = NOW()
-        WHERE id = v_rec.producto_id;
+        -- 1. Reingresar el stock no despachado al almacén principal (inventario_almacen.stock_disponible)
+        INSERT INTO public.inventario_almacen (producto_id, stock_disponible, stock_comprometido, updated_at)
+        VALUES (v_rec.producto_id, v_rec.total_devuelto, 0, NOW())
+        ON CONFLICT (producto_id)
+        DO UPDATE SET 
+            stock_disponible = public.inventario_almacen.stock_disponible + v_rec.total_devuelto,
+            updated_at = NOW();
 
-        -- Ajustar inventario móvil si hay camión asociado
+        -- Opcional: Actualizar también en la tabla productos si existiera la columna stock_disponible
+        BEGIN
+            UPDATE public.productos
+            SET stock_disponible = COALESCE(stock_disponible, 0) + v_rec.total_devuelto,
+                updated_at = NOW()
+            WHERE id = v_rec.producto_id;
+        EXCEPTION WHEN OTHERS THEN
+            -- Ignorar si la columna no existe en la tabla productos
+            NULL;
+        END;
+
+        -- 2. Descontar / rebajar del inventario móvil del camión la mercancía no entregada (devuelta)
         IF v_rec.camion_id IS NOT NULL THEN
             UPDATE public.inventario_movil
             SET cantidad_cargada = GREATEST(0, cantidad_cargada - v_rec.total_devuelto),

@@ -73,9 +73,14 @@ BEGIN
         FROM public.detalle_distribucion
         WHERE orden_id = p_orden_id
     LOOP
-        -- Descontar del comprometido del almacén principal (sale físicamente del centro de distribución)
+        -- Descontar del almacén principal (sale físicamente del centro de distribución)
         UPDATE public.inventario_almacen
-        SET stock_comprometido = stock_comprometido - v_item.cantidad_solicitada,
+        SET stock_comprometido = GREATEST(0, stock_comprometido - v_item.cantidad_solicitada),
+            stock_disponible = CASE 
+                WHEN stock_comprometido < v_item.cantidad_solicitada 
+                THEN GREATEST(0, stock_disponible - (v_item.cantidad_solicitada - stock_comprometido))
+                ELSE stock_disponible 
+            END,
             updated_at = NOW()
         WHERE producto_id = v_item.producto_id;
 

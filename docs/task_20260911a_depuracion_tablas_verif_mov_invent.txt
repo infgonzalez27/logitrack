@@ -1,0 +1,8 @@
+## depuracion de tablas
+# 1. Elimina todos los registros de las tablas de ordenes_distribucion, detalle_distribucion
+# 2. Elimina los registros de las tablas movimientos_contenedores, saldo_contenedores_clientes
+# 3. Por lo momentos quita la condición de las políticas de crédito, es decir, no dejes ningun cliente inactivo según las condiciones de pago cuando se apruebe al radar
+# 4. Verifica los movimientos de inventario cuando se carga al inventario movil, no lo está haciendo. El inventario del almacen se rebaja cuando se carga el camión y se recarga cuando una orden está devuelta al momento de aprobar el radar
+# 5. Mantén el cambio del estado de la orden que pasé 'por_liquidar' como está actualmente
+
+Hoy tengo que presentar este proyecto hasta donde está y no quiero que ningún cliente quede desactivado, que le sigan haciendo ordenes de distribucion

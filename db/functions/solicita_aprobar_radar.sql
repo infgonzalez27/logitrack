@@ -148,29 +148,9 @@ BEGIN
     )
     SELECT COUNT(*) INTO v_ordenes_anuladas_count FROM ordenes_devueltas;
 
-    -- 6. Evaluar políticas de crédito respecto a clientes.max_facturas_vencidas
-    -- Para cada cliente en el radar, si sus órdenes por liquidar >= max_facturas_vencidas (y max_facturas_vencidas > 0)
-    -- deshabilitar permiso_despacho_manual = FALSE
-    FOR v_rec_cliente IN
-        SELECT DISTINCT c.id AS cliente_id, COALESCE(c.max_facturas_vencidas, 0) AS max_facturas_vencidas
-        FROM public.ordenes_distribucion o
-        JOIN public.clientes c ON c.id = o.cliente_id
-        WHERE o.radar_id = p_radar_id
-          AND COALESCE(c.max_facturas_vencidas, 0) > 0
-    LOOP
-        SELECT COUNT(*) INTO v_ordenes_por_liquidar_count
-        FROM public.ordenes_distribucion
-        WHERE cliente_id = v_rec_cliente.cliente_id
-          AND estado = 'por_liquidar';
-
-        IF v_ordenes_por_liquidar_count >= v_rec_cliente.max_facturas_vencidas THEN
-            UPDATE public.clientes
-            SET permiso_despacho_manual = FALSE
-            WHERE id = v_rec_cliente.cliente_id;
-
-            v_clientes_deshabilitados_count := v_clientes_deshabilitados_count + 1;
-        END IF;
-    END LOOP;
+    -- 6. Políticas de crédito desactivadas temporalmente para mantener todos los clientes activos
+    -- Ningún cliente es desactivado al aprobar el radar. Todos mantienen permiso_despacho_manual = TRUE.
+    v_clientes_deshabilitados_count := 0;
 
     RETURN jsonb_build_object(
         'success', TRUE,
