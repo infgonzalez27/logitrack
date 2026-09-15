@@ -295,9 +295,34 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
       "total_cantidad_despachada": 0,
       "total_contenedores_retirados": 0
     },
-    "error": null
-  }
+### 2.3.4. Consulta de Lista de Radares Pendientes por Rango de Fechas (`retorna_lista_radars_pendiente_segun_rango_fechas`)
+- **Firma SQL:** `retorna_lista_radars_pendiente_segun_rango_fechas(p_despachador_id UUID DEFAULT NULL, p_fecha_inicial DATE DEFAULT NULL, p_fecha_limite DATE DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_radars_pendiente_segun_rango_fechas', {
+    p_despachador_id: 'uuid-del-despachador', // Opcional
+    p_fecha_inicial: '2026-09-01',
+    p_fecha_limite: '2026-09-15'
+  });
   ```
+- **Notas de Comportamiento:**
+  - Retorna únicamente los radares en estado **pendiente** (`status_radar = FALSE`).
+  - Mismos parámetros y estructura de retorno que `retorna_lista_radars_segun_rango_fechas`.
+
+### 2.3.5. Consulta de Lista de Radares Aprobados por Rango de Fechas (`retorna_lista_radars_aprobado_segun_rango_fechas`)
+- **Firma SQL:** `retorna_lista_radars_aprobado_segun_rango_fechas(p_despachador_id UUID DEFAULT NULL, p_fecha_inicial DATE DEFAULT NULL, p_fecha_limite DATE DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_radars_aprobado_segun_rango_fechas', {
+    p_despachador_id: 'uuid-del-despachador', // Opcional
+    p_fecha_inicial: '2026-09-01',
+    p_fecha_limite: '2026-09-15'
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Retorna únicamente los radares en estado **aprobado** (`status_radar = TRUE`).
+  - Mismos parámetros y estructura de retorno que `retorna_lista_radars_segun_rango_fechas`.
+
 
 
 
