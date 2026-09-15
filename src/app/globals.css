@@ -491,6 +491,13 @@ h4 {
     border: 0 !important;
     border-radius: 0 !important;
     font-size: 10px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .lt-ticket-copy + .lt-ticket-copy {
+    break-before: page;
+    page-break-before: always;
   }
 
   .lt-ticket__big {

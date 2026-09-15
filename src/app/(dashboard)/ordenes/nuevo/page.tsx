@@ -9,13 +9,28 @@ import { retornaUltimaTasaCambioAction } from "@/lib/actions/tasa-cambio";
 import { createClient } from "@/lib/supabase/server";
 import { NuevaOrdenForm } from "./nueva-orden-form";
 
-export default async function NuevaOrdenPage() {
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export default async function NuevaOrdenPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cliente_id?: string; volver?: string }>;
+}) {
   const [profile, user] = await Promise.all([
     getCurrentProfile(),
     getSessionUser(),
   ]);
   const rol = getRoleNameFromProfile(profile);
   if (!canCreateOrden(rol)) redirect("/ordenes");
+
+  const sp = await searchParams;
+  const clienteIdPrefill =
+    sp.cliente_id && UUID_RE.test(sp.cliente_id.trim())
+      ? sp.cliente_id.trim()
+      : null;
+  const volverHref =
+    sp.volver && sp.volver.startsWith("/") ? sp.volver : null;
 
   const supabase = await createClient();
 
@@ -25,7 +40,6 @@ export default async function NuevaOrdenPage() {
     .eq("activo", true)
     .order("razon_social");
 
-  // Cartera: vendedor solo ve clientes asignados (DB-016)
   if (rol === "vendedor" && user?.id) {
     clientesQuery = clientesQuery.eq("vendedor_id", user.id);
   }
@@ -52,16 +66,24 @@ export default async function NuevaOrdenPage() {
     ),
   );
 
+  const clienteOptions = (clientes ?? []).map((c) => ({
+    value: c.id,
+    label: c.razon_social,
+    despachador_id: c.despachador_id ?? null,
+    despachador_nombre: c.despachador_id
+      ? (despachadorNombrePorId.get(c.despachador_id) ?? null)
+      : null,
+  }));
+
+  const initialClienteId =
+    clienteIdPrefill &&
+    clienteOptions.some((c) => c.value === clienteIdPrefill)
+      ? clienteIdPrefill
+      : "";
+
   return (
     <NuevaOrdenForm
-      clientes={(clientes ?? []).map((c) => ({
-        value: c.id,
-        label: c.razon_social,
-        despachador_id: c.despachador_id ?? null,
-        despachador_nombre: c.despachador_id
-          ? (despachadorNombrePorId.get(c.despachador_id) ?? null)
-          : null,
-      }))}
+      clientes={clienteOptions}
       camiones={camiones.map((c) => ({
         value: c.id,
         label: c.placa,
@@ -70,6 +92,9 @@ export default async function NuevaOrdenPage() {
       productos={productos}
       productosError={productosResult.ok ? null : productosResult.error}
       tasaActual={tasaResult.ok ? tasaResult.tasa : null}
+      initialClienteId={initialClienteId || undefined}
+      lockCliente={Boolean(initialClienteId)}
+      volverHref={volverHref}
     />
   );
 }

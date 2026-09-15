@@ -159,22 +159,35 @@ export default async function OrdenImprimirPage({
         </p>
       ) : null}
 
-      <OrdenTicket
-        correlativo={orden.correlativo}
-        facturaOrigen={orden.factura_origen_numero}
-        estado={orden.estado as OrdenEstado}
-        creadaAt={orden.created_at}
-        clienteNombre={cliente?.razon_social ?? "—"}
-        clienteRif={cliente?.rif_nit ?? "—"}
-        clienteDireccion={cliente?.direccion_fiscal ?? "—"}
-        camionLabel={camion ? `${camion.placa} — ${camion.modelo}` : "—"}
-        choferNombre={choferNombre}
-        pesoKg={orden.peso_total_calculado}
-        lineas={lineas}
-        totalRecaudar={totalRecaudar}
-        estadoCuentaVacios={estadoCuentaVacios ?? undefined}
-        estadoCuentaProvisional={estadoCuentaProvisional}
-      />
+      {[0, 1].map((copy) => (
+        <div key={copy} className="lt-ticket-copy">
+          {copy === 1 ? (
+            <p className="lt-no-print mb-2 text-center text-xs text-lt-text-muted">
+              Copia 2 de 2
+            </p>
+          ) : (
+            <p className="lt-no-print mb-2 text-center text-xs text-lt-text-muted">
+              Copia 1 de 2
+            </p>
+          )}
+          <OrdenTicket
+            correlativo={orden.correlativo}
+            facturaOrigen={orden.factura_origen_numero}
+            estado={orden.estado as OrdenEstado}
+            creadaAt={orden.created_at}
+            clienteNombre={cliente?.razon_social ?? "—"}
+            clienteRif={cliente?.rif_nit ?? "—"}
+            clienteDireccion={cliente?.direccion_fiscal ?? "—"}
+            camionLabel={camion ? `${camion.placa} — ${camion.modelo}` : "—"}
+            choferNombre={choferNombre}
+            pesoKg={orden.peso_total_calculado}
+            lineas={lineas}
+            totalRecaudar={totalRecaudar}
+            estadoCuentaVacios={estadoCuentaVacios ?? undefined}
+            estadoCuentaProvisional={estadoCuentaProvisional}
+          />
+        </div>
+      ))}
     </div>
   );
 }

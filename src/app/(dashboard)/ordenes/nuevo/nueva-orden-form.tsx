@@ -40,6 +40,9 @@ export function NuevaOrdenForm({
   productos,
   productosError = null,
   tasaActual = null,
+  initialClienteId,
+  lockCliente = false,
+  volverHref = null,
 }: {
   clientes: ClienteOrdenOption[];
   camiones: Option[];
@@ -47,11 +50,14 @@ export function NuevaOrdenForm({
   productos: ProductoListaRpc[];
   productosError?: string | null;
   tasaActual?: TasaCambio | null;
+  initialClienteId?: string;
+  lockCliente?: boolean;
+  volverHref?: string | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [clienteId, setClienteId] = useState("");
+  const [clienteId, setClienteId] = useState(initialClienteId ?? "");
   const [camionId, setCamionId] = useState("");
   const [fechaDespacho, setFechaDespacho] = useState(defaultFechaDespachoLocal);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
@@ -154,6 +160,17 @@ export function NuevaOrdenForm({
       <PageHeader
         title="Nueva orden de distribución"
         description="Estado inicial: borrador"
+        action={
+          volverHref ? (
+            <button
+              type="button"
+              onClick={() => router.push(volverHref)}
+              className="text-sm font-medium text-lt-primary hover:underline"
+            >
+              ← Volver a la visita
+            </button>
+          ) : null
+        }
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -170,6 +187,7 @@ export function NuevaOrdenForm({
               }))}
               value={clienteId}
               onChange={(e) => setClienteId(e.target.value)}
+              disabled={lockCliente && Boolean(clienteId)}
             />
             <Select
               label="Camión"
