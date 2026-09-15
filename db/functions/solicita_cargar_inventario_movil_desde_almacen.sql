@@ -152,13 +152,13 @@ BEGIN
           AND od.estado = 'en_transito';
     END IF;
 
-    -- 6. Marcar carga_inventario_movil = TRUE en la tabla radars (radars SÍ tiene updated_at)
+    -- 6. Marcar carga_inventario_movil = TRUE en la tabla radars
     IF v_radar_id IS NOT NULL THEN
         UPDATE public.radars
-        SET carga_inventario_movil = TRUE,
-            updated_at = NOW()
+        SET carga_inventario_movil = TRUE
         WHERE id = v_radar_id;
     END IF;
+
 
     -- 7. Respuesta Exitosa
     RETURN jsonb_build_object(

@@ -182,10 +182,10 @@ BEGIN
     -- 5. Cambiar carga_inventario_movil = FALSE en radars
     IF v_radar_id IS NOT NULL THEN
         UPDATE public.radars
-        SET carga_inventario_movil = FALSE,
-            updated_at = NOW()
+        SET carga_inventario_movil = FALSE
         WHERE id = v_radar_id;
     END IF;
+
 
     -- 6. Respuesta Exitosa
     RETURN jsonb_build_object(

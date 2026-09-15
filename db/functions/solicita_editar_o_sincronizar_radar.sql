@@ -104,9 +104,9 @@ BEGIN
     UPDATE public.radars
     SET total_cantidad_solicitada = v_tot_solicitada,
         total_cantidad_despachada = v_tot_despachada,
-        total_contenedores_retirados = v_tot_retirados,
-        updated_at = NOW()
+        total_contenedores_retirados = v_tot_retirados
     WHERE id = p_radar_id;
+
 
     RETURN jsonb_build_object(
         'success', TRUE,
