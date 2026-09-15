@@ -168,7 +168,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.3. Carga a Inventario Móvil (`cargar_inventario_movil`)
+### 2.3. Carga a Inventario Móvil por Orden (`cargar_inventario_movil`)
 - **Firma SQL:** `cargar_inventario_movil(p_orden_id UUID)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -187,6 +187,52 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     "error": null
   }
   ```
+
+### 2.3.1. Carga Consolidada a Inventario Móvil desde Resumen de Radar (`solicita_cargar_inventario_movil_desde_almacen`)
+- **Firma SQL:** `solicita_cargar_inventario_movil_desde_almacen(p_camion_id UUID, p_resumen_productos JSONB, p_radar_id UUID DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_cargar_inventario_movil_desde_almacen', {
+    p_camion_id: 'uuid-del-camion',
+    p_resumen_productos: [
+      {
+        producto_id: 'uuid-del-producto-1',
+        codigo_producto: '1187',
+        nombre_producto: 'Zulia Lata 295 ml',
+        cantidad_solicitada: 22,
+        cantidad_despachada: 22
+      },
+      {
+        producto_id: 'uuid-del-producto-2',
+        codigo_producto: '1086',
+        nombre_producto: 'Zulia Retornable 222 ml',
+        cantidad_solicitada: 15,
+        cantidad_despachada: 15
+      }
+    ],
+    p_radar_id: 'uuid-del-radar' // Opcional
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Toma `cantidad_solicitada` por cada producto para descontar del `inventario_almacen` e incrementar `cantidad_cargada` en `inventario_movil`.
+  - Actualiza automáticamente el estado del camión a `'en_ruta'`.
+  - Actualiza el estado de las órdenes asociadas a `'en_transito'` y fija `fecha_despacho = NOW()`.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Carga a inventario móvil procesada exitosamente desde el almacén.",
+    "data": {
+      "camion_id": "uuid-del-camion",
+      "radar_id": "uuid-del-radar",
+      "total_productos_cargados": 2,
+      "unidades_totales": 37,
+      "ordenes_despachadas": 5
+    },
+    "error": null
+  }
+  ```
+
 
 ### 2.4. Registro de Entregas y Devoluciones en Ruta (`registrar_entrega_detalle`)
 - **Firma SQL:** `registrar_entrega_detalle(p_detalle_id UUID, p_cantidad_despachada INT, p_estado_entrega TEXT, p_motivo_rechazo TEXT)`

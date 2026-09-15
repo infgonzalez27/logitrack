@@ -1,0 +1,48 @@
+## Cargar inventario movil desde radar
+Se nos ha solicitado que al descargar productos del almacén al inventario movil que sea desde el resumen del radar
+y no desde la orden de distribución.
+Lo ideal es tener un total de productos, cantidad_solicitada por id_producto y que cuando desde el front se solicite cargar el invenario movil
+se toma el total de cantidad_solicitada por id_productos.
+
+Prepara una Funtions titulada solicita_cargar_inventario_movil_desde_almacen(camion_id)
+como se te pasarían los demás parámetros, por un JSON? Asesorame tu como se te pasan los demás parametros
+Este sería el JSON que prepara el FRONT
+{
+  "resumen_productos": [
+    {
+      "producto_id": "uuid-del-producto",
+      "codigo_producto": "1187",
+      "nombre_producto": "Zulia Lata 295 ml",
+      "cantidad_solicitada": 22,
+      "cantidad_despachada": 22
+    },
+    {
+      "producto_id": "uuid-del-producto",
+      "codigo_producto": "1F71202A",
+      "nombre_producto": "Morena Tipo Lager lata 355 ml",
+      "cantidad_solicitada": 3,
+      "cantidad_despachada": 3
+    },
+    {
+      "producto_id": "uuid-del-producto",
+      "codigo_producto": "1086",
+      "nombre_producto": "Zulia Retornable 222 ml",
+      "cantidad_solicitada": 15,
+      "cantidad_despachada": 15
+    }
+  ]
+}
+
+## Reglas
+# 1. La cantidad de productos a cargar en el inventario movil viene de la suma del campo cantidad_solicidata por id_productos, 
+ya que al momento de hacer la carga en el inventario movil no hay despachos, entonces no tomar en cuenta el campo de cantidad_despachada}
+el JSON del ejemplo viene como resultado después del despacho.
+#2. Cuando el despachador actualize la cantidad despachada, que siempre debe ser la misma que la cargada, esta cantidad debe descontarse del 
+inventario movil y no del almacén. Verifica que eso esté así en la Functions correspondiente
+
+## Preguntas planteadas
+¿Se requiere que la función marque automáticamente la fecha de despacho (fecha_despacho = NOW()) en las ordenes_distribucion pertenecientes al radar / camión?
+Si
+
+Aceptamos tu recomendación de implementar la Opcion 1 con soporte híbrido (Opción 3) pero toma en cuenta que el Frontend siempre te va a enviar p_resumen_productos JSONB 
+con la información que necesitas.
