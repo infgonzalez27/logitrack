@@ -48,7 +48,7 @@ BEGIN
         SELECT radar_id INTO v_radar_id
         FROM public.ordenes_distribucion
         WHERE camion_id = p_camion_id AND radar_id IS NOT NULL
-        ORDER BY updated_at DESC
+        ORDER BY created_at DESC
         LIMIT 1;
     END IF;
 
@@ -115,24 +115,21 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 3. Actualizar estado del camión a 'en_ruta'
+    -- 3. Actualizar estado del camión a 'en_ruta' (sin updated_at)
     UPDATE public.camiones
     SET estado = 'en_ruta'
     WHERE id = p_camion_id;
 
-
-    -- 4. Transicionar órdenes vinculadas a 'en_transito' (SIN MODIFICAR fecha_despacho)
+    -- 4. Transicionar órdenes vinculadas a 'en_transito' (sin updated_at y sin modificar fecha_despacho)
     IF v_radar_id IS NOT NULL THEN
         UPDATE public.ordenes_distribucion
-        SET estado = 'en_transito',
-            updated_at = NOW()
+        SET estado = 'en_transito'
         WHERE radar_id = v_radar_id AND estado = 'aprobada';
         
         GET DIAGNOSTICS v_ordenes_actualizadas = ROW_COUNT;
     ELSE
         UPDATE public.ordenes_distribucion
-        SET estado = 'en_transito',
-            updated_at = NOW()
+        SET estado = 'en_transito'
         WHERE camion_id = p_camion_id AND estado = 'aprobada';
         
         GET DIAGNOSTICS v_ordenes_actualizadas = ROW_COUNT;
@@ -155,7 +152,7 @@ BEGIN
           AND od.estado = 'en_transito';
     END IF;
 
-    -- 6. Marcar carga_inventario_movil = TRUE en la tabla radars
+    -- 6. Marcar carga_inventario_movil = TRUE en la tabla radars (radars SÍ tiene updated_at)
     IF v_radar_id IS NOT NULL THEN
         UPDATE public.radars
         SET carga_inventario_movil = TRUE,
