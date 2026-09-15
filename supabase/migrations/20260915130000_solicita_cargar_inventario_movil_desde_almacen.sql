@@ -109,9 +109,9 @@ BEGIN
 
     -- 3. Actualizar estado del camión a 'en_ruta'
     UPDATE public.camiones
-    SET estado = 'en_ruta',
-        updated_at = NOW()
+    SET estado = 'en_ruta'
     WHERE id = p_camion_id;
+
 
     -- 4. Transicionar órdenes vinculadas a 'en_transito' y fijar fecha_despacho = NOW()
     IF p_radar_id IS NOT NULL THEN

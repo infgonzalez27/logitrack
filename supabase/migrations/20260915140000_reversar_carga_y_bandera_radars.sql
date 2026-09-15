@@ -118,9 +118,9 @@ BEGIN
     END LOOP;
 
     UPDATE public.camiones
-    SET estado = 'en_ruta',
-        updated_at = NOW()
+    SET estado = 'en_ruta'
     WHERE id = p_camion_id;
+
 
     IF v_radar_id IS NOT NULL THEN
         UPDATE public.ordenes_distribucion
@@ -362,9 +362,9 @@ BEGIN
     END IF;
 
     UPDATE public.camiones
-    SET estado = 'asignado',
-        updated_at = NOW()
+    SET estado = 'asignado'
     WHERE id = p_camion_id;
+
 
     IF v_radar_id IS NOT NULL THEN
         UPDATE public.radars
