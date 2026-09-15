@@ -5,6 +5,7 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
 import { getRoleNameFromProfile, type RolNombre } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
+import type { ContenedorResumenDespacho } from "@/lib/ordenes/estado-cuenta-vacios";
 import type {
   RadarCabecera,
   RadarDetalleReporte,
@@ -87,11 +88,18 @@ function revalidateRadarPaths(ordenId: string) {
   revalidatePath(`/ordenes/${ordenId}`);
 }
 
-/** INTEGRACION-RPC §2.17 — `registrar_despacho_cliente_radar` (bajo nivel). */
+/** INTEGRACION-RPC §2.17 / §2.4 — `registrar_despacho_cliente_radar` (bajo nivel). */
 export async function registrarDespachoClienteRadarAction(input: {
   orden_id: string;
   detalles: RadarDetalleInput[];
-}): Promise<{ ok: true; estado?: string } | { ok: false; error: string; code?: string }> {
+}): Promise<
+  | {
+      ok: true;
+      estado?: string;
+      contenedores_resumen?: ContenedorResumenDespacho[];
+    }
+  | { ok: false; error: string; code?: string }
+> {
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
   if (rol !== "despachador") {
@@ -138,6 +146,7 @@ export async function registrarDespachoClienteRadarAction(input: {
     nuevo_estado_orden?: string;
     nuevo_estado?: string;
     total_despachado?: number;
+    contenedores_resumen?: ContenedorResumenDespacho[];
   }>("registrar_despacho_cliente_radar", {
     p_orden_id: ordenId,
     p_detalles_json: input.detalles.map((linea) => ({
@@ -161,7 +170,20 @@ export async function registrarDespachoClienteRadarAction(input: {
   revalidateRadarPaths(ordenId);
   const estado =
     response.data?.nuevo_estado ?? response.data?.nuevo_estado_orden;
-  return { ok: true, estado };
+  const resumenRaw = response.data?.contenedores_resumen;
+  const contenedores_resumen = Array.isArray(resumenRaw)
+    ? resumenRaw
+        .map((r) => ({
+          contenedor_id: String(r.contenedor_id ?? "").trim(),
+          saldo_anterior: Number(r.saldo_anterior) || 0,
+          cantidad_entregada: Number(r.cantidad_entregada) || 0,
+          cantidad_retirada: Number(r.cantidad_retirada) || 0,
+          saldo_actualizado: Number(r.saldo_actualizado) || 0,
+        }))
+        .filter((r) => r.contenedor_id)
+    : [];
+
+  return { ok: true, estado, contenedores_resumen };
 }
 
 /**
@@ -177,7 +199,12 @@ export async function finalizarEntregaRadarAction(input: {
   entregas: RadarEntregaLineaInput[];
   retiros: RadarRetiroInput[];
 }): Promise<
-  | { ok: true; estado?: string; deVuelta?: boolean }
+  | {
+      ok: true;
+      estado?: string;
+      deVuelta?: boolean;
+      contenedores_resumen?: ContenedorResumenDespacho[];
+    }
   | { ok: false; error: string; code?: string }
 > {
   const profile = await getCurrentProfile();
@@ -328,6 +355,7 @@ export async function finalizarEntregaRadarAction(input: {
     ok: true,
     estado: registered.estado,
     deVuelta,
+    contenedores_resumen: registered.contenedores_resumen ?? [],
   };
 }
 

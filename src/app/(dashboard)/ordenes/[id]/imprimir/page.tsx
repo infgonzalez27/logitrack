@@ -3,11 +3,43 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { getOrdenDistribucionDetalle } from "@/lib/data/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
-import { retornaEstadoCuentaVaciosOrden } from "@/lib/ordenes/estado-cuenta-vacios";
+import {
+  lineasDesdeContenedoresResumen,
+  retornaEstadoCuentaVaciosOrden,
+  type ContenedorResumenDespacho,
+} from "@/lib/ordenes/estado-cuenta-vacios";
 import { joinOne } from "@/lib/supabase/join";
 import { OrdenTicket } from "@/components/print/orden-ticket";
 import { OrdenPrintControls } from "./orden-print-controls";
 import type { OrdenEstado } from "@/types/database";
+
+function parseVaciosQuery(
+  raw: string | undefined,
+): ContenedorResumenDespacho[] | null {
+  if (!raw?.trim()) return null;
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/");
+    const padLen = (4 - (padded.length % 4)) % 4;
+    const b64 = padded + "=".repeat(padLen);
+    const json = Buffer.from(b64, "base64").toString("utf8");
+    const parsed = JSON.parse(json) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    return parsed
+      .map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          contenedor_id: String(row.contenedor_id ?? "").trim(),
+          saldo_anterior: Number(row.saldo_anterior) || 0,
+          cantidad_entregada: Number(row.cantidad_entregada) || 0,
+          cantidad_retirada: Number(row.cantidad_retirada) || 0,
+          saldo_actualizado: Number(row.saldo_actualizado) || 0,
+        };
+      })
+      .filter((r) => r.contenedor_id);
+  } catch {
+    return null;
+  }
+}
 
 export default async function OrdenImprimirPage({
   params,
@@ -18,10 +50,15 @@ export default async function OrdenImprimirPage({
     de_vuelta?: string;
     estado_cuenta?: string;
     volver?: string;
+    vacios?: string;
   }>;
 }) {
   const { id } = await params;
-  const { de_vuelta, volver: volverParam } = await searchParams;
+  const {
+    de_vuelta,
+    volver: volverParam,
+    vacios: vaciosParam,
+  } = await searchParams;
   const esDeVuelta = de_vuelta === "1" || de_vuelta === "true";
 
   const [user, profile] = await Promise.all([
@@ -82,14 +119,23 @@ export default async function OrdenImprimirPage({
 
   const totalRecaudar = lineas.reduce((sum, linea) => sum + linea.subtotal, 0);
 
-  const estadoCuenta = orden.cliente_id
-    ? await retornaEstadoCuentaVaciosOrden({
-        clienteId: orden.cliente_id,
-        ordenId: orden.id,
-        radarId: orden.radar_id ?? null,
-        detalle,
-      })
-    : null;
+  const resumenDespacho = parseVaciosQuery(vaciosParam);
+  let estadoCuentaVacios =
+    resumenDespacho && resumenDespacho.length
+      ? await lineasDesdeContenedoresResumen(resumenDespacho)
+      : null;
+  let estadoCuentaProvisional = false;
+
+  if (!estadoCuentaVacios?.length && orden.cliente_id) {
+    const estadoCuenta = await retornaEstadoCuentaVaciosOrden({
+      clienteId: orden.cliente_id,
+      ordenId: orden.id,
+      radarId: orden.radar_id ?? null,
+      detalle,
+    });
+    estadoCuentaVacios = estadoCuenta.lineas;
+    estadoCuentaProvisional = estadoCuenta.provisional;
+  }
 
   const volverHref =
     volverParam && volverParam.startsWith("/")
@@ -126,8 +172,8 @@ export default async function OrdenImprimirPage({
         pesoKg={orden.peso_total_calculado}
         lineas={lineas}
         totalRecaudar={totalRecaudar}
-        estadoCuentaVacios={estadoCuenta?.lineas}
-        estadoCuentaProvisional={estadoCuenta?.provisional}
+        estadoCuentaVacios={estadoCuentaVacios ?? undefined}
+        estadoCuentaProvisional={estadoCuentaProvisional}
       />
     </div>
   );

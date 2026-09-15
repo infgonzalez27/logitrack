@@ -193,11 +193,23 @@ export function RadarEntregaForm({
       return;
     }
 
-    // Reimprimir con estado de cuenta de vacíos (proyectado hasta aprobar radar).
+    // Ticket con estado de cuenta de vacíos del JSON del despacho (DB-036).
     const qs = new URLSearchParams({ estado_cuenta: "1" });
     if (result.deVuelta) qs.set("de_vuelta", "1");
     if (backHref.startsWith("/radar")) {
       qs.set("volver", backHref);
+    }
+    if (result.contenedores_resumen?.length) {
+      try {
+        const json = JSON.stringify(result.contenedores_resumen);
+        const b64 = btoa(unescape(encodeURIComponent(json)))
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/g, "");
+        qs.set("vacios", b64);
+      } catch {
+        // Si falla el encode, la página de impresión lee movimientos asentados.
+      }
     }
     router.push(`/ordenes/${orden.orden_id}/imprimir?${qs.toString()}`);
     router.refresh();

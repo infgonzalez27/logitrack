@@ -306,7 +306,54 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   ```
 - **Notas:** Solo `status_radar = TRUE`. Misma forma de retorno que §2.30.
 
-### 2.4. Registro de Entregas y Devoluciones en Ruta (`registrar_entrega_detalle`)
+### 2.4. Registrar Despacho Cliente en Radar (`registrar_despacho_cliente_radar`)
+- **Firma SQL:** `registrar_despacho_cliente_radar(p_orden_id UUID, p_detalles_json JSONB)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_despacho_cliente_radar', {
+    p_orden_id: 'uuid-de-la-orden',
+    p_detalles_json: [
+      {
+        detalle_id: 'uuid-del-detalle-linea',
+        cantidad_despachada: 10,
+        estado_entrega: 'entregado',
+        motivo_rechazo: null,
+        contenedores_retirados: 2,
+        contenedor_id: 'uuid-contenedor-opcional'
+      }
+    ]
+  });
+  ```
+- **Notas de Comportamiento (DB-036):**
+  - Asienta atómicamente en `movimientos_contenedores` e incrementa/decrementa `saldo_contenedores_clientes` **al confirmar el despacho** (ya no en `solicita_aprobar_radar`).
+  - Para cada SKU con `contenedor_id`, contenedores entregados = `CEIL(cantidad_despachada / GREATEST(unidades_por_contenedor, 1))`.
+  - Es **idempotente**: si se re-edita la entrega, revierte los movimientos previos de esa orden antes de asentar los nuevos.
+  - Retorna `contenedores_resumen` (`saldo_anterior`, `cantidad_entregada`, `cantidad_retirada`, `saldo_actualizado`) para mostrar en UI.
+  - Conserva reglas de crédito/excepción gerencial (§2.17 / DB-027); el bloqueo por crédito puede estar temporalmente desactivado en el SP.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Despacho registrado en radar exitosamente.",
+    "data": {
+      "orden_id": "uuid-de-la-orden",
+      "nuevo_estado": "por_liquidar",
+      "total_despachado": 10,
+      "contenedores_resumen": [
+        {
+          "contenedor_id": "uuid-del-contenedor",
+          "saldo_anterior": 15,
+          "cantidad_entregada": 10,
+          "cantidad_retirada": 2,
+          "saldo_actualizado": 23
+        }
+      ]
+    },
+    "error": null
+  }
+  ```
+
+### 2.4.1. Registrar Entrega Detalle Lineal (`registrar_entrega_detalle`)
 - **Firma SQL:** `registrar_entrega_detalle(p_detalle_id UUID, p_cantidad_despachada INT, p_estado_entrega TEXT, p_motivo_rechazo TEXT)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -782,9 +829,15 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 - **UI recomendada:** si `despacho_permitido === false`, bloquear “Iniciar entrega” / formulario de captura y mostrar `motivo_bloqueo`. Gerencia libera con §2.23.
 ### 2.17. Registrar Despacho de Cliente en Radar (`registrar_despacho_cliente_radar`)
 - **Firma SQL:** `registrar_despacho_cliente_radar(p_orden_id UUID, p_detalles_json JSONB)`
+- **Alias documental de §2.4** (misma función; aquí se detallan notas de crédito).
 - **Notas (DB-027):**
   - Rechaza con `DESPACHO_BLOQUEADO_CREDITO` si el cliente está bloqueado por crédito y no tiene excepción gerencial.
   - Al completar la entrega, si `excepcion_despacho_gerencia = TRUE`, se desactiva automáticamente a `FALSE` (un solo uso).
+- **Notas (DB-036):**
+  - Al confirmar el despacho asienta vacíos en `movimientos_contenedores` / `saldo_contenedores_clientes`.
+  - Entregados = `CEIL(cantidad_despachada / GREATEST(unidades_por_contenedor, 1))`.
+  - Idempotente ante re-edición de la misma orden.
+  - Respuesta incluye `contenedores_resumen` para UI (ver §2.4).
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('registrar_despacho_cliente_radar', {
@@ -808,8 +861,19 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "message": "Despacho registrado en radar exitosamente.",
     "data": {
       "orden_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
-      "nuevo_estado_orden": "despachada"
-    }
+      "nuevo_estado": "por_liquidar",
+      "total_despachado": 8,
+      "contenedores_resumen": [
+        {
+          "contenedor_id": "e5f6a7b8-c9d0-1234-ef01-567890abcdef",
+          "saldo_anterior": 15,
+          "cantidad_entregada": 8,
+          "cantidad_retirada": 5,
+          "saldo_actualizado": 18
+        }
+      ]
+    },
+    "error": null
   }
   ```
 - **Respuesta esperada en `data` (Fallo - crédito / morosidad):**
@@ -1014,8 +1078,9 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.33. Aprobación Gerencial de Radar (`solicita_aprobar_radar`)
 - **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
-- **Descripción:** Aprueba el radar (`status_radar = true`), liquida los envases entregados (`CEIL(cantidad_despachada * unidades_por_contenedor)`) y envases retirados acreditándolos al estado de cuenta del cliente (`saldo_contenedores_clientes`), restituye la mercancía no entregada con movimiento doble (descuenta `inventario_movil` e incrementa `inventario_almacen.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`. El bloqueo por políticas de crédito al aprobar está desactivado temporalmente (`clientes_deshabilitados_credito` = 0).
-- **Nota (despacho):** el registro de entrega (`registrar_despacho_cliente_radar`) no requiere que el front clasifique completo/parcial; recibe `cantidad_despachada`. Si el total despachado de la orden es `0`, el SP pasa la orden a `devuelta`; si hay cantidades > 0 y no quedan pendientes, pasa a `por_liquidar`. Temporalmente el SP permite despacho aunque el cliente tenga crédito bloqueado.
+- **Descripción:** Aprueba el radar (`status_radar = true`), restituye la mercancía no entregada con movimiento doble (descuenta `inventario_movil` e incrementa `inventario_almacen.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`. El bloqueo por políticas de crédito al aprobar está desactivado temporalmente (`clientes_deshabilitados_credito` = 0).
+- **Nota (DB-036):** el asiento de vacíos entregados/retirados **ya no ocurre aquí**; se hace en `registrar_despacho_cliente_radar` (§2.4 / §2.17). Los contadores `contenedores_entregados_procesados` / `contenedores_retirados_procesados` en la respuesta quedan en `0` por compatibilidad.
+- **Nota (despacho):** el registro de entrega no requiere que el front clasifique completo/parcial; recibe `cantidad_despachada`. Si el total despachado de la orden es `0`, el SP pasa la orden a `devuelta`; si hay cantidades > 0 y no quedan pendientes, pasa a `por_liquidar`.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
@@ -1026,12 +1091,12 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   ```json
   {
     "success": true,
-    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, inventario restituido a almacén y órdenes devueltas anuladas.",
+    "message": "Radar aprobado exitosamente. Inventario restituido a almacén y órdenes devueltas anuladas.",
     "data": {
       "radar_id": "f1e2d3c4-b5a6-7890-1234-567890abcdef",
       "status_radar": true,
-      "contenedores_entregados_procesados": 25,
-      "contenedores_retirados_procesados": 15,
+      "contenedores_entregados_procesados": 0,
+      "contenedores_retirados_procesados": 0,
       "clientes_deshabilitados_credito": 0,
       "ordenes_anuladas": 2,
       "inventario_reintegrado": [
@@ -1104,10 +1169,10 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 ### 2.38. Solicitar Aprobación del Radar (`solicita_aprobar_radar`)
 - **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
 - **Descripción:** Aprueba y cierra un radar de despacho (`status_radar = true`). Ejecuta de forma atómica:
-  1. Registra movimientos de contenedores/envases entregados y retirados en `movimientos_contenedores` y actualiza `saldo_contenedores_clientes`.
-  2. **Movimiento Doble de Inventario:** Restituye la mercancía no despachada (órdenes devueltas), **descontándola del inventario móvil del camión (`inventario_movil`)** e **incrementando de vuelta el stock en el almacén principal (`inventario_almacen.stock_disponible`)**.
-  3. Transiciona las órdenes completamente devueltas a estado `anulada`.
-  4. Mantiene activos a todos los clientes involucrados sin aplicar bloqueos morosos temporales.
+  1. **Movimiento Doble de Inventario:** Restituye la mercancía no despachada (órdenes devueltas), **descontándola del inventario móvil del camión (`inventario_movil`)** e **incrementando de vuelta el stock en el almacén principal (`inventario_almacen.stock_disponible`)**.
+  2. Transiciona las órdenes completamente devueltas a estado `anulada`.
+  3. Mantiene activos a todos los clientes involucrados sin aplicar bloqueos morosos temporales.
+- **Nota (DB-036):** el asiento de vacíos se hizo en el despacho (§2.4 / §2.17); aquí `contenedores_*_procesados` = 0.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
@@ -1118,12 +1183,12 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   ```json
   {
     "success": true,
-    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, inventario restituido a almacén y órdenes devueltas anuladas.",
+    "message": "Radar aprobado exitosamente. Inventario restituido a almacén y órdenes devueltas anuladas.",
     "data": {
       "radar_id": "e1f2a3b4-c5d6-7890-ef01-234567890abc",
       "status_radar": true,
-      "contenedores_entregados_procesados": 12,
-      "contenedores_retirados_procesados": 8,
+      "contenedores_entregados_procesados": 0,
+      "contenedores_retirados_procesados": 0,
       "clientes_deshabilitados_credito": 0,
       "ordenes_anuladas": 1,
       "inventario_reintegrado": [

@@ -94,7 +94,7 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
     for (const v of data.estadoCuentaVacios) {
       lines.push(v.nombre);
       lines.push(
-        `  Ent:${formatNumber(v.entregado)} Ret:${formatNumber(v.retirado)} Saldo:${formatNumber(v.saldo_nuevo)}`,
+        `  Ant:${formatNumber(v.saldo_anterior)} Ent:${formatNumber(v.entregado)} Ret:${formatNumber(v.retirado)} Saldo:${formatNumber(v.saldo_nuevo)}`,
       );
     }
     if (data.estadoCuentaProvisional) {
@@ -205,6 +205,10 @@ export function OrdenTicket(data: OrdenTicketData) {
           estadoCuentaVacios.map((v) => (
             <div key={v.contenedor_id} className="lt-ticket__item">
               <p className="lt-ticket__strong">{v.nombre}</p>
+              <p className="lt-ticket__row">
+                <span>Saldo anterior</span>
+                <span>{formatNumber(v.saldo_anterior)}</span>
+              </p>
               <p className="lt-ticket__row">
                 <span>Entregado</span>
                 <span>{formatNumber(v.entregado)}</span>

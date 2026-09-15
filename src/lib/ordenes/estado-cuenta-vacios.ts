@@ -18,6 +18,15 @@ export type EstadoCuentaVacios = {
   provisional: boolean;
 };
 
+/** Fila de `contenedores_resumen` en `registrar_despacho_cliente_radar` (DB-036). */
+export type ContenedorResumenDespacho = {
+  contenedor_id: string;
+  saldo_anterior: number;
+  cantidad_entregada: number;
+  cantidad_retirada: number;
+  saldo_actualizado: number;
+};
+
 type DetalleVacios = {
   cantidad_despachada?: number | null;
   cantidad_solicitada?: number | null;
@@ -72,13 +81,13 @@ function agregarEntregadosPorContenedor(
     const p = productoDeLinea(d);
     const cid = contenedorIdDeLinea(d);
     if (!cid) continue;
-    // Misma fórmula que solicita_aprobar_radar (DB-033):
-    // CEIL(cantidad_despachada * unidades_por_contenedor)
+    // Misma fórmula que registrar_despacho_cliente_radar (DB-036):
+    // CEIL(cantidad_despachada / GREATEST(unidades_por_contenedor, 1))
     const unidades = Math.max(1, Number(p?.unidades_por_contenedor) || 1);
     const cantidad =
       Number(d.cantidad_despachada) || Number(d.cantidad_solicitada) || 0;
     if (cantidad <= 0) continue;
-    const vacios = Math.ceil(cantidad * unidades);
+    const vacios = Math.ceil(cantidad / unidades);
     if (vacios <= 0) continue;
     map.set(cid, (map.get(cid) ?? 0) + vacios);
   }
@@ -96,11 +105,9 @@ async function dbClient(): Promise<SupabaseClient> {
 /**
  * Estado de cuenta de vacíos para ticket.
  *
- * Importante: `saldo_contenedores_clientes` se consolida al liquidar / al
- * aprobar radar (retiros). Durante la ruta el crédito vive en
- * `movimientos_contenedores` (p. ej. al cargar/despachar). Por eso el ticket
- * prioriza la suma de movimientos y proyecta retiros del detalle hasta que
- * gerencia apruebe el radar.
+ * DB-036: al confirmar despacho, `registrar_despacho_cliente_radar` asienta
+ * movimientos y saldo. El ticket prioriza esos movimientos; si aún no hay
+ * asiento (orden sin despachar), proyecta desde el detalle.
  */
 export async function retornaEstadoCuentaVaciosOrden(input: {
   clienteId: string;
@@ -122,7 +129,7 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
     radarAprobado = Boolean(radar?.status_radar);
   }
 
-  // Fuente viva: movimientos (entregas al cargar + retiros ya oficializados).
+  // Fuente viva: movimientos (asentados al despachar — DB-036).
   const { data: movimientos } = await db
     .from("movimientos_contenedores")
     .select("orden_id, contenedor_id, cantidad_entregada, cantidad_retirada")
@@ -148,7 +155,10 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
     }
   }
 
-  // Fallback / complemento: tabla consolidada (liquidación / radar aprobado).
+  const asentadoEnDespacho =
+    entregadoOrdenMov.size > 0 || retiradoOrdenMov.size > 0;
+
+  // Fallback / complemento: tabla consolidada (ahora también se actualiza al despachar).
   const { data: saldos } = await db
     .from("saldo_contenedores_clientes")
     .select("contenedor_id, saldo_pendiente")
@@ -168,7 +178,6 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
     ...entregadosDetalle.keys(),
   ]);
 
-  // Envases de la orden aunque aún no haya movimiento/saldo.
   for (const d of input.detalle) {
     const cid = contenedorIdDeLinea(d);
     if (cid) ids.add(cid);
@@ -197,12 +206,13 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
         (entregadosDetalle.get(contenedor_id) ?? 0);
       const retiradoDetalle = retirosDetalle.get(contenedor_id) ?? 0;
       const retiradoMov = retiradoOrdenMov.get(contenedor_id) ?? 0;
-      // Hasta aprobar radar, los retiros viven en detalle, no en movimientos.
-      const retirado = Math.max(retiradoDetalle, retiradoMov);
+      const retirado = asentadoEnDespacho
+        ? retiradoMov || retiradoDetalle
+        : Math.max(retiradoDetalle, retiradoMov);
 
       const saldoMov = saldoMovById.get(contenedor_id);
       const saldoTabla = saldoTablaById.get(contenedor_id);
-      // Preferir movimientos si existen; si no, tabla; si no, entregado de esta orden.
+
       let saldo_anterior =
         saldoMov != null
           ? saldoMov
@@ -210,9 +220,8 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
             ? saldoTabla
             : entregado;
 
-      // Si hay movimientos pero aún no incluyen la entrega de esta orden
-      // (crédito best-effort falló), sumar el estimado del detalle.
       if (
+        !asentadoEnDespacho &&
         saldoMov != null &&
         (entregadoOrdenMov.get(contenedor_id) ?? 0) === 0 &&
         (entregadosDetalle.get(contenedor_id) ?? 0) > 0
@@ -220,12 +229,22 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
         saldo_anterior += entregadosDetalle.get(contenedor_id) ?? 0;
       }
 
-      const saldo_nuevo = radarAprobado
-        ? Math.max(
-            0,
-            saldoTabla != null ? saldoTabla : saldo_anterior - retiradoMov,
-          )
-        : Math.max(0, saldo_anterior - (retiradoDetalle - retiradoMov));
+      // Con asiento al despachar, el saldo consolidado ya refleja retiros.
+      const saldo_nuevo =
+        asentadoEnDespacho || radarAprobado
+          ? Math.max(
+              0,
+              saldoTabla != null
+                ? saldoTabla
+                : saldoMov != null
+                  ? saldoMov
+                  : saldo_anterior,
+            )
+          : Math.max(0, saldo_anterior - (retiradoDetalle - retiradoMov));
+
+      // Antes del asiento, saldo_anterior en movimientos incluye la entrega;
+      // para mostrar "saldo anterior" visual = saldo_nuevo + retirado - entregado
+      // no hace falta: el ticket usa entregado/retirado/saldo_nuevo.
 
       return {
         contenedor_id,
@@ -249,6 +268,55 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
   return {
     lineas,
     radarAprobado,
-    provisional: !radarAprobado && lineas.some((l) => l.retirado > 0),
+    // Ya no es provisional tras el asiento en despacho (DB-036).
+    provisional:
+      !asentadoEnDespacho &&
+      !radarAprobado &&
+      lineas.some((l) => l.retirado > 0),
   };
+}
+
+/** Convierte `contenedores_resumen` del RPC de despacho a líneas de ticket. */
+export async function lineasDesdeContenedoresResumen(
+  resumen: ContenedorResumenDespacho[],
+): Promise<EstadoCuentaVacioLinea[]> {
+  if (!resumen.length) return [];
+  const db = await dbClient();
+  const ids = [
+    ...new Set(
+      resumen
+        .map((r) => String(r.contenedor_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const nombres = new Map<string, string>();
+  if (ids.length) {
+    const { data: tipos } = await db
+      .from("tipos_contenedores")
+      .select("id, nombre, codigo")
+      .in("id", ids);
+    for (const t of tipos ?? []) {
+      const id = String(t.id);
+      nombres.set(
+        id,
+        t.codigo && String(t.codigo).trim()
+          ? `${t.codigo} — ${t.nombre}`
+          : String(t.nombre ?? id),
+      );
+    }
+  }
+  return resumen
+    .map((r) => {
+      const contenedor_id = String(r.contenedor_id ?? "").trim();
+      return {
+        contenedor_id,
+        nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
+        entregado: Number(r.cantidad_entregada) || 0,
+        saldo_anterior: Math.max(0, Number(r.saldo_anterior) || 0),
+        retirado: Number(r.cantidad_retirada) || 0,
+        saldo_nuevo: Math.max(0, Number(r.saldo_actualizado) || 0),
+      };
+    })
+    .filter((l) => l.contenedor_id)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
