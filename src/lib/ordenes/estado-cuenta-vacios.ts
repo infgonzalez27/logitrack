@@ -276,6 +276,84 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
   };
 }
 
+/** Lee el asiento que ya dejó el SP en movimientos de ESTA orden (sin recalcular). */
+export async function lineasDesdeMovimientosOrden(input: {
+  clienteId: string;
+  ordenId: string;
+}): Promise<EstadoCuentaVacioLinea[]> {
+  const db = await dbClient();
+  const { data: movimientos } = await db
+    .from("movimientos_contenedores")
+    .select("contenedor_id, cantidad_entregada, cantidad_retirada")
+    .eq("cliente_id", input.clienteId)
+    .eq("orden_id", input.ordenId);
+
+  if (!movimientos?.length) return [];
+
+  const byId = new Map<
+    string,
+    { entregado: number; retirado: number }
+  >();
+  for (const m of movimientos) {
+    const id = String(m.contenedor_id ?? "").trim();
+    if (!id) continue;
+    const prev = byId.get(id) ?? { entregado: 0, retirado: 0 };
+    prev.entregado += Number(m.cantidad_entregada) || 0;
+    prev.retirado += Number(m.cantidad_retirada) || 0;
+    byId.set(id, prev);
+  }
+
+  const { data: saldos } = await db
+    .from("saldo_contenedores_clientes")
+    .select("contenedor_id, saldo_pendiente")
+    .eq("cliente_id", input.clienteId)
+    .in("contenedor_id", [...byId.keys()]);
+
+  const saldoTabla = new Map<string, number>();
+  for (const s of saldos ?? []) {
+    saldoTabla.set(
+      String(s.contenedor_id),
+      Number(s.saldo_pendiente) || 0,
+    );
+  }
+
+  const nombres = new Map<string, string>();
+  const { data: tipos } = await db
+    .from("tipos_contenedores")
+    .select("id, nombre, codigo")
+    .in("id", [...byId.keys()]);
+  for (const t of tipos ?? []) {
+    const id = String(t.id);
+    nombres.set(
+      id,
+      t.codigo && String(t.codigo).trim()
+        ? `${t.codigo} — ${t.nombre}`
+        : String(t.nombre ?? id),
+    );
+  }
+
+  return [...byId.entries()]
+    .map(([contenedor_id, v]) => {
+      const saldo_nuevo = Math.max(
+        0,
+        saldoTabla.get(contenedor_id) ??
+          Math.max(0, v.entregado - v.retirado),
+      );
+      // saldo_anterior aproximado desde el movimiento de esta orden
+      const saldo_anterior = Math.max(0, saldo_nuevo - v.entregado + v.retirado);
+      return {
+        contenedor_id,
+        nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
+        entregado: v.entregado,
+        saldo_anterior,
+        retirado: v.retirado,
+        saldo_nuevo,
+      };
+    })
+    .filter((l) => l.entregado > 0 || l.retirado > 0 || l.saldo_nuevo > 0)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+}
+
 /** Convierte `contenedores_resumen` del RPC de despacho a líneas de ticket. */
 export async function lineasDesdeContenedoresResumen(
   resumen: ContenedorResumenDespacho[],

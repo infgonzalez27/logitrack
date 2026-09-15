@@ -189,9 +189,9 @@ export async function registrarDespachoClienteRadarAction(input: {
 /**
  * Cierre de parada (Pantalla 2 del Radar).
  * Productos → `registrar_despacho_cliente_radar` (estado derivado de cantidades).
- * Retiros → se adjuntan a líneas cuando cabe; el excedente usa
- * `registrar_movimiento_contenedores` (§2.7) hasta que DB soporte `retiros[]` a nivel orden.
- * motivo_rechazo automático si parcial/rechazo (no hay columna de observaciones).
+ * Retiros → solo en líneas cuyo producto tiene `contenedor_id`; el resto usa
+ * `registrar_movimiento_contenedores` (§2.7). Nunca se pega el contenedor del
+ * retiro en un SKU sin envase (evita contar latas/etc. como vacíos).
  */
 export async function finalizarEntregaRadarAction(input: {
   orden_id: string;
@@ -282,27 +282,79 @@ export async function finalizarEntregaRadarAction(input: {
     return !Number.isFinite(entregada) || entregada < asignada;
   });
 
-  const detalles: RadarDetalleInput[] = input.entregas.map((linea, idx) => {
+  // El SP (DB-036) calcula entregados con p.contenedor_id. El front NO inventa
+  // contenedor_id: solo informa cantidades de retiro en líneas cuyo producto
+  // ya tiene ese envase (para que el SP las sume en contenedores_resumen).
+  const supabase = await createClient();
+  const detalleIds = input.entregas.map((e) => e.detalle_id);
+  const { data: detalleRows, error: detalleError } = await supabase
+    .from("detalle_distribucion")
+    .select("id, productos(contenedor_id)")
+    .eq("orden_id", ordenId)
+    .in("id", detalleIds);
+
+  if (detalleError) {
+    return {
+      ok: false,
+      error: detalleError.message,
+      code: "SQL_ERROR",
+    };
+  }
+
+  const contenedorProductoPorDetalle = new Map<string, string | null>();
+  for (const row of detalleRows ?? []) {
+    const prod = Array.isArray(row.productos)
+      ? row.productos[0]
+      : row.productos;
+    const raw =
+      prod &&
+      typeof (prod as { contenedor_id?: string | null }).contenedor_id ===
+        "string"
+        ? String(
+            (prod as { contenedor_id?: string | null }).contenedor_id,
+          ).trim()
+        : "";
+    contenedorProductoPorDetalle.set(String(row.id), raw || null);
+  }
+
+  const retiroRestante = new Map<string, number>();
+  for (const r of retirosValidos) {
+    retiroRestante.set(
+      r.contenedor_id,
+      (retiroRestante.get(r.contenedor_id) ?? 0) + r.cantidad,
+    );
+  }
+
+  const detalles: RadarDetalleInput[] = input.entregas.map((linea) => {
     const asignada = Number(linea.cantidad_asignada);
     let entregada = Math.min(Number(linea.cantidad_entregada), asignada);
     if (forzarDeVuelta) entregada = 0;
     const estado = forzarDeVuelta
       ? "rechazado"
       : deriveEstadoEntrega(asignada, entregada);
-    const retiro = retirosValidos[idx];
     const motivo =
       estado === "rechazado"
         ? "Devolución"
         : estado === "entregado_parcial"
           ? "Entrega parcial"
           : null;
+
+    const productoContenedorId =
+      contenedorProductoPorDetalle.get(linea.detalle_id) ?? null;
+    let contenedoresRetirados = 0;
+    if (productoContenedorId && (retiroRestante.get(productoContenedorId) ?? 0) > 0) {
+      contenedoresRetirados = retiroRestante.get(productoContenedorId) ?? 0;
+      retiroRestante.set(productoContenedorId, 0);
+    }
+
     return {
       detalle_id: linea.detalle_id,
       cantidad_despachada: estado === "rechazado" ? 0 : entregada,
       estado_entrega: estado,
       motivo_rechazo: motivo,
-      contenedores_retirados: retiro?.cantidad ?? 0,
-      contenedor_id: retiro?.contenedor_id ?? null,
+      contenedores_retirados: contenedoresRetirados,
+      // null: el SP usa productos.contenedor_id (no pintar envase en SKUs sin él).
+      contenedor_id: null,
     };
   });
 
@@ -312,7 +364,11 @@ export async function finalizarEntregaRadarAction(input: {
   });
   if (!registered.ok) return registered;
 
-  const retirosExtra = retirosValidos.slice(input.entregas.length);
+  // Retiros sin línea de producto con ese envase → movimiento aparte (§2.7).
+  const retirosExtra: RadarRetiroInput[] = [...retiroRestante.entries()]
+    .filter(([, qty]) => qty > 0)
+    .map(([contenedor_id, cantidad]) => ({ contenedor_id, cantidad }));
+
   if (retirosExtra.length) {
     const user = await getSessionUser();
     if (!user) {
@@ -351,11 +407,46 @@ export async function finalizarEntregaRadarAction(input: {
   revalidateRadarPaths(ordenId);
   // El SP decide el estado de la orden según cantidades (0 → `devuelta`).
   const deVuelta = registered.estado === "devuelta" || forzarDeVuelta;
+
+  // Preferir JSON del SP. Si hubo retiros §2.7 aparte, sumar esas cantidades
+  // al resumen (sin recalcular entregados con CEIL).
+  let contenedores_resumen = [...(registered.contenedores_resumen ?? [])];
+  if (retirosExtra.length) {
+    for (const extra of retirosExtra) {
+      const idx = contenedores_resumen.findIndex(
+        (r) => r.contenedor_id === extra.contenedor_id,
+      );
+      if (idx >= 0) {
+        const row = contenedores_resumen[idx];
+        const retirado =
+          (Number(row.cantidad_retirada) || 0) + extra.cantidad;
+        contenedores_resumen[idx] = {
+          ...row,
+          cantidad_retirada: retirado,
+          saldo_actualizado: Math.max(
+            0,
+            (Number(row.saldo_anterior) || 0) +
+              (Number(row.cantidad_entregada) || 0) -
+              retirado,
+          ),
+        };
+      } else {
+        contenedores_resumen.push({
+          contenedor_id: extra.contenedor_id,
+          saldo_anterior: 0,
+          cantidad_entregada: 0,
+          cantidad_retirada: extra.cantidad,
+          saldo_actualizado: 0,
+        });
+      }
+    }
+  }
+
   return {
     ok: true,
     estado: registered.estado,
     deVuelta,
-    contenedores_resumen: registered.contenedores_resumen ?? [],
+    contenedores_resumen,
   };
 }
 

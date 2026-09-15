@@ -5,7 +5,7 @@ import { getOrdenDistribucionDetalle } from "@/lib/data/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
 import {
   lineasDesdeContenedoresResumen,
-  retornaEstadoCuentaVaciosOrden,
+  lineasDesdeMovimientosOrden,
   type ContenedorResumenDespacho,
 } from "@/lib/ordenes/estado-cuenta-vacios";
 import { joinOne } from "@/lib/supabase/join";
@@ -120,22 +120,19 @@ export default async function OrdenImprimirPage({
   const totalRecaudar = lineas.reduce((sum, linea) => sum + linea.subtotal, 0);
 
   const resumenDespacho = parseVaciosQuery(vaciosParam);
+  // DB-036: ticket = JSON del SP. Reimpresión sin query → movimientos de esa orden.
+  // Nunca proyectar CEIL desde productos en el front.
   let estadoCuentaVacios =
     resumenDespacho && resumenDespacho.length
       ? await lineasDesdeContenedoresResumen(resumenDespacho)
-      : null;
-  let estadoCuentaProvisional = false;
-
-  if (!estadoCuentaVacios?.length && orden.cliente_id) {
-    const estadoCuenta = await retornaEstadoCuentaVaciosOrden({
+      : [];
+  if (!estadoCuentaVacios.length && orden.cliente_id) {
+    estadoCuentaVacios = await lineasDesdeMovimientosOrden({
       clienteId: orden.cliente_id,
       ordenId: orden.id,
-      radarId: orden.radar_id ?? null,
-      detalle,
     });
-    estadoCuentaVacios = estadoCuenta.lineas;
-    estadoCuentaProvisional = estadoCuenta.provisional;
   }
+  const estadoCuentaProvisional = false;
 
   const volverHref =
     volverParam && volverParam.startsWith("/")
@@ -183,7 +180,7 @@ export default async function OrdenImprimirPage({
             pesoKg={orden.peso_total_calculado}
             lineas={lineas}
             totalRecaudar={totalRecaudar}
-            estadoCuentaVacios={estadoCuentaVacios ?? undefined}
+            estadoCuentaVacios={estadoCuentaVacios}
             estadoCuentaProvisional={estadoCuentaProvisional}
           />
         </div>
