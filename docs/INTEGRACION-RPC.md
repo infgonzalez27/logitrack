@@ -265,11 +265,42 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     },
     "error": null
   }
+  ### 2.3.3. Edición y Re-sincronización de Radar (`solicita_editar_o_sincronizar_radar`)
+- **Firma SQL:** `solicita_editar_o_sincronizar_radar(p_radar_id UUID)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_editar_o_sincronizar_radar', {
+    p_radar_id: 'uuid-del-radar'
+  });
+  ```
+- **Notas de Comportamiento:**
+  - **Fase 1 (Desvinculación):** Desvincula las órdenes actualmente asignadas al radar que estén en estado `'aprobada'`.
+  - **Fase 2 (Revinculación):** Re-vincula todas las órdenes aprobadas pertenecientes a clientes del despachador y con la misma `fecha_despacho::date` del radar.
+  - Recalcula acumulados de `total_cantidad_solicitada`, `total_cantidad_despachada` y `total_contenedores_retirados`.
+  - Retorna el error `RADAR_INVENTARIO_CARGADO` (`'Para modificar el Radar debe reversar el inventario movil al almacén'`) si `carga_inventario_movil = TRUE`.
+  - Retorna el error `RADAR_APROBADO_BLOQUEADO` si `status_radar = TRUE`.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Radar re-sincronizado y actualizado exitosamente.",
+    "data": {
+      "radar_id": "uuid-del-radar",
+      "correlativo": 104,
+      "despachador_id": "uuid-del-despachador",
+      "fecha_despacho": "2026-09-15",
+      "ordenes_desvinculadas": 8,
+      "ordenes_vinculadas": 8,
+      "total_cantidad_solicitada": 120,
+      "total_cantidad_despachada": 0,
+      "total_contenedores_retirados": 0
+    },
+    "error": null
+  }
   ```
 
 
 
-### 2.4. Registro de Entregas y Devoluciones en Ruta (`registrar_entrega_detalle`)
 - **Firma SQL:** `registrar_entrega_detalle(p_detalle_id UUID, p_cantidad_despachada INT, p_estado_entrega TEXT, p_motivo_rechazo TEXT)`
 - **Uso en Frontend (RPC):**
   ```typescript

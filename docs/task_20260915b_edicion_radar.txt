@@ -1,0 +1,5 @@
+## Editar o modificar un radar existente
+ Existe la necesidad de modificar un radar, esta edición tiene dos pasos o fases
+#1 Desvincular las ordenes de distribución que actualmente están vinculadas al radar
+#2 Volver a vincular las órdenes que tengan la fecha de despacho del radar.
+De esa manera se evita la duplicidad de ordenes en un radar
