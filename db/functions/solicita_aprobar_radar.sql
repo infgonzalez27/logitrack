@@ -63,80 +63,12 @@ BEGIN
     SET status_radar = TRUE
     WHERE id = p_radar_id;
 
-    -- 2. Cargar en el estado de cuenta del cliente los contenedores ENTREGADOS en el despacho
-    -- si el producto tiene un contenedor asignado: CEIL(cantidad_despachada * unidades_por_contenedor)
-    FOR v_rec_entregados IN
-        SELECT 
-            o.cliente_id,
-            d.orden_id,
-            COALESCE(d.contenedor_id, p.contenedor_id) AS contenedor_id,
-            SUM(CEIL(COALESCE(d.cantidad_despachada, 0)::numeric * COALESCE(p.unidades_por_contenedor, 1))) AS total_entregados
-        FROM public.ordenes_distribucion o
-        JOIN public.detalle_distribucion d ON d.orden_id = o.id
-        JOIN public.productos p ON p.id = d.producto_id
-        WHERE o.radar_id = p_radar_id
-          AND COALESCE(d.cantidad_despachada, 0) > 0
-          AND COALESCE(d.contenedor_id, p.contenedor_id) IS NOT NULL
-        GROUP BY o.cliente_id, d.orden_id, COALESCE(d.contenedor_id, p.contenedor_id)
-    LOOP
-        v_contenedores_entregados := v_rec_entregados.total_entregados::INT;
-        IF v_contenedores_entregados > 0 THEN
-            INSERT INTO public.movimientos_contenedores (
-                cliente_id, orden_id, contenedor_id, cantidad_entregada, cantidad_retirada, creado_por
-            ) VALUES (
-                v_rec_entregados.cliente_id, v_rec_entregados.orden_id, v_rec_entregados.contenedor_id, v_contenedores_entregados, 0, auth.uid()
-            );
+    -- Note: El cálculo de contenedores entregados y retirados fue trasladado a registrar_despacho_cliente_radar
+    -- para asentar los saldos al momento de confirmar el despacho.
+    v_contenedores_entregados_procesados := 0;
+    v_contenedores_retirados_procesados := 0;
 
-            INSERT INTO public.saldo_contenedores_clientes (
-                cliente_id, contenedor_id, saldo_pendiente, updated_at
-            ) VALUES (
-                v_rec_entregados.cliente_id, v_rec_entregados.contenedor_id, v_contenedores_entregados, NOW()
-            )
-            ON CONFLICT (cliente_id, contenedor_id)
-            DO UPDATE SET 
-                saldo_pendiente = public.saldo_contenedores_clientes.saldo_pendiente + EXCLUDED.saldo_pendiente,
-                updated_at = NOW();
-
-            v_contenedores_entregados_procesados := v_contenedores_entregados_procesados + v_contenedores_entregados;
-        END IF;
-    END LOOP;
-
-    -- 3. Procesar movimiento de envases RETIRADOS/DEVUELTOS por clientes (contenedores_retirados)
-    FOR v_rec IN
-        SELECT 
-            o.cliente_id,
-            d.orden_id,
-            COALESCE(d.contenedor_id, p.contenedor_id) AS contenedor_id,
-            SUM(COALESCE(d.contenedores_retirados, 0)) AS total_retirados
-        FROM public.ordenes_distribucion o
-        JOIN public.detalle_distribucion d ON d.orden_id = o.id
-        LEFT JOIN public.productos p ON p.id = d.producto_id
-        WHERE o.radar_id = p_radar_id
-          AND COALESCE(d.contenedores_retirados, 0) > 0
-        GROUP BY o.cliente_id, d.orden_id, COALESCE(d.contenedor_id, p.contenedor_id)
-    LOOP
-        IF v_rec.contenedor_id IS NOT NULL THEN
-            INSERT INTO public.movimientos_contenedores (
-                cliente_id, orden_id, contenedor_id, cantidad_entregada, cantidad_retirada, creado_por
-            ) VALUES (
-                v_rec.cliente_id, v_rec.orden_id, v_rec.contenedor_id, 0, v_rec.total_retirados, auth.uid()
-            );
-
-            INSERT INTO public.saldo_contenedores_clientes (
-                cliente_id, contenedor_id, saldo_pendiente, updated_at
-            ) VALUES (
-                v_rec.cliente_id, v_rec.contenedor_id, 0, NOW()
-            )
-            ON CONFLICT (cliente_id, contenedor_id)
-            DO UPDATE SET 
-                saldo_pendiente = GREATEST(0, public.saldo_contenedores_clientes.saldo_pendiente - v_rec.total_retirados),
-                updated_at = NOW();
-
-            v_contenedores_retirados_procesados := v_contenedores_retirados_procesados + v_rec.total_retirados;
-        END IF;
-    END LOOP;
-
-    -- 4. Devuelve el inventario no despachado del camión al almacén principal
+    -- 2. Devuelve el inventario no despachado del camión al almacén principal
     v_inv_res := public.retorna_inventario_no_despachado_para_almacen(p_radar_id);
 
     -- 5. Las órdenes en estado 'devuelta' pasan al estado final 'anulada'

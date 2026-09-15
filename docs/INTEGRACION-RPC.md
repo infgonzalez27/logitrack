@@ -323,9 +323,53 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   - Retorna únicamente los radares en estado **aprobado** (`status_radar = TRUE`).
   - Mismos parámetros y estructura de retorno que `retorna_lista_radars_segun_rango_fechas`.
 
+### 2.4. Registrar Despacho Cliente en Radar (`registrar_despacho_cliente_radar`)
+- **Firma SQL:** `registrar_despacho_cliente_radar(p_orden_id UUID, p_detalles_json JSONB)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_despacho_cliente_radar', {
+    p_orden_id: 'uuid-de-la-orden',
+    p_detalles_json: [
+      {
+        detalle_id: 'uuid-del-detalle-linea',
+        cantidad_despachada: 10,
+        estado_entrega: 'entregado',
+        motivo_rechazo: null,
+        contenedores_retirados: 2,
+        contenedor_id: 'uuid-contenedor-opcional'
+      }
+    ]
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Asienta atómicamente en `movimientos_contenedores` e incrementa/decrementa `saldo_contenedores_clientes` al momento de la confirmación del despacho.
+  - Para cada SKU despachado con `contenedor_id`, calcula contenedores entregados = `CEIL(cantidad_despachada / unidades_por_contenedor)`.
+  - Es **idempotente**: si la orden es re-editada en el radar, revierte los movimientos previos de esa orden antes de asentar los nuevos.
+  - Retorna `contenedores_resumen` con el `saldo_anterior`, movimiento (`cantidad_entregada`, `cantidad_retirada`) y `saldo_actualizado` para ser presentado en la interfaz gráfica.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Despacho registrado en radar exitosamente.",
+    "data": {
+      "orden_id": "uuid-de-la-orden",
+      "nuevo_estado": "por_liquidar",
+      "total_despachado": 10,
+      "contenedores_resumen": [
+        {
+          "contenedor_id": "uuid-del-contenedor",
+          "saldo_anterior": 15,
+          "cantidad_entregada": 10,
+          "cantidad_retirada": 2,
+          "saldo_actualizado": 23
+        }
+      ]
+    },
+    "error": null
+  }
+  ```
 
-
-
+### 2.4.1. Registrar Entrega Detalle Lineal (`registrar_entrega_detalle`)
 - **Firma SQL:** `registrar_entrega_detalle(p_detalle_id UUID, p_cantidad_despachada INT, p_estado_entrega TEXT, p_motivo_rechazo TEXT)`
 - **Uso en Frontend (RPC):**
   ```typescript

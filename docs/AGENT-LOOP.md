@@ -355,6 +355,19 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
   - **Función:** Ejecutar un script masivo PL/pgSQL para recalcular atómicamente todos los movimientos de entrega (`CEIL(cantidad_despachada * unidades_por_contenedor)`) y retiros de envases de todas las órdenes despachadas en radares aprobados de la base de datos, resincronizando `saldo_contenedores_clientes`.
   - **Migración:** `20260910181500_recalcular_movimientos_y_saldos_contenedores_masivo.sql`.
 
+- `[x]` **Tarea DB-036: Actualización de Saldos de Contenedores al Momento del Despacho**
+  - **Función:** Desacoplar la actualización de envases/contenedores de la aprobación de la orden y trasladarla al evento de confirmación/actualización del despacho por el despachador (`registrar_despacho_cliente_radar` / `registrar_entrega_detalle`).
+  - **Comportamiento:**
+    1. Evaluar si cada SKU despachado tiene `contenedor_id` asignado en `productos`. Si es NULL, ignorar.
+    2. Calcular contenedores entregados = `CEIL(cantidad_despachada / NULLIF(unidades_por_contenedor, 0))`.
+    3. Asentar atómicamente en `movimientos_contenedores` (`cliente_id`, `orden_distribucion_id`, `contenedor_id`, `cantidad_entregada`, `cantidad_retirada`, `fecha_movimiento`, `usuario_despachador_id`).
+    4. Actualizar `saldo_contenedores_clientes` sumando `cantidad_entregada` y restando `cantidad_retirada`.
+    5. Retornar al Frontend el resumen detallado en la respuesta RPC: `saldo_anterior`, movimiento (`cantidad_entregada`, `cantidad_retirada`) y `saldo_actualizado`.
+  - **Migración:** `20260915200000_actualizar_asiento_contenedores_al_despachar.sql`.
+  - **Documentación:** [docs/task_20260915c_Actualizacion_retiro_contenedores.md](file:///d:/ProyectosWeb/LogiTrack/docs/task_20260915c_Actualizacion_retiro_contenedores.md).
+
+
+
 
 
 

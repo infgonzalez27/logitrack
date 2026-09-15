@@ -1,5 +1,11 @@
-## Editar o modificar un radar existente
+##1 Editar o modificar un radar existente
  Existe la necesidad de modificar un radar, esta edición tiene dos pasos o fases
 #1 Desvincular las ordenes de distribución que actualmente están vinculadas al radar
 #2 Volver a vincular las órdenes que tengan la fecha de despacho del radar.
 De esa manera se evita la duplicidad de ordenes en un radar
+
+##2 Lista de radares bajo el status de 'pendiente'
+Crea una Functions retorna_lista_radars_pendiente_segun_rango_fechas que retorne una lista de registro de la tabla radars con status 'pendiente' con los mismos campos y parametros 
+de la Functions retorna_lista_radars_segun_rango_fechas.sql
+Crea una Functions retorna_lista_radars_aprobado_segun_rango_fechas que retorne una lista de registro de la tabla radars con status 'aprobado' con los mismos campos y parametros 
+de la Functions retorna_lista_radars_segun_rango_fechas.sql

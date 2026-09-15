@@ -1,5 +1,5 @@
 -- Migration: 20260915180000_fix_camiones_sin_updated_at.sql
--- Description: Corregir funciones RPC elimina referencia inexistente updated_at en tabla public.camiones
+-- Description: Corregir funciones RPC eliminando referencias a updated_at inexistentes en las tablas public.camiones y public.ordenes_distribucion
 
 -- 1. RPC: solicita_cargar_inventario_movil_desde_almacen
 CREATE OR REPLACE FUNCTION public.solicita_cargar_inventario_movil_desde_almacen(
@@ -51,7 +51,7 @@ BEGIN
         SELECT radar_id INTO v_radar_id
         FROM public.ordenes_distribucion
         WHERE camion_id = p_camion_id AND radar_id IS NOT NULL
-        ORDER BY updated_at DESC
+        ORDER BY created_at DESC
         LIMIT 1;
     END IF;
 
@@ -119,17 +119,16 @@ BEGIN
     SET estado = 'en_ruta'
     WHERE id = p_camion_id;
 
+    -- Transicionar órdenes vinculadas (sin updated_at)
     IF v_radar_id IS NOT NULL THEN
         UPDATE public.ordenes_distribucion
-        SET estado = 'en_transito',
-            updated_at = NOW()
+        SET estado = 'en_transito'
         WHERE radar_id = v_radar_id AND estado = 'aprobada';
         
         GET DIAGNOSTICS v_ordenes_actualizadas = ROW_COUNT;
     ELSE
         UPDATE public.ordenes_distribucion
-        SET estado = 'en_transito',
-            updated_at = NOW()
+        SET estado = 'en_transito'
         WHERE camion_id = p_camion_id AND estado = 'aprobada';
         
         GET DIAGNOSTICS v_ordenes_actualizadas = ROW_COUNT;
@@ -239,7 +238,7 @@ BEGIN
         SELECT radar_id INTO v_radar_id
         FROM public.ordenes_distribucion
         WHERE camion_id = p_camion_id AND radar_id IS NOT NULL
-        ORDER BY updated_at DESC
+        ORDER BY created_at DESC
         LIMIT 1;
     END IF;
 
@@ -328,17 +327,16 @@ BEGIN
         END LOOP;
     END IF;
 
+    -- Transicionar órdenes de vuelta a 'aprobada' (sin updated_at)
     IF v_radar_id IS NOT NULL THEN
         UPDATE public.ordenes_distribucion
-        SET estado = 'aprobada',
-            updated_at = NOW()
+        SET estado = 'aprobada'
         WHERE radar_id = v_radar_id AND estado = 'en_transito';
 
         GET DIAGNOSTICS v_ordenes_reversadas = ROW_COUNT;
     ELSE
         UPDATE public.ordenes_distribucion
-        SET estado = 'aprobada',
-            updated_at = NOW()
+        SET estado = 'aprobada'
         WHERE camion_id = p_camion_id AND estado = 'en_transito';
 
         GET DIAGNOSTICS v_ordenes_reversadas = ROW_COUNT;
