@@ -3,9 +3,11 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { retornaRadarDetalleReporteAction } from "@/lib/actions/radar";
+import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout/page-header";
-import { RadarAprobarButton } from "../radar-aprobar-button";
+import { RadarGerenciaActions } from "../radar-gerencia-actions";
 import { RadarParadasView } from "../radar-paradas-view";
+import { RadarRegenerarButton } from "../radar-regenerar-button";
 import { RadarReporteView } from "../radar-reporte-view";
 
 export default async function RadarDetallePage({
@@ -28,11 +30,22 @@ export default async function RadarDetallePage({
 
   const modoDespachador = rol === "despachador";
   const puedeAprobar = rol === "gerente" || rol === "admin";
+  const puedeRegenerar =
+    rol === "admin" || rol === "gerente" || rol === "vendedor";
   const reporte = await retornaRadarDetalleReporteAction(id);
 
+  const supabase = await createClient();
+  const { data: radarRow } = await supabase
+    .from("radars")
+    .select("status_radar, carga_inventario_movil")
+    .eq("id", id)
+    .maybeSingle();
+
   const radarAprobado = Boolean(
-    reporte.ok && reporte.reporte.radar.status_radar === true,
+    radarRow?.status_radar === true ||
+      (reporte.ok && reporte.reporte.radar.status_radar === true),
   );
+  const cargaInventarioMovil = Boolean(radarRow?.carga_inventario_movil);
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -40,12 +53,21 @@ export default async function RadarDetallePage({
         title="Detalle del radar"
         description="Órdenes y paradas vinculadas a este radar."
         action={
-          <Link
-            href="/radar"
-            className="text-sm font-medium text-lt-primary hover:underline"
-          >
-            ← Volver al listado
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            {puedeRegenerar ? (
+              <RadarRegenerarButton
+                radarId={id}
+                yaAprobado={radarAprobado}
+                cargaInventarioMovil={cargaInventarioMovil}
+              />
+            ) : null}
+            <Link
+              href="/radar"
+              className="text-sm font-medium text-lt-primary hover:underline"
+            >
+              ← Volver al listado
+            </Link>
+          </div>
         }
       />
 
@@ -82,7 +104,11 @@ export default async function RadarDetallePage({
             El SP no evalúa entrega completa/parcial; eso ya quedó en las
             cantidades registradas por el despachador.
           </p>
-          <RadarAprobarButton radarId={id} yaAprobado={radarAprobado} />
+          <RadarGerenciaActions
+            radarId={id}
+            yaAprobado={radarAprobado}
+            cargaInventarioMovil={cargaInventarioMovil}
+          />
         </section>
       ) : null}
     </div>

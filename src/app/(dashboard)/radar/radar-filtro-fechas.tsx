@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 export function RadarFiltroFechas({
   fechaInicial,
   fechaLimite,
+  estado,
 }: {
   fechaInicial: string;
   fechaLimite: string;
+  estado?: "pendiente" | "aprobado" | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -22,6 +24,9 @@ export function RadarFiltroFechas({
     const params = new URLSearchParams();
     if (fi) params.set("fecha_inicial", fi);
     if (fl) params.set("fecha_limite", fl);
+    if (estado === "pendiente" || estado === "aprobado") {
+      params.set("estado", estado);
+    }
     startTransition(() => {
       router.push(`/radar?${params.toString()}`);
     });

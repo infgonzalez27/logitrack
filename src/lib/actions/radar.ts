@@ -455,6 +455,311 @@ export async function solicitaAprobarRadarAction(
   };
 }
 
+async function resolveCamionIdForRadar(
+  radarId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ordenes_distribucion")
+    .select("camion_id")
+    .eq("radar_id", radarId)
+    .not("camion_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+  const camionId =
+    data && typeof data.camion_id === "string" ? data.camion_id.trim() : "";
+  return camionId && UUID_RE.test(camionId) ? camionId : null;
+}
+
+async function buildResumenCargaDesdeRadar(
+  radarId: string,
+): Promise<
+  | { ok: true; resumen: Array<{ producto_id: string; cantidad_solicitada: number }> }
+  | { ok: false; error: string; code?: string }
+> {
+  const response = await callDbProcedure<RadarDetalleReporte>(
+    "retorna_radar_detalle_reporte",
+    { p_radar_id: radarId },
+  );
+  if (!response.success || !response.data) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(
+        response,
+        "No se pudo obtener el resumen de productos del radar.",
+      ),
+      code: response.error?.code,
+    };
+  }
+  const resumen = (response.data.resumen_productos ?? [])
+    .map((p) => ({
+      producto_id: String(p.producto_id ?? "").trim(),
+      cantidad_solicitada: Number(p.cantidad_solicitada ?? 0),
+    }))
+    .filter(
+      (p) =>
+        UUID_RE.test(p.producto_id) &&
+        Number.isFinite(p.cantidad_solicitada) &&
+        p.cantidad_solicitada > 0,
+    );
+  if (!resumen.length) {
+    return {
+      ok: false,
+      error: "El radar no tiene productos con cantidad solicitada para cargar.",
+      code: "DATOS_VACIOS",
+    };
+  }
+  return { ok: true, resumen };
+}
+
+/**
+ * INTEGRACION-RPC §2.3.1 — `solicita_cargar_inventario_movil_desde_almacen`.
+ * Descarga almacén → inventario móvil, órdenes a `en_transito`,
+ * `carga_inventario_movil = true`.
+ */
+export async function solicitaCargarInventarioMovilDesdeAlmacenAction(
+  radarId: string,
+): Promise<
+  | {
+      ok: true;
+      message?: string;
+      data?: {
+        camion_id?: string;
+        radar_id?: string;
+        carga_inventario_movil?: boolean;
+        total_productos_cargados?: number;
+        unidades_totales?: number;
+        ordenes_despachadas?: number;
+      };
+    }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (rol !== "gerente" && rol !== "admin") {
+    return {
+      ok: false,
+      error: "Solo gerencia o admin pueden cargar el camión desde el radar.",
+      code: "ACCESO_DENEGADO",
+    };
+  }
+
+  const id = radarId?.trim();
+  if (!id || !UUID_RE.test(id)) {
+    return {
+      ok: false,
+      error: "Identificador de radar inválido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const camionId = await resolveCamionIdForRadar(id);
+  if (!camionId) {
+    return {
+      ok: false,
+      error: "No se encontró un camión asignado a las órdenes de este radar.",
+      code: "CAMION_INEXISTENTE",
+    };
+  }
+
+  const resumenResult = await buildResumenCargaDesdeRadar(id);
+  if (!resumenResult.ok) return resumenResult;
+
+  const response = await callDbProcedure<{
+    camion_id?: string;
+    radar_id?: string;
+    carga_inventario_movil?: boolean;
+    total_productos_cargados?: number;
+    unidades_totales?: number;
+    ordenes_despachadas?: number;
+  }>("solicita_cargar_inventario_movil_desde_almacen", {
+    p_camion_id: camionId,
+    p_resumen_productos: resumenResult.resumen,
+    p_radar_id: id,
+  });
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo cargar el inventario al camión."),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/radar");
+  revalidatePath(`/radar/${id}`);
+  revalidatePath("/ordenes");
+  revalidatePath("/inventario-almacen");
+  revalidatePath("/inventario-movil");
+
+  return {
+    ok: true,
+    message: response.message,
+    data: response.data ?? undefined,
+  };
+}
+
+/**
+ * INTEGRACION-RPC §2.3.2 — `solicita_reversar_carga_inventario_movil_a_almacen`.
+ * Devuelve mercancía al almacén, órdenes a `aprobada`,
+ * `carga_inventario_movil = false`. Bloquea si ya hay entregas.
+ */
+export async function solicitaReversarCargaInventarioMovilAction(
+  radarId: string,
+): Promise<
+  | {
+      ok: true;
+      message?: string;
+      data?: {
+        camion_id?: string;
+        radar_id?: string;
+        carga_inventario_movil?: boolean;
+        total_productos_reversados?: number;
+        unidades_totales?: number;
+        ordenes_reversadas?: number;
+      };
+    }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (rol !== "gerente" && rol !== "admin") {
+    return {
+      ok: false,
+      error: "Solo gerencia o admin pueden reversar la carga al almacén.",
+      code: "ACCESO_DENEGADO",
+    };
+  }
+
+  const id = radarId?.trim();
+  if (!id || !UUID_RE.test(id)) {
+    return {
+      ok: false,
+      error: "Identificador de radar inválido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const camionId = await resolveCamionIdForRadar(id);
+  if (!camionId) {
+    return {
+      ok: false,
+      error: "No se encontró un camión asignado a las órdenes de este radar.",
+      code: "CAMION_INEXISTENTE",
+    };
+  }
+
+  const response = await callDbProcedure<{
+    camion_id?: string;
+    radar_id?: string;
+    carga_inventario_movil?: boolean;
+    total_productos_reversados?: number;
+    unidades_totales?: number;
+    ordenes_reversadas?: number;
+  }>("solicita_reversar_carga_inventario_movil_a_almacen", {
+    p_camion_id: camionId,
+    p_resumen_productos: null,
+    p_radar_id: id,
+  });
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(
+        response,
+        "No se pudo reversar el inventario al almacén.",
+      ),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/radar");
+  revalidatePath(`/radar/${id}`);
+  revalidatePath("/ordenes");
+  revalidatePath("/inventario-almacen");
+  revalidatePath("/inventario-movil");
+
+  return {
+    ok: true,
+    message: response.message,
+    data: response.data ?? undefined,
+  };
+}
+
+/**
+ * INTEGRACION-RPC §2.3.3 — `solicita_editar_o_sincronizar_radar`.
+ * Re-sincroniza órdenes aprobadas del despachador/fecha del radar.
+ */
+export async function solicitaEditarOSincronizarRadarAction(
+  radarId: string,
+): Promise<
+  | {
+      ok: true;
+      message?: string;
+      data?: {
+        radar_id?: string;
+        correlativo?: number;
+        despachador_id?: string;
+        fecha_despacho?: string;
+        ordenes_desvinculadas?: number;
+        ordenes_vinculadas?: number;
+        total_cantidad_solicitada?: number;
+        total_cantidad_despachada?: number;
+        total_contenedores_retirados?: number;
+      };
+    }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (!canCreateRadar(rol)) {
+    return {
+      ok: false,
+      error: "Solo gerente, vendedor o admin pueden regenerar el radar.",
+      code: "ACCESO_DENEGADO",
+    };
+  }
+
+  const id = radarId?.trim();
+  if (!id || !UUID_RE.test(id)) {
+    return {
+      ok: false,
+      error: "Identificador de radar inválido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const response = await callDbProcedure<{
+    radar_id?: string;
+    correlativo?: number;
+    despachador_id?: string;
+    fecha_despacho?: string;
+    ordenes_desvinculadas?: number;
+    ordenes_vinculadas?: number;
+    total_cantidad_solicitada?: number;
+    total_cantidad_despachada?: number;
+    total_contenedores_retirados?: number;
+  }>("solicita_editar_o_sincronizar_radar", { p_radar_id: id });
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo regenerar el radar."),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/radar");
+  revalidatePath(`/radar/${id}`);
+  revalidatePath("/ordenes");
+
+  return {
+    ok: true,
+    message: response.message,
+    data: response.data ?? undefined,
+  };
+}
+
 /** INTEGRACION-RPC §2.19 — `crear_o_obtener_radar` */
 export async function crearOObtenerRadarAction(input: {
   despachador_id: string;
@@ -598,11 +903,13 @@ function mapRadarOrdenResumen(raw: unknown): RadarOrdenResumen | null {
   };
 }
 
-/** INTEGRACION-RPC §2.30 — lista de radares por rango de fechas. */
+/** INTEGRACION-RPC §2.30 / §2.3.4 / §2.3.5 — lista de radares por rango (y filtro de estado). */
 export async function retornaListaRadarsSegunRangoFechasAction(input?: {
   fechaInicial?: string | null;
   fechaLimite?: string | null;
   despachadorId?: string | null;
+  /** `pendiente` | `aprobado` | omitido = todos. */
+  estado?: "pendiente" | "aprobado" | null;
 }): Promise<
   | { ok: true; items: RadarListaRangoItem[] }
   | { ok: false; error: string; code?: string }
@@ -628,10 +935,24 @@ export async function retornaListaRadarsSegunRangoFechasAction(input?: {
     };
   }
 
+  const estado =
+    input?.estado === "pendiente" || input?.estado === "aprobado"
+      ? input.estado
+      : null;
+  const statusRadar =
+    estado === "pendiente" ? false : estado === "aprobado" ? true : null;
+
   const despachadorFiltro =
     rol === "despachador" && profile?.id
       ? profile.id
       : input?.despachadorId?.trim() || null;
+
+  const rpcName =
+    estado === "pendiente"
+      ? "retorna_lista_radars_pendiente_segun_rango_fechas"
+      : estado === "aprobado"
+        ? "retorna_lista_radars_aprobado_segun_rango_fechas"
+        : "retorna_lista_radars_segun_rango_fechas";
 
   // Staff ve todos los radares del rango (el RPC filtra siempre por un despachador).
   if (rol !== "despachador") {
@@ -640,6 +961,7 @@ export async function retornaListaRadarsSegunRangoFechasAction(input?: {
       fechaInicial: fi,
       fechaLimite: fl,
       despachadorId: despachadorFiltro,
+      statusRadar,
     });
     return { ok: true, items };
   }
@@ -650,10 +972,7 @@ export async function retornaListaRadarsSegunRangoFechasAction(input?: {
   };
   if (despachadorFiltro) params.p_despachador_id = despachadorFiltro;
 
-  const response = await callDbProcedure<unknown>(
-    "retorna_lista_radars_segun_rango_fechas",
-    params,
-  );
+  const response = await callDbProcedure<unknown>(rpcName, params);
 
   if (!response.success) {
     const { listarRadaresPorRangoLocal } = await import("@/lib/data/radares");
@@ -661,6 +980,7 @@ export async function retornaListaRadarsSegunRangoFechasAction(input?: {
       fechaInicial: fi,
       fechaLimite: fl,
       despachadorId: despachadorFiltro,
+      statusRadar,
     });
     if (items.length || response.error?.code === "NETWORK_OR_API_ERROR") {
       return { ok: true, items };

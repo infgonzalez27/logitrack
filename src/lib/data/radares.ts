@@ -93,6 +93,8 @@ export async function listarRadaresPorRangoLocal(opts: {
   fechaInicial: string;
   fechaLimite: string;
   despachadorId?: string | null;
+  /** true = solo aprobados; false = solo pendientes; omitido = todos. */
+  statusRadar?: boolean | null;
 }): Promise<RadarListaRangoItem[]> {
   const supabase = await createClient();
 
@@ -107,6 +109,9 @@ export async function listarRadaresPorRangoLocal(opts: {
       .limit(200);
     if (opts.despachadorId) {
       q = q.eq("despachador_id", opts.despachadorId);
+    }
+    if (opts.statusRadar === true || opts.statusRadar === false) {
+      q = q.eq("status_radar", opts.statusRadar);
     }
     return q;
   }

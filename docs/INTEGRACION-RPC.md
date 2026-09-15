@@ -189,6 +189,123 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
+### 2.3.1. Carga Consolidada a Inventario Móvil desde Resumen de Radar (`solicita_cargar_inventario_movil_desde_almacen`)
+- **Firma SQL:** `solicita_cargar_inventario_movil_desde_almacen(p_camion_id UUID, p_resumen_productos JSONB, p_radar_id UUID DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_cargar_inventario_movil_desde_almacen', {
+    p_camion_id: 'uuid-del-camion',
+    p_resumen_productos: [
+      { producto_id: 'uuid-producto-1', cantidad_solicitada: 22 },
+      { producto_id: 'uuid-producto-2', cantidad_solicitada: 15 }
+    ],
+    p_radar_id: 'uuid-del-radar' // Opcional
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Toma solo `producto_id` + `cantidad_solicitada` por ítem (suficiente al cargar el camión; aún no hay despacho).
+  - Descuenta del `inventario_almacen` e incrementa `cantidad_cargada` en `inventario_movil`.
+  - Actualiza el camión a `'en_ruta'` y las órdenes a `'en_transito'` **sin cambiar** `fecha_despacho`.
+  - Establece `carga_inventario_movil = TRUE` en `radars`.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Carga a inventario móvil procesada exitosamente desde el almacén.",
+    "data": {
+      "camion_id": "uuid-del-camion",
+      "radar_id": "uuid-del-radar",
+      "carga_inventario_movil": true,
+      "total_productos_cargados": 2,
+      "unidades_totales": 37,
+      "ordenes_despachadas": 5
+    },
+    "error": null
+  }
+  ```
+
+### 2.3.2. Reverso de Carga de Inventario Móvil al Almacén (`solicita_reversar_carga_inventario_movil_a_almacen`)
+- **Firma SQL:** `solicita_reversar_carga_inventario_movil_a_almacen(p_camion_id UUID, p_resumen_productos JSONB DEFAULT NULL, p_radar_id UUID DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_reversar_carga_inventario_movil_a_almacen', {
+    p_camion_id: 'uuid-del-camion',
+    p_radar_id: 'uuid-del-radar' // Opcional
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Devuelve mercancía de `inventario_movil` a `inventario_almacen`.
+  - Órdenes `'en_transito'` → `'aprobada'` (mantiene `fecha_despacho`); camión → `'asignado'`.
+  - Restablece `carga_inventario_movil = FALSE`.
+  - Error `REVERSO_BLOQUEADO_POR_ENTREGAS` si ya hay entregas/despachos en la ruta.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Reverso de inventario móvil al almacén procesado exitosamente.",
+    "data": {
+      "camion_id": "uuid-del-camion",
+      "radar_id": "uuid-del-radar",
+      "carga_inventario_movil": false,
+      "total_productos_reversados": 2,
+      "unidades_totales": 37,
+      "ordenes_reversadas": 5
+    },
+    "error": null
+  }
+  ```
+
+### 2.3.3. Edición y Re-sincronización de Radar (`solicita_editar_o_sincronizar_radar`)
+- **Firma SQL:** `solicita_editar_o_sincronizar_radar(p_radar_id UUID)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_editar_o_sincronizar_radar', {
+    p_radar_id: 'uuid-del-radar'
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Desvincula órdenes `aprobada` del radar y re-vincula las del mismo despachador/`fecha_despacho`.
+  - Recalcula totales de cantidad y contenedores.
+  - Error `RADAR_INVENTARIO_CARGADO` si `carga_inventario_movil = TRUE`.
+  - Error `RADAR_APROBADO_BLOQUEADO` si `status_radar = TRUE`.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Radar re-sincronizado y actualizado exitosamente.",
+    "data": {
+      "radar_id": "uuid-del-radar",
+      "correlativo": 104,
+      "ordenes_desvinculadas": 8,
+      "ordenes_vinculadas": 8,
+      "total_cantidad_solicitada": 120
+    },
+    "error": null
+  }
+  ```
+
+### 2.3.4. Lista de Radares Pendientes por Rango (`retorna_lista_radars_pendiente_segun_rango_fechas`)
+- **Firma SQL:** `retorna_lista_radars_pendiente_segun_rango_fechas(p_despachador_id UUID DEFAULT NULL, p_fecha_inicial DATE DEFAULT NULL, p_fecha_limite DATE DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_radars_pendiente_segun_rango_fechas', {
+    p_fecha_inicial: '2026-09-01',
+    p_fecha_limite: '2026-09-15'
+  });
+  ```
+- **Notas:** Solo `status_radar = FALSE`. Misma forma de retorno que §2.30.
+
+### 2.3.5. Lista de Radares Aprobados por Rango (`retorna_lista_radars_aprobado_segun_rango_fechas`)
+- **Firma SQL:** `retorna_lista_radars_aprobado_segun_rango_fechas(p_despachador_id UUID DEFAULT NULL, p_fecha_inicial DATE DEFAULT NULL, p_fecha_limite DATE DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_lista_radars_aprobado_segun_rango_fechas', {
+    p_fecha_inicial: '2026-09-01',
+    p_fecha_limite: '2026-09-15'
+  });
+  ```
+- **Notas:** Solo `status_radar = TRUE`. Misma forma de retorno que §2.30.
+
 ### 2.4. Registro de Entregas y Devoluciones en Ruta (`registrar_entrega_detalle`)
 - **Firma SQL:** `registrar_entrega_detalle(p_detalle_id UUID, p_cantidad_despachada INT, p_estado_entrega TEXT, p_motivo_rechazo TEXT)`
 - **Uso en Frontend (RPC):**
