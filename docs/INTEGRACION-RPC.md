@@ -216,7 +216,8 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
 - **Notas de Comportamiento:**
   - Toma `cantidad_solicitada` por cada producto para descontar del `inventario_almacen` e incrementar `cantidad_cargada` en `inventario_movil`.
   - Actualiza automáticamente el estado del camión a `'en_ruta'`.
-  - Actualiza el estado de las órdenes asociadas a `'en_transito'` y fija `fecha_despacho = NOW()`.
+  - Transiciona el estado de las órdenes asociadas a `'en_transito'` **manteniendo su `fecha_despacho` original**.
+  - Establece `carga_inventario_movil = TRUE` en la tabla `radars`.
 - **Respuesta esperada en `data`:**
   ```json
   {
@@ -225,6 +226,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     "data": {
       "camion_id": "uuid-del-camion",
       "radar_id": "uuid-del-radar",
+      "carga_inventario_movil": true,
       "total_productos_cargados": 2,
       "unidades_totales": 37,
       "ordenes_despachadas": 5
@@ -232,6 +234,39 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     "error": null
   }
   ```
+
+### 2.3.2. Reverso de Carga de Inventario Móvil al Almacén (`solicita_reversar_carga_inventario_movil_a_almacen`)
+- **Firma SQL:** `solicita_reversar_carga_inventario_movil_a_almacen(p_camion_id UUID, p_resumen_productos JSONB DEFAULT NULL, p_radar_id UUID DEFAULT NULL)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('solicita_reversar_carga_inventario_movil_a_almacen', {
+    p_camion_id: 'uuid-del-camion',
+    p_radar_id: 'uuid-del-radar' // Opcional
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Devuelve la mercancía del `inventario_movil` del camión al `inventario_almacen`.
+  - Transiciona las órdenes de la ruta de `'en_transito'` de vuelta a `'aprobada'` **manteniendo su `fecha_despacho` original**.
+  - Cambia el estado del camión a `'asignado'`.
+  - Restablece `carga_inventario_movil = FALSE` en la tabla `radars`.
+  - Retorna error `REVERSO_BLOQUEADO_POR_ENTREGAS` si ya se registraron despachos a clientes en esa ruta.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Reverso de inventario móvil al almacén procesado exitosamente.",
+    "data": {
+      "camion_id": "uuid-del-camion",
+      "radar_id": "uuid-del-radar",
+      "carga_inventario_movil": false,
+      "total_productos_reversados": 2,
+      "unidades_totales": 37,
+      "ordenes_reversadas": 5
+    },
+    "error": null
+  }
+  ```
+
 
 
 ### 2.4. Registro de Entregas y Devoluciones en Ruta (`registrar_entrega_detalle`)

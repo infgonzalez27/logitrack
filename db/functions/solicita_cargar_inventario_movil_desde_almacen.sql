@@ -16,6 +16,7 @@ DECLARE
     v_unidades_totales INT := 0;
     v_camion_existe BOOLEAN;
     v_ordenes_actualizadas INT := 0;
+    v_radar_id UUID;
 BEGIN
     -- 1. Validaciones básicas
     IF p_camion_id IS NULL THEN
@@ -39,6 +40,16 @@ BEGIN
                 'message', 'El camión especificado no existe.'
             )
         );
+    END IF;
+
+    -- Obtener o confirmar radar_id
+    v_radar_id := p_radar_id;
+    IF v_radar_id IS NULL THEN
+        SELECT radar_id INTO v_radar_id
+        FROM public.ordenes_distribucion
+        WHERE camion_id = p_camion_id AND radar_id IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT 1;
     END IF;
 
     -- Extraer el arreglo de productos (soporta directo [...] u objeto {"resumen_productos": [...]})
@@ -110,19 +121,17 @@ BEGIN
         updated_at = NOW()
     WHERE id = p_camion_id;
 
-    -- 4. Transicionar órdenes vinculadas a 'en_transito' y fijar fecha_despacho = NOW()
-    IF p_radar_id IS NOT NULL THEN
+    -- 4. Transicionar órdenes vinculadas a 'en_transito' (SIN MODIFICAR fecha_despacho)
+    IF v_radar_id IS NOT NULL THEN
         UPDATE public.ordenes_distribucion
         SET estado = 'en_transito',
-            fecha_despacho = NOW(),
             updated_at = NOW()
-        WHERE radar_id = p_radar_id AND estado = 'aprobada';
+        WHERE radar_id = v_radar_id AND estado = 'aprobada';
         
         GET DIAGNOSTICS v_ordenes_actualizadas = ROW_COUNT;
     ELSE
         UPDATE public.ordenes_distribucion
         SET estado = 'en_transito',
-            fecha_despacho = NOW(),
             updated_at = NOW()
         WHERE camion_id = p_camion_id AND estado = 'aprobada';
         
@@ -130,12 +139,12 @@ BEGIN
     END IF;
 
     -- 5. Inicializar cantidad_despachada = cantidad_solicitada en detalle_distribucion para las órdenes en_transito
-    IF p_radar_id IS NOT NULL THEN
+    IF v_radar_id IS NOT NULL THEN
         UPDATE public.detalle_distribucion dd
         SET cantidad_despachada = dd.cantidad_solicitada
         FROM public.ordenes_distribucion od
         WHERE dd.orden_id = od.id
-          AND od.radar_id = p_radar_id
+          AND od.radar_id = v_radar_id
           AND od.estado = 'en_transito';
     ELSE
         UPDATE public.detalle_distribucion dd
@@ -146,13 +155,22 @@ BEGIN
           AND od.estado = 'en_transito';
     END IF;
 
-    -- 6. Respuesta Exitosa
+    -- 6. Marcar carga_inventario_movil = TRUE en la tabla radars
+    IF v_radar_id IS NOT NULL THEN
+        UPDATE public.radars
+        SET carga_inventario_movil = TRUE,
+            updated_at = NOW()
+        WHERE id = v_radar_id;
+    END IF;
+
+    -- 7. Respuesta Exitosa
     RETURN jsonb_build_object(
         'success', TRUE,
         'message', 'Carga a inventario móvil procesada exitosamente desde el almacén.',
         'data', jsonb_build_object(
             'camion_id', p_camion_id,
-            'radar_id', p_radar_id,
+            'radar_id', v_radar_id,
+            'carga_inventario_movil', TRUE,
             'total_productos_cargados', v_total_productos_cargados,
             'unidades_totales', v_unidades_totales,
             'ordenes_despachadas', v_ordenes_actualizadas

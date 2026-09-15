@@ -33,6 +33,16 @@ Este sería el JSON que prepara el FRONT
   ]
 }
 
+## Reversar carga de inventario movil
+Se puede dar la necesidad de reversar la carga para modificar el radar, para esto es necesario obligar al usuario a reversar el inventario antes de querer 
+modificar el radar, para evitar que el reverso sea por cantidades incorrectas si llega a volver a generar el radar.
+Para esto es necesario:
+Crear un campo carga_inventario_movil tipo boleano en la tabla radars, por defecto el campo se inicializa en .F. al cargar el inventario movil este campo pasa a .T.
+cuando se haga el reverso el campo cambia a .F.
+No se puede modificar un Radar si el campo carga_inventario_movil está en .T. en ese caso se le informa al usuario 'Para modificar el Radar debe reversar el inventario movil al almacén'
+
+Si tienes una lógica mejor funcional que la que propongo la escribes en el Implementation Plan
+
 ## Reglas
 # 1. La cantidad de productos a cargar en el inventario movil viene de la suma del campo cantidad_solicidata por id_productos, 
 ya que al momento de hacer la carga en el inventario movil no hay despachos, entonces no tomar en cuenta el campo de cantidad_despachada}
@@ -42,7 +52,7 @@ inventario movil y no del almacén. Verifica que eso esté así en la Functions 
 
 ## Preguntas planteadas
 ¿Se requiere que la función marque automáticamente la fecha de despacho (fecha_despacho = NOW()) en las ordenes_distribucion pertenecientes al radar / camión?
-Si
+No. Se debe mantener la fecha de despacho que ya está registrada en cada orden de distribucion ya que este campo es clave para asignar las órdenes de distribuición a un radar
 
 Aceptamos tu recomendación de implementar la Opcion 1 con soporte híbrido (Opción 3) pero toma en cuenta que el Frontend siempre te va a enviar p_resumen_productos JSONB 
 con la información que necesitas.
