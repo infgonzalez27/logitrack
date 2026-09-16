@@ -88,6 +88,8 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/rendiciones/por-liquidar",
 
+    "/contenedores",
+
     "/facturas-compras",
 
     "/pagos-proveedores",
@@ -100,7 +102,7 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
   ],
 
-  despachador: ["/radar", "/ordenes"],
+  despachador: ["/radar", "/ordenes", "/contenedores"],
 
   vendedor: [
     "/",
@@ -111,11 +113,18 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
     "/rutas",
     "/rendiciones",
     "/rendiciones/por-liquidar",
+    "/contenedores",
   ],
 
   chofer: ["/ordenes", "/inventario-movil"],
 
-  cobrador: ["/visita", "/rendiciones", "/rendiciones/por-liquidar", "/clientes"],
+  cobrador: [
+    "/visita",
+    "/rendiciones",
+    "/rendiciones/por-liquidar",
+    "/contenedores",
+    "/clientes",
+  ],
 
 };
 
@@ -176,7 +185,10 @@ export function getNavSectionsForRole(rol: RolNombre | null) {
       { title: "Ruta", items: [{ href: "/radar", label: "Radar" }] },
       {
         title: "Consulta",
-        items: [{ href: "/ordenes", label: "Órdenes de distribución" }],
+        items: [
+          { href: "/ordenes", label: "Órdenes de distribución" },
+          { href: "/contenedores", label: "Consulta de contenedores" },
+        ],
       },
     ];
   }
@@ -189,6 +201,7 @@ export function getNavSectionsForRole(rol: RolNombre | null) {
           { href: "/rendiciones/por-liquidar", label: "Órdenes por liquidar" },
           { href: "/rendiciones", label: "Rendición de Cuentas" },
           { href: "/rendiciones/nuevo", label: "Nueva rendición" },
+          { href: "/contenedores", label: "Consulta de contenedores" },
         ],
       },
     ];
@@ -219,7 +232,12 @@ export function canAccessHref(rol: RolNombre | null, href: string): boolean {
   }
 
   if (rol === "cobrador") {
-    return href === "/rendiciones" || href.startsWith("/rendiciones/");
+    return (
+      href === "/rendiciones" ||
+      href.startsWith("/rendiciones/") ||
+      href === "/contenedores" ||
+      href.startsWith("/contenedores/")
+    );
   }
 
   if (rol === "despachador") {
@@ -228,6 +246,9 @@ export function canAccessHref(rol: RolNombre | null, href: string): boolean {
       return false;
     }
     if (/^\/ordenes\/[^/]+\/editar/.test(href)) return false;
+    if (href === "/contenedores" || href.startsWith("/contenedores/")) {
+      return true;
+    }
     return href === "/ordenes" || href.startsWith("/ordenes/");
   }
 
