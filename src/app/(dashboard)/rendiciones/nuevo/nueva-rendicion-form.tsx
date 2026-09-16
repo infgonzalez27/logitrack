@@ -135,7 +135,13 @@ export function NuevaRendicionForm({
   const [cargandoOrdenes, setCargandoOrdenes] = useState(false);
 
   const [borradorFpagoId, setBorradorFpagoId] = useState("");
-  const [borradorMontoForma, setBorradorMontoForma] = useState("0.00");
+  const [borradorMontoUsd, setBorradorMontoUsd] = useState("0.00");
+  const [borradorMontoBs, setBorradorMontoBs] = useState("0.00");
+  const [borradorTasa, setBorradorTasa] = useState(() =>
+    tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0
+      ? String(Number(tasaDelDia.tasa_cambio))
+      : "",
+  );
   const [borradorFechaPago, setBorradorFechaPago] = useState(hoyLocal);
   const [borradorReferencia, setBorradorReferencia] = useState("");
   const [borradorCuentaId, setBorradorCuentaId] = useState(
@@ -158,11 +164,15 @@ export function NuevaRendicionForm({
   const [pending, startTransition] = useTransition();
 
   const tasaValor =
-    tasaOficial != null && tasaOficial > 0
-      ? tasaOficial
-      : tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0
-        ? Number(tasaDelDia.tasa_cambio)
-        : null;
+    (() => {
+      const t = Number(borradorTasa);
+      if (Number.isFinite(t) && t > 0) return t;
+      if (tasaOficial != null && tasaOficial > 0) return tasaOficial;
+      if (tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0) {
+        return Number(tasaDelDia.tasa_cambio);
+      }
+      return null;
+    })();
 
   const formaSeleccionada = formasPago.find(
     (f) => f.fpago_id === borradorFpagoId,
@@ -171,14 +181,6 @@ export function NuevaRendicionForm({
   const borradorEnBs = formaSeleccionada
     ? esFormaPagoEnBs(formaSeleccionada.fpago_concepto)
     : false;
-  const borradorEquivUsd =
-    borradorEnBs && tasaValor != null
-      ? convertirBsAUsd(Number(borradorMontoForma) || 0, tasaValor)
-      : Number(borradorMontoForma) || 0;
-  const borradorEquivBs =
-    !borradorEnBs && tasaValor != null
-      ? convertirUsdABs(Number(borradorMontoForma) || 0, tasaValor)
-      : Number(borradorMontoForma) || 0;
 
   const clientesFiltrados = useMemo(() => {
     const q = buscarCliente.trim().toLowerCase();
@@ -232,6 +234,7 @@ export function NuevaRendicionForm({
         result.data.tasa_oficial_actual > 0
       ) {
         setTasaOficial(result.data.tasa_oficial_actual);
+        setBorradorTasa(String(result.data.tasa_oficial_actual));
       }
       // Cobranza/Abono inicia en 0 por orden.
       const inicial: Record<string, string> = {};
@@ -283,6 +286,67 @@ export function NuevaRendicionForm({
     [pagos],
   );
   const diferencia = totalRendicion - totalOrdenes;
+  const faltanteCobrar = Math.max(0, totalOrdenes - totalRendicion);
+
+  // Sincroniza tasa del día en el borrador cuando llega del servidor.
+  useEffect(() => {
+    if (tasaOficial != null && tasaOficial > 0 && !borradorTasa) {
+      setBorradorTasa(String(tasaOficial));
+    } else if (
+      tasaDelDia != null &&
+      Number(tasaDelDia.tasa_cambio) > 0 &&
+      !borradorTasa
+    ) {
+      setBorradorTasa(String(Number(tasaDelDia.tasa_cambio)));
+    }
+  }, [tasaOficial, tasaDelDia, borradorTasa]);
+
+  // Coloca el faltante a cobrar en Monto $ (flecha del total → campo).
+  useEffect(() => {
+    const usd = faltanteCobrar;
+    setBorradorMontoUsd(usd > 0 ? usd.toFixed(2) : "0.00");
+    const tasa =
+      Number(borradorTasa) > 0
+        ? Number(borradorTasa)
+        : tasaValor != null && tasaValor > 0
+          ? tasaValor
+          : null;
+    if (tasa != null && usd > 0) {
+      setBorradorMontoBs(convertirUsdABs(usd, tasa).toFixed(2));
+    } else {
+      setBorradorMontoBs("0.00");
+    }
+    // Solo al cambiar el faltante (cobranzas / pagos incluidos).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [faltanteCobrar]);
+
+  function onMontoUsdChange(value: string) {
+    setBorradorMontoUsd(value);
+    const usd = Number(value);
+    if (!Number.isFinite(usd) || usd < 0 || tasaValor == null || tasaValor <= 0) {
+      return;
+    }
+    setBorradorMontoBs(convertirUsdABs(usd, tasaValor).toFixed(2));
+  }
+
+  function onMontoBsChange(value: string) {
+    setBorradorMontoBs(value);
+    const bs = Number(value);
+    if (!Number.isFinite(bs) || bs < 0 || tasaValor == null || tasaValor <= 0) {
+      return;
+    }
+    setBorradorMontoUsd(convertirBsAUsd(bs, tasaValor).toFixed(2));
+  }
+
+  function onTasaChange(value: string) {
+    setBorradorTasa(value);
+    const tasa = Number(value);
+    const usd = Number(borradorMontoUsd);
+    if (!Number.isFinite(tasa) || tasa <= 0) return;
+    if (Number.isFinite(usd) && usd >= 0) {
+      setBorradorMontoBs(convertirUsdABs(usd, tasa).toFixed(2));
+    }
+  }
 
   function resetFormulario() {
     setBuscarCliente("");
@@ -294,7 +358,8 @@ export function NuevaRendicionForm({
     setOrdenesDisponibles([]);
     setOrdenesError(null);
     setBorradorFpagoId("");
-    setBorradorMontoForma("0.00");
+    setBorradorMontoUsd("0.00");
+    setBorradorMontoBs("0.00");
     setBorradorFechaPago(hoyLocal());
     setBorradorReferencia("");
     setBorradorCuentaId(cuentasBancarias[0]?.id ?? "");
@@ -351,18 +416,31 @@ export function NuevaRendicionForm({
       setError("Selecciona una forma de pago.");
       return;
     }
-    const montoIngresado = Number(borradorMontoForma);
-    if (!Number.isFinite(montoIngresado) || montoIngresado <= 0) {
-      setError("El monto de la forma de pago debe ser mayor a 0.");
+    const tasa =
+      Number(borradorTasa) > 0
+        ? Number(borradorTasa)
+        : tasaValor != null && tasaValor > 0
+          ? tasaValor
+          : null;
+
+    const montoUsd = Number(borradorMontoUsd);
+    const montoBs = Number(borradorMontoBs);
+    if (borradorEnBs) {
+      if (!Number.isFinite(montoBs) || montoBs <= 0) {
+        setError("El monto en Bs debe ser mayor a 0.");
+        return;
+      }
+      if (tasa == null || tasa <= 0) {
+        setError(
+          "Indica la TASA BCV para convertir bolívares. Regístrala en Tasas de cambio si falta.",
+        );
+        return;
+      }
+    } else if (!Number.isFinite(montoUsd) || montoUsd <= 0) {
+      setError("El monto en $ debe ser mayor a 0.");
       return;
     }
-    const enBs = esFormaPagoEnBs(formaSeleccionada.fpago_concepto);
-    if (enBs && (tasaValor == null || tasaValor <= 0)) {
-      setError(
-        "No hay tasa del día para convertir bolívares. Regístrala en Tasas de cambio (BCV).",
-      );
-      return;
-    }
+
     if (formaSeleccionada.fpago_info) {
       if (!borradorReferencia.trim()) {
         setError("Ingresa la referencia bancaria.");
@@ -374,14 +452,17 @@ export function NuevaRendicionForm({
       }
     }
 
-    const montoUsd = enBs
-      ? convertirBsAUsd(montoIngresado, tasaValor as number)
-      : montoIngresado;
-    const montoBs = enBs
-      ? montoIngresado
-      : tasaValor != null
-        ? convertirUsdABs(montoIngresado, tasaValor)
-        : 0;
+    const usdFinal = borradorEnBs
+      ? convertirBsAUsd(montoBs, tasa as number)
+      : montoUsd;
+    const bsFinal = borradorEnBs
+      ? montoBs
+      : tasa != null
+        ? convertirUsdABs(usdFinal, tasa)
+        : montoBs > 0
+          ? montoBs
+          : 0;
+    const montoIngresado = borradorEnBs ? montoBs : montoUsd;
 
     const cuenta = cuentasBancarias.find((c) => c.id === borradorCuentaId);
 
@@ -392,11 +473,11 @@ export function NuevaRendicionForm({
         fpago_id: formaSeleccionada.fpago_id,
         concepto: formaSeleccionada.fpago_concepto,
         fpago_info: formaSeleccionada.fpago_info,
-        en_bs: enBs,
+        en_bs: borradorEnBs,
         monto_ingresado: montoIngresado,
-        monto_usd: montoUsd,
-        monto_bs: montoBs,
-        tasa_aplicada: tasaValor,
+        monto_usd: usdFinal,
+        monto_bs: bsFinal,
+        tasa_aplicada: tasa,
         fecha: borradorFechaPago || fechaPago,
         referencia_bancaria: formaSeleccionada.fpago_info
           ? borradorReferencia.trim()
@@ -415,7 +496,8 @@ export function NuevaRendicionForm({
     ]);
 
     setBorradorFpagoId("");
-    setBorradorMontoForma("0.00");
+    setBorradorMontoUsd("0.00");
+    setBorradorMontoBs("0.00");
     setBorradorFechaPago(fechaPago);
     setBorradorReferencia("");
     setBorradorCaptureUrl(null);
@@ -744,23 +826,14 @@ export function NuevaRendicionForm({
           <h2 className="text-base font-semibold text-lt-text">
             Opciones de pago
           </h2>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              onClick={incluirPago}
-              disabled={formasPago.length === 0}
-            >
-              Incluir
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={quitarPagoSeleccionado}
-              disabled={!pagoSeleccionadoKey}
-            >
-              Quitar
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={quitarPagoSeleccionado}
+            disabled={!pagoSeleccionadoKey}
+          >
+            Quitar
+          </Button>
         </div>
 
         <div className="space-y-3 border-b border-lt-border-light p-4">
@@ -777,7 +850,7 @@ export function NuevaRendicionForm({
             </p>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Select
               label="Forma de pago"
               placeholder="Selecciona forma"
@@ -796,14 +869,50 @@ export function NuevaRendicionForm({
               onChange={(e) => setBorradorFechaPago(e.target.value)}
             />
             <Input
-              label={borradorEnBs ? "Monto Bs" : "Monto $"}
+              label="Monto $"
               type="number"
               min={0}
               step="0.01"
-              value={borradorMontoForma}
-              onChange={(e) => setBorradorMontoForma(e.target.value)}
+              value={borradorMontoUsd}
+              onChange={(e) => onMontoUsdChange(e.target.value)}
             />
-            {pideInfoBancaria ? (
+            <Input
+              label="TASA BCV"
+              type="number"
+              min={0}
+              step="0.0001"
+              value={borradorTasa}
+              onChange={(e) => onTasaChange(e.target.value)}
+              placeholder="Tasa del día"
+            />
+            <Input
+              label="Monto Bs"
+              type="number"
+              min={0}
+              step="0.01"
+              value={borradorMontoBs}
+              onChange={(e) => onMontoBsChange(e.target.value)}
+            />
+          </div>
+
+          {pideInfoBancaria ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Input
+                label="Referencia bancaria"
+                required
+                value={borradorReferencia}
+                onChange={(e) => setBorradorReferencia(e.target.value)}
+                placeholder="Nº de referencia"
+              />
+              <Select
+                label="Cuenta bancaria empresa"
+                required
+                placeholder="Selecciona cuenta destino"
+                options={cuentasOptions}
+                value={borradorCuentaId}
+                onChange={(e) => setBorradorCuentaId(e.target.value)}
+                disabled={cuentasBancarias.length === 0}
+              />
               <div className="flex items-end gap-2">
                 <Button
                   type="button"
@@ -834,67 +943,23 @@ export function NuevaRendicionForm({
                   onChange={(e) => void onCaptureSelected(e.target.files?.[0])}
                 />
               </div>
-            ) : (
-              <div className="flex items-end">
-                <p className="pb-2 text-xs text-lt-text-muted">
-                  {borradorFpagoId
-                    ? borradorEnBs
-                      ? tasaValor != null
-                        ? `Equivale a ${formatCurrency(borradorEquivUsd)}`
-                        : "Falta tasa del día"
-                      : tasaValor != null
-                        ? `Equivale a ${formatNumber(borradorEquivBs)} Bs`
-                        : "Monto en dólares"
-                    : " "}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {borradorFpagoId && tasaValor != null ? (
-            <p className="text-sm text-lt-text-muted">
-              {borradorEnBs ? (
-                <>
-                  Conversión BCV:{" "}
-                  <span className="font-medium text-lt-text">
-                    {formatNumber(Number(borradorMontoForma) || 0)} Bs ÷{" "}
-                    {formatNumber(tasaValor)} ={" "}
-                    {formatCurrency(borradorEquivUsd)}
-                  </span>
-                </>
-              ) : (
-                <>
-                  Equivalente:{" "}
-                  <span className="font-medium text-lt-text">
-                    {formatCurrency(Number(borradorMontoForma) || 0)} ×{" "}
-                    {formatNumber(tasaValor)} ={" "}
-                    {formatNumber(borradorEquivBs)} Bs
-                  </span>
-                </>
-              )}
-            </p>
-          ) : null}
-
-          {pideInfoBancaria ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                label="Referencia bancaria"
-                required
-                value={borradorReferencia}
-                onChange={(e) => setBorradorReferencia(e.target.value)}
-                placeholder="Nº de referencia"
-              />
-              <Select
-                label="Cuenta bancaria empresa"
-                required
-                placeholder="Selecciona cuenta destino"
-                options={cuentasOptions}
-                value={borradorCuentaId}
-                onChange={(e) => setBorradorCuentaId(e.target.value)}
-                disabled={cuentasBancarias.length === 0}
-              />
             </div>
           ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-lt-text-muted">
+              {tasaValor != null
+                ? `Conversión: $ × ${formatNumber(tasaValor)} = Bs · Bs ÷ ${formatNumber(tasaValor)} = $`
+                : "Indica la TASA BCV para convertir entre $ y Bs."}
+            </p>
+            <Button
+              type="button"
+              onClick={incluirPago}
+              disabled={formasPago.length === 0}
+            >
+              Incluir otra forma de pago
+            </Button>
+          </div>
         </div>
 
         <div className="hidden overflow-x-auto md:block">
@@ -917,7 +982,7 @@ export function NuevaRendicionForm({
                     colSpan={7}
                     className="px-4 py-8 text-center text-lt-text-muted"
                   >
-                    Incluye opciones de pago con el botón Incluir.
+                    Incluye opciones de pago con «Incluir otra forma de pago».
                   </td>
                 </tr>
               ) : (
@@ -974,7 +1039,7 @@ export function NuevaRendicionForm({
         <ul className="space-y-2 p-4 md:hidden">
           {pagos.length === 0 ? (
             <li className="py-4 text-center text-sm text-lt-text-muted">
-              Incluye opciones de pago con el botón Incluir.
+              Incluye opciones de pago con «Incluir otra forma de pago».
             </li>
           ) : (
             pagos.map((p) => (
