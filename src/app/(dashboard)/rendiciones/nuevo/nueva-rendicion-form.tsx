@@ -920,7 +920,7 @@ export function NuevaRendicionForm({
                   disabled={subiendoCapture}
                   onClick={() => captureInputRef.current?.click()}
                 >
-                  {subiendoCapture ? "Subiendo…" : "Captura"}
+                  {subiendoCapture ? "Subiendo…" : "Adjuntar imagen"}
                 </Button>
                 <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg border border-lt-border bg-lt-surface-muted">
                   {borradorPreview ? (
@@ -938,7 +938,6 @@ export function NuevaRendicionForm({
                   ref={captureInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={(e) => void onCaptureSelected(e.target.files?.[0])}
                 />

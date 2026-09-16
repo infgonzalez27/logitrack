@@ -6,18 +6,32 @@ import { Button } from "@/components/ui/button";
 export function VisitaClienteAcciones({
   clienteId,
   puedeCrearOrden,
+  puedeRendir,
 }: {
   clienteId: string;
   puedeCrearOrden: boolean;
+  /** false si el cliente no tiene órdenes por liquidar. */
+  puedeRendir: boolean;
 }) {
   const visitaHref = `/clientes/${clienteId}/visita`;
   const rendicionHref = `/rendiciones/nuevo?cliente_id=${encodeURIComponent(clienteId)}&volver=${encodeURIComponent(visitaHref)}`;
 
   return (
     <div className="flex flex-wrap gap-3">
-      <Button href={rendicionHref} variant="secondary">
-        Rendición de cuentas
-      </Button>
+      {puedeRendir ? (
+        <Button href={rendicionHref} variant="secondary">
+          Rendición de cuentas
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="secondary"
+          disabled
+          title="Este cliente no tiene órdenes por liquidar"
+        >
+          Rendición de cuentas
+        </Button>
+      )}
       {puedeCrearOrden ? (
         <Button
           href={`/ordenes/nuevo?cliente_id=${encodeURIComponent(clienteId)}&volver=${encodeURIComponent(visitaHref)}`}

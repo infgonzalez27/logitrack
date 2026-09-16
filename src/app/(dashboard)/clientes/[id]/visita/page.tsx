@@ -68,6 +68,7 @@ export default async function ClienteVisitaPage({
       <VisitaClienteAcciones
         clienteId={id}
         puedeCrearOrden={canCreateOrden(rol)}
+        puedeRendir={ordenes.some((o) => Number(o.saldo_pendiente ?? 0) > 0)}
       />
 
       {!abonos.ok ? (
