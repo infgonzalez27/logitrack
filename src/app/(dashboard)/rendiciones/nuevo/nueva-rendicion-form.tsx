@@ -99,6 +99,8 @@ export function NuevaRendicionForm({
   cuentasError = null,
   tasaDelDia = null,
   tasaError = null,
+  initialClienteId,
+  volverHref = "/rendiciones",
 }: {
   clientes: ClienteOption[];
   formasPago: Fpago[];
@@ -107,12 +109,15 @@ export function NuevaRendicionForm({
   cuentasError?: string | null;
   tasaDelDia?: TasaCambio | null;
   tasaError?: string | null;
+  /** Prefill desde visita (`?cliente_id=`). */
+  initialClienteId?: string;
+  volverHref?: string;
 }) {
   const router = useRouter();
   const captureInputRef = useRef<HTMLInputElement>(null);
 
   const [buscarCliente, setBuscarCliente] = useState("");
-  const [clienteId, setClienteId] = useState("");
+  const [clienteId, setClienteId] = useState(initialClienteId ?? "");
   const [fechaPago, setFechaPago] = useState(hoyLocal);
   const [observaciones, setObservaciones] = useState("");
   const [saldoFavor, setSaldoFavor] = useState(0);
@@ -145,12 +150,9 @@ export function NuevaRendicionForm({
     null,
   );
 
-  const [borradorOrdenId, setBorradorOrdenId] = useState("");
-  const [borradorMontoOrden, setBorradorMontoOrden] = useState("0.00");
-  const [borradorRendicion, setBorradorRendicion] = useState("0.00");
-
   const [pagos, setPagos] = useState<PagoAgregado[]>([]);
-  const [ordenes, setOrdenes] = useState<OrdenAgregada[]>([]);
+  /** Cobranza/Abono por orden_id — default "0". */
+  const [cobranzas, setCobranzas] = useState<Record<string, string>>({});
 
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -161,15 +163,6 @@ export function NuevaRendicionForm({
       : tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0
         ? Number(tasaDelDia.tasa_cambio)
         : null;
-
-  const ordenBorrador = useMemo(
-    () => ordenesDisponibles.find((o) => o.id === borradorOrdenId),
-    [ordenesDisponibles, borradorOrdenId],
-  );
-  const borradorSaldoPendienteBs = saldoPendienteBsDeOrden(
-    ordenBorrador,
-    tasaValor,
-  );
 
   const formaSeleccionada = formasPago.find(
     (f) => f.fpago_id === borradorFpagoId,
@@ -210,12 +203,9 @@ export function NuevaRendicionForm({
     if (!clienteId) {
       setOrdenesDisponibles([]);
       setOrdenesError(null);
-      setOrdenes([]);
+      setCobranzas({});
       setSaldoFavor(0);
       setSaldoFavorBs(null);
-      setBorradorOrdenId("");
-      setBorradorMontoOrden("0.00");
-      setBorradorRendicion("0.00");
       return;
     }
 
@@ -229,6 +219,7 @@ export function NuevaRendicionForm({
       if (!result.ok) {
         setOrdenesError(result.error);
         setOrdenesDisponibles([]);
+        setCobranzas({});
         setSaldoFavor(0);
         setSaldoFavorBs(null);
         return;
@@ -242,10 +233,12 @@ export function NuevaRendicionForm({
       ) {
         setTasaOficial(result.data.tasa_oficial_actual);
       }
-      setOrdenes([]);
-      setBorradorOrdenId("");
-      setBorradorMontoOrden("0.00");
-      setBorradorRendicion("0.00");
+      // Cobranza/Abono inicia en 0 por orden.
+      const inicial: Record<string, string> = {};
+      for (const o of result.data.ordenes) {
+        inicial[o.id] = "0";
+      }
+      setCobranzas(inicial);
     });
 
     return () => {
@@ -253,15 +246,33 @@ export function NuevaRendicionForm({
     };
   }, [clienteId]);
 
-  const ordenesParaSelect = useMemo(() => {
-    const usadas = new Set(ordenes.map((o) => o.orden_id));
-    return ordenesDisponibles
-      .filter((o) => !usadas.has(o.id) && o.saldo_pendiente > 0)
-      .map((o) => ({
-        value: o.id,
-        label: `#${o.correlativo} · pendiente ${formatCurrency(o.saldo_pendiente)}`,
-      }));
-  }, [ordenesDisponibles, ordenes]);
+  const ordenes = useMemo((): OrdenAgregada[] => {
+    return ordenesDisponibles.flatMap((o) => {
+      const monto = Number(cobranzas[o.id] ?? 0);
+      if (!Number.isFinite(monto) || monto <= 0) return [];
+      const saldoPendienteBs = saldoPendienteBsDeOrden(o, tasaValor);
+      const montoBs =
+        tasaValor != null
+          ? convertirUsdABs(monto, tasaValor)
+          : saldoPendienteBs != null && o.saldo_pendiente > 0
+            ? (monto / o.saldo_pendiente) * saldoPendienteBs
+            : 0;
+      return [
+        {
+          key: o.id,
+          orden_id: o.id,
+          correlativo: o.correlativo,
+          monto_orden: o.monto_total_orden,
+          monto_orden_bs: o.monto_total_orden_bs,
+          abonos: o.abonos_acumulados,
+          saldo_pendiente: o.saldo_pendiente,
+          saldo_pendiente_bs: saldoPendienteBs,
+          monto_rendicion: monto,
+          monto_rendicion_bs: montoBs,
+        },
+      ];
+    });
+  }, [ordenesDisponibles, cobranzas, tasaValor]);
 
   const totalOrdenes = useMemo(
     () => ordenes.reduce((sum, o) => sum + o.monto_rendicion, 0),
@@ -290,11 +301,8 @@ export function NuevaRendicionForm({
     setBorradorCaptureUrl(null);
     setBorradorPreview(null);
     setPagoSeleccionadoKey(null);
-    setBorradorOrdenId("");
-    setBorradorMontoOrden("0.00");
-    setBorradorRendicion("0.00");
     setPagos([]);
-    setOrdenes([]);
+    setCobranzas({});
     setError(null);
     if (captureInputRef.current) captureInputRef.current.value = "";
   }
@@ -304,17 +312,13 @@ export function NuevaRendicionForm({
     setBorradorReferencia("");
   }
 
-  function onOrdenChange(value: string) {
-    setBorradorOrdenId(value);
-    const found = ordenesDisponibles.find((o) => o.id === value);
-    if (found) {
-      const monto = found.saldo_pendiente.toFixed(2);
-      setBorradorMontoOrden(monto);
-      setBorradorRendicion(monto);
-    } else {
-      setBorradorMontoOrden("0.00");
-      setBorradorRendicion("0.00");
-    }
+  function setCobranzaOrden(ordenId: string, value: string) {
+    setCobranzas((prev) => ({ ...prev, [ordenId]: value }));
+  }
+
+  function aplicarTotalOrden(orden: OrdenParaRendicion) {
+    // Total cobrable ahora = saldo pendiente (no superar lo adeudado).
+    setCobranzaOrden(orden.id, Number(orden.saldo_pendiente ?? 0).toFixed(2));
   }
 
   async function onCaptureSelected(file: File | undefined) {
@@ -429,58 +433,6 @@ export function NuevaRendicionForm({
     setPagoSeleccionadoKey(null);
   }
 
-  function agregarOrden() {
-    setError(null);
-    if (!borradorOrdenId) {
-      setError("Selecciona una orden.");
-      return;
-    }
-    const found = ordenesDisponibles.find((o) => o.id === borradorOrdenId);
-    if (!found) {
-      setError("Orden no válida.");
-      return;
-    }
-    const montoRendicion = Number(borradorRendicion);
-    if (!Number.isFinite(montoRendicion) || montoRendicion <= 0) {
-      setError("El monto a rendir debe ser mayor a 0.");
-      return;
-    }
-    if (montoRendicion > found.saldo_pendiente + 0.009) {
-      setError(
-        `El monto a rendir no puede superar el saldo pendiente (${formatCurrency(found.saldo_pendiente)}).`,
-      );
-      return;
-    }
-
-    const saldoPendienteBs = saldoPendienteBsDeOrden(found, tasaValor);
-    const montoBs =
-      tasaValor != null
-        ? convertirUsdABs(montoRendicion, tasaValor)
-        : saldoPendienteBs != null && found.saldo_pendiente > 0
-          ? (montoRendicion / found.saldo_pendiente) * saldoPendienteBs
-          : 0;
-
-    setOrdenes((prev) => [
-      ...prev,
-      {
-        key: newKey(),
-        orden_id: found.id,
-        correlativo: found.correlativo,
-        monto_orden: found.monto_total_orden,
-        monto_orden_bs: found.monto_total_orden_bs,
-        abonos: found.abonos_acumulados,
-        saldo_pendiente: found.saldo_pendiente,
-        saldo_pendiente_bs: saldoPendienteBs,
-        monto_rendicion: montoRendicion,
-        monto_rendicion_bs: montoBs,
-      },
-    ]);
-
-    setBorradorOrdenId("");
-    setBorradorMontoOrden("0.00");
-    setBorradorRendicion("0.00");
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -494,8 +446,17 @@ export function NuevaRendicionForm({
       return;
     }
     if (!ordenes.length) {
-      setError("Agrega al menos una orden.");
+      setError("Indica Cobranza/Abono mayor a 0 en al menos una orden.");
       return;
+    }
+
+    for (const o of ordenes) {
+      if (o.monto_rendicion > o.saldo_pendiente + 0.009) {
+        setError(
+          `Orden #${o.correlativo}: la cobranza no puede superar el saldo pendiente (${formatCurrency(o.saldo_pendiente)}).`,
+        );
+        return;
+      }
     }
 
     const obs = [
@@ -651,19 +612,27 @@ export function NuevaRendicionForm({
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-lt-border bg-lt-surface shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-lt-border-light bg-lt-surface-muted px-4 py-3">
-          <h2 className="text-base font-semibold text-lt-text">Órdenes</h2>
-          <Button type="button" onClick={agregarOrden} disabled={!clienteId}>
-            + Orden
-          </Button>
+        <div className="border-b border-lt-border-light bg-lt-surface-muted px-4 py-3">
+          <h2 className="text-base font-semibold text-lt-text">
+            Órdenes por liquidar
+          </h2>
+          <p className="text-sm text-lt-text-muted">
+            Indica Cobranza/Abono por orden (inicia en 0). Usa «Total de la
+            orden» para cargar el saldo pendiente.
+          </p>
         </div>
 
-        <div className="space-y-3 border-b border-lt-border-light p-4">
+        <div className="space-y-4 p-4">
           {cargandoOrdenes ? (
             <p className="text-sm text-lt-text-muted">Cargando órdenes…</p>
           ) : null}
           {ordenesError ? (
             <p className="text-sm text-lt-danger-text">{ordenesError}</p>
+          ) : null}
+          {!clienteId ? (
+            <p className="text-sm text-lt-text-muted">
+              Selecciona un cliente para ver sus órdenes.
+            </p>
           ) : null}
           {clienteId && !cargandoOrdenes && ordenesDisponibles.length === 0 ? (
             <p className="text-sm text-lt-text-muted">
@@ -671,155 +640,94 @@ export function NuevaRendicionForm({
             </p>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Select
-              label="Orden"
-              placeholder="Órdenes por liquidar"
-              options={ordenesParaSelect}
-              value={borradorOrdenId}
-              onChange={(e) => onOrdenChange(e.target.value)}
-              disabled={!clienteId || cargandoOrdenes}
-            />
-            <Input
-              label="Saldo pendiente $"
-              type="number"
-              min={0}
-              step="0.01"
-              readOnly
-              value={borradorMontoOrden}
-            />
-            <Input
-              label="Saldo pendiente Bs"
-              type="text"
-              readOnly
-              value={
-                borradorSaldoPendienteBs != null
-                  ? formatNumber(borradorSaldoPendienteBs)
-                  : "—"
-              }
-            />
-            <Input
-              label="Monto a rendir $"
-              type="number"
-              min={0}
-              step="0.01"
-              value={borradorRendicion}
-              onChange={(e) => setBorradorRendicion(e.target.value)}
-            />
-          </div>
-        </div>
+          {ordenesDisponibles.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {ordenesDisponibles.map((o) => {
+                const cobranza = cobranzas[o.id] ?? "0";
+                const saldoBs = saldoPendienteBsDeOrden(o, tasaValor);
+                return (
+                  <article
+                    key={o.id}
+                    className="flex flex-col rounded-2xl border border-lt-border bg-lt-surface p-4 shadow-sm"
+                  >
+                    <h3 className="text-lg font-bold text-lt-text">
+                      Orden: #{o.correlativo}
+                    </h3>
+                    <dl className="mt-3 space-y-2 text-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <dt className="text-lt-text-muted">Fecha despacho:</dt>
+                        <dd className="text-right font-medium text-lt-text">
+                          {o.fecha_despacho
+                            ? formatDateOnly(o.fecha_despacho)
+                            : "—"}
+                        </dd>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <dt className="text-lt-text-muted">Días vencidos:</dt>
+                        <dd className="text-right font-medium tabular-nums text-lt-text">
+                          {formatNumber(o.dias_vencidos ?? 0)}
+                        </dd>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <dt className="text-lt-text-muted">Total orden:</dt>
+                        <dd className="text-right tabular-nums text-lt-text">
+                          {formatCurrency(Number(o.monto_total_orden ?? 0))}
+                        </dd>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <dt className="text-lt-text-muted">Abonado:</dt>
+                        <dd className="text-right tabular-nums text-lt-text">
+                          {formatCurrency(Number(o.abonos_acumulados ?? 0))}
+                        </dd>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <dt className="text-lt-text-muted">Saldo pendiente:</dt>
+                        <dd className="text-right tabular-nums font-medium text-lt-text">
+                          {formatCurrency(Number(o.saldo_pendiente ?? 0))}
+                          {saldoBs != null && saldoBs > 0 ? (
+                            <span className="block text-xs font-normal text-lt-text-muted">
+                              {formatNumber(saldoBs)} Bs
+                            </span>
+                          ) : null}
+                        </dd>
+                      </div>
+                    </dl>
 
-        <div className="hidden overflow-x-auto md:block">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-lt-surface-muted text-xs uppercase tracking-wide text-lt-text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Correlativo</th>
-                <th className="px-4 py-3 font-medium">Total orden</th>
-                <th className="px-4 py-3 font-medium">Abonos</th>
-                <th className="px-4 py-3 font-medium">Saldo pend.</th>
-                <th className="px-4 py-3 font-medium">Monto a rendir</th>
-                <th className="px-4 py-3 font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {ordenes.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-8 text-center text-lt-text-muted"
-                  >
-                    Agrega órdenes con el botón + Orden.
-                  </td>
-                </tr>
-              ) : (
-                ordenes.map((o) => (
-                  <tr
-                    key={o.key}
-                    className="border-t border-lt-border-light"
-                  >
-                    <td className="px-4 py-3 font-medium text-lt-text">
-                      {o.correlativo}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatCurrency(o.monto_orden)}
-                    </td>
-                    <td className="px-4 py-3">{formatCurrency(o.abonos)}</td>
-                    <td className="px-4 py-3">
-                      {formatCurrency(o.saldo_pendiente)}
-                      {o.saldo_pendiente_bs != null && o.saldo_pendiente_bs > 0 ? (
-                        <span className="block text-xs text-lt-text-muted">
-                          {formatNumber(o.saldo_pendiente_bs)} Bs
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                      {formatCurrency(o.monto_rendicion)}
-                      <span className="block text-xs text-lt-text-muted">
-                        {formatNumber(o.monto_rendicion_bs)} Bs
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        className="rounded-lg px-2 py-1 text-sm font-medium text-lt-danger-text hover:bg-lt-danger-bg"
-                        onClick={() =>
-                          setOrdenes((prev) =>
-                            prev.filter((item) => item.key !== o.key),
-                          )
-                        }
+                    <div className="mt-4 space-y-2 border-t border-lt-border-light pt-3">
+                      <label
+                        htmlFor={`cobranza-${o.id}`}
+                        className="block text-sm font-medium text-lt-text"
                       >
-                        Quitar
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                        Cobranza / Abono
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          id={`cobranza-${o.id}`}
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={cobranza}
+                          onChange={(e) =>
+                            setCobranzaOrden(o.id, e.target.value)
+                          }
+                          className="lt-input w-full flex-1 rounded-xl border border-lt-border bg-lt-surface px-3.5 py-2.5 text-sm tabular-nums text-lt-text"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="shrink-0 whitespace-nowrap"
+                          onClick={() => aplicarTotalOrden(o)}
+                        >
+                          Total de la orden
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
-
-        <ul className="space-y-2 p-4 md:hidden">
-          {ordenes.length === 0 ? (
-            <li className="py-4 text-center text-sm text-lt-text-muted">
-              Agrega órdenes con el botón + Orden.
-            </li>
-          ) : (
-            ordenes.map((o) => (
-              <li
-                key={o.key}
-                className="rounded-xl border border-lt-border-light p-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-lt-text">
-                      Orden No. {o.correlativo}
-                    </p>
-                    <p className="mt-1 text-sm text-lt-text-muted">
-                      Pendiente {formatCurrency(o.saldo_pendiente)}
-                      {o.saldo_pendiente_bs != null && o.saldo_pendiente_bs > 0
-                        ? ` · ${formatNumber(o.saldo_pendiente_bs)} Bs`
-                        : ""}
-                    </p>
-                    <p className="text-sm font-medium text-lt-text">
-                      A rendir {formatCurrency(o.monto_rendicion)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="text-sm font-medium text-lt-danger-text"
-                    onClick={() =>
-                      setOrdenes((prev) =>
-                        prev.filter((item) => item.key !== o.key),
-                      )
-                    }
-                  >
-                    Quitar
-                  </button>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
 
         <div className="flex justify-end border-t border-lt-border-light bg-lt-surface-muted px-4 py-3">
           <p className="text-sm font-semibold text-lt-text">
@@ -1127,14 +1035,14 @@ export function NuevaRendicionForm({
             <Button
               type="button"
               variant="secondary"
-              onClick={() => router.push("/rendiciones")}
+              onClick={() => router.push(volverHref)}
             >
-              Buscar
+              Volver
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => router.push("/rendiciones")}
+              onClick={() => router.push(volverHref)}
             >
               Abandonar
             </Button>

@@ -510,13 +510,13 @@ export type RadarOrdenResumen = {
   contenedores_retirados: number;
 };
 
-/** §2.32 — fila de cartera por liquidar (una fila por orden). */
+/** §2.32 — cartera por liquidar (una fila por cliente; JSON del SP). */
 export type OrdenPorLiquidarCliente = {
-  orden_id: string;
-  correlativo: number;
   cliente_id: string;
   razon_social: string;
+  rif_nit: string;
   dias_vencidos: number;
+  cant_ordenes: number;
   monto_por_liquidar: number;
 };
 

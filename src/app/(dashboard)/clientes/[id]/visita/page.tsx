@@ -9,6 +9,7 @@ import { formatCurrency, formatDateOnly, formatNumber } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { VisitaClienteAcciones } from "./visita-cliente-acciones";
 
 export default async function ClienteVisitaPage({
@@ -80,8 +81,8 @@ export default async function ClienteVisitaPage({
         </p>
       ) : null}
 
-      <Card className="overflow-hidden p-0">
-        <div className="border-b border-lt-border px-4 py-3">
+      <section className="space-y-4">
+        <div>
           <h2 className="text-base font-semibold text-lt-text">
             Órdenes por liquidar
           </h2>
@@ -89,79 +90,71 @@ export default async function ClienteVisitaPage({
             Pendientes de cobro / liquidación de este cliente.
           </p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[36rem] text-left text-sm">
-            <thead className="border-b border-lt-border bg-lt-surface-muted text-lt-text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Orden</th>
-                <th className="px-4 py-3 font-medium">Fecha despacho</th>
-                <th className="px-4 py-3 font-medium text-right">
-                  Total orden
-                </th>
-                <th className="px-4 py-3 font-medium text-right">Abonado</th>
-                <th className="px-4 py-3 font-medium text-right">
-                  Saldo pendiente
-                </th>
-                <th className="px-4 py-3 font-medium"> </th>
-              </tr>
-            </thead>
-            <tbody>
-              {!ordenes.length ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-8 text-center text-lt-text-muted"
-                  >
-                    Este cliente no tiene órdenes por liquidar.
-                  </td>
-                </tr>
-              ) : (
-                ordenes.map((o) => (
-                  <tr
-                    key={o.id}
-                    className="border-b border-lt-border-light last:border-0"
-                  >
-                    <td className="px-4 py-3 font-semibold text-lt-text">
-                      #{o.correlativo}
-                    </td>
-                    <td className="px-4 py-3 text-lt-text-muted">
+
+        {!ordenes.length ? (
+          <Card className="px-4 py-8 text-center text-sm text-lt-text-muted">
+            Este cliente no tiene órdenes por liquidar.
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {ordenes.map((o) => (
+              <article
+                key={o.id}
+                className="flex flex-col rounded-2xl border border-lt-border bg-lt-surface p-4 shadow-sm"
+              >
+                <h3 className="text-lg font-bold text-lt-text">
+                  Orden: #{o.correlativo}
+                </h3>
+                <dl className="mt-3 flex-1 space-y-2 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-lt-text-muted">Fecha despacho:</dt>
+                    <dd className="text-right font-medium text-lt-text">
                       {o.fecha_despacho
                         ? formatDateOnly(o.fecha_despacho)
                         : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    </dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-lt-text-muted">Días vencidos:</dt>
+                    <dd className="text-right font-medium tabular-nums text-lt-text">
+                      {formatNumber(o.dias_vencidos ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-lt-text-muted">Total orden:</dt>
+                    <dd className="text-right tabular-nums text-lt-text">
                       {formatCurrency(Number(o.monto_total_orden ?? 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    </dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-lt-text-muted">Abonado:</dt>
+                    <dd className="text-right tabular-nums text-lt-text">
                       {formatCurrency(Number(o.abonos_acumulados ?? 0))}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    </dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-lt-text-muted">Saldo pendiente:</dt>
+                    <dd className="text-right">
                       <Badge tone="warning">
                         {formatCurrency(Number(o.saldo_pendiente ?? 0))}
                       </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/ordenes/${o.id}`}
-                        className="text-sm font-medium text-lt-primary hover:underline"
-                      >
-                        Ver
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-4 flex justify-end">
+                  <Button href={`/ordenes/${o.id}`}>Ver detalle</Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
         {ordenes.length ? (
-          <p className="border-t border-lt-border px-4 py-3 text-sm text-lt-text-muted">
-            {formatNumber(ordenes.length)} orden
-            {ordenes.length === 1 ? "" : "es"} pendiente
-            {ordenes.length === 1 ? "" : "s"}
+          <p className="text-sm text-lt-text-muted">
+            Total de órdenes en vista: {formatNumber(ordenes.length)}
           </p>
         ) : null}
-      </Card>
+      </section>
     </div>
   );
 }

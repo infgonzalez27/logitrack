@@ -10,24 +10,26 @@ export function VisitaClienteAcciones({
   clienteId: string;
   puedeCrearOrden: boolean;
 }) {
+  const visitaHref = `/clientes/${clienteId}/visita`;
+  const rendicionHref = `/rendiciones/nuevo?cliente_id=${encodeURIComponent(clienteId)}&volver=${encodeURIComponent(visitaHref)}`;
+
   return (
     <div className="flex flex-wrap gap-3">
-      <Button
-        type="button"
-        variant="secondary"
-        disabled
-        title="Próximamente: rendición de cuentas desde esta pantalla"
-      >
+      <Button href={rendicionHref} variant="secondary">
         Rendición de cuentas
       </Button>
       {puedeCrearOrden ? (
         <Button
-          href={`/ordenes/nuevo?cliente_id=${encodeURIComponent(clienteId)}&volver=${encodeURIComponent(`/clientes/${clienteId}/visita`)}`}
+          href={`/ordenes/nuevo?cliente_id=${encodeURIComponent(clienteId)}&volver=${encodeURIComponent(visitaHref)}`}
         >
           Crear orden de distribución
         </Button>
       ) : (
-        <Button type="button" disabled title="No tienes permiso para crear órdenes">
+        <Button
+          type="button"
+          disabled
+          title="No tienes permiso para crear órdenes"
+        >
           Crear orden de distribución
         </Button>
       )}

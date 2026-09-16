@@ -1,3 +1,6 @@
+-- DB: solicita_abonos incluye dias_vencidos por orden (calculado en SP).
+-- También lista despachada + por_liquidar para la pantalla de visita.
+
 CREATE OR REPLACE FUNCTION public.solicita_abonos_orden_distribucion(
     p_cliente_id UUID
 )
@@ -45,8 +48,6 @@ BEGIN
         v_tasa_oficial := 1.0000;
     END IF;
 
-    -- ordenes_distribucion usa total_recaudar_usd / total_recaudar_bs
-    -- dias_vencidos lo calcula el SP (no el front)
     SELECT json_agg(
         json_build_object(
             'orden_id', od.id,

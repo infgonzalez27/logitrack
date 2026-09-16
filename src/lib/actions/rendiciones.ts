@@ -37,6 +37,8 @@ export type OrdenParaRendicion = {
   id: string;
   correlativo: number;
   fecha_despacho: string | null;
+  /** Días vencidos desde el SP (`dias_vencidos`); no calcular en el front. */
+  dias_vencidos: number;
   tasa_orden: number | null;
   /** Saldo pendiente USD (monto a cobrar restante). */
   total_recaudar: number;
@@ -114,6 +116,7 @@ type AbonosOrdenRpc = {
   orden_id: string;
   correlativo: number;
   fecha_despacho?: string | null;
+  dias_vencidos?: number | null;
   tasa_orden?: number | null;
   monto_total_orden?: number | null;
   monto_total_orden_bs?: number | null;
@@ -156,6 +159,7 @@ function mapAbonosClienteRpc(raw: AbonosClienteRpc): AbonosClienteResult {
       id: o.orden_id,
       correlativo: Number(o.correlativo),
       fecha_despacho: o.fecha_despacho ?? null,
+      dias_vencidos: Math.max(0, Number(o.dias_vencidos ?? 0)),
       tasa_orden: o.tasa_orden != null ? Number(o.tasa_orden) : null,
       total_recaudar: saldoPendiente,
       total_recaudar_bs: saldoPendienteBs,
@@ -350,6 +354,8 @@ async function solicitaAbonosOrdenDistribucionLocal(
       id: od.id,
       correlativo: od.correlativo,
       fecha_despacho: od.fecha_despacho ?? null,
+      // Fallback local: sin SP no inventamos días; el ticket/UI muestra 0.
+      dias_vencidos: 0,
       tasa_orden: tasaOrden,
       total_recaudar: saldoPendiente,
       total_recaudar_bs: saldoPendienteBs,
@@ -385,13 +391,7 @@ export async function solicitaAbonosOrdenDistribucionAction(
     return { ok: false, error: "Cliente inválido." };
   }
 
-  // Preferir consulta local: el SP aún puede fallar por columnas viejas
-  // (`od.subtotal_recaudar`) y solo listaba `por_liquidar`.
-  const local = await solicitaAbonosOrdenDistribucionLocal(id);
-  if (local.ok) {
-    return local;
-  }
-
+  // Preferir SP: trae `dias_vencidos` y montos asentados (no calcular en front).
   const response = await callDbProcedure<AbonosClienteRpc>(
     "solicita_abonos_orden_distribucion",
     { p_cliente_id: id },
@@ -399,6 +399,11 @@ export async function solicitaAbonosOrdenDistribucionAction(
 
   if (response.success && response.data) {
     return { ok: true, data: mapAbonosClienteRpc(response.data) };
+  }
+
+  const local = await solicitaAbonosOrdenDistribucionLocal(id);
+  if (local.ok) {
+    return local;
   }
 
   return {
@@ -705,24 +710,19 @@ export async function aprobarRendicionAction(rendicionId: string) {
 function mapOrdenPorLiquidar(raw: unknown): OrdenPorLiquidarCliente | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  const ordenId =
-    typeof r.orden_id === "string"
-      ? r.orden_id
-      : typeof r.id === "string"
-        ? r.id
-        : null;
-  if (!ordenId) return null;
+  const clienteId = typeof r.cliente_id === "string" ? r.cliente_id : null;
+  if (!clienteId) return null;
   return {
-    orden_id: ordenId,
-    correlativo: Number(r.correlativo ?? 0),
-    cliente_id: typeof r.cliente_id === "string" ? r.cliente_id : "",
+    cliente_id: clienteId,
     razon_social: String(r.razon_social ?? "—"),
-    dias_vencidos: Number(r.dias_vencidos ?? 0),
+    rif_nit: String(r.rif_nit ?? "—"),
+    dias_vencidos: Math.max(0, Number(r.dias_vencidos ?? 0)),
+    cant_ordenes: Math.max(0, Number(r.cant_ordenes ?? 0)),
     monto_por_liquidar: Number(r.monto_por_liquidar ?? 0),
   };
 }
 
-/** Una fila por orden en estado `por_liquidar`. */
+/** Fallback local solo si falla el SP — sin inventar días vencidos en front. */
 async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente[]> {
   const supabase = await createClient();
   const { data: ordenes, error } = await supabase
@@ -730,12 +730,9 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
     .select(
       `
       id,
-      correlativo,
       cliente_id,
-      fecha_despacho,
-      tasa_cambio,
       total_recaudar_usd,
-      clientes(razon_social),
+      clientes(razon_social, rif_nit),
       detalle_distribucion(subtotal_recaudar_usd)
     `,
     )
@@ -746,19 +743,14 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
     return [];
   }
 
-  type Det = {
-    subtotal_recaudar_usd: number | null;
-  };
+  type Det = { subtotal_recaudar_usd: number | null };
   type Row = {
     id: string;
-    correlativo: number;
     cliente_id: string;
-    fecha_despacho: string | null;
-    tasa_cambio: number | null;
     total_recaudar_usd: number | null;
     clientes:
-      | { razon_social: string }
-      | { razon_social: string }[]
+      | { razon_social: string; rif_nit?: string | null }
+      | { razon_social: string; rif_nit?: string | null }[]
       | null;
     detalle_distribucion: Det[] | Det | null;
   };
@@ -777,23 +769,24 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
       const rc = Array.isArray(a.rendiciones_cuentas)
         ? a.rendiciones_cuentas[0]
         : a.rendiciones_cuentas;
-      if (!rc || (rc as { estado?: string }).estado !== "aprobada") continue;
-      const oid = a.orden_distribucion_id as string;
-      abonosMap.set(
-        oid,
-        (abonosMap.get(oid) ?? 0) + Number(a.recaudado ?? 0),
-      );
+      if ((rc as { estado?: string } | null)?.estado !== "aprobada") continue;
+      const key = a.orden_distribucion_id as string;
+      abonosMap.set(key, (abonosMap.get(key) ?? 0) + Number(a.recaudado ?? 0));
     }
   }
 
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-
-  const items: OrdenPorLiquidarCliente[] = [];
+  const byCliente = new Map<
+    string,
+    {
+      razon_social: string;
+      rif_nit: string;
+      cant_ordenes: number;
+      monto_por_liquidar: number;
+    }
+  >();
 
   for (const od of rows) {
-    const cliente =
-      Array.isArray(od.clientes) ? od.clientes[0] : od.clientes;
+    const cliente = Array.isArray(od.clientes) ? od.clientes[0] : od.clientes;
     const dets = Array.isArray(od.detalle_distribucion)
       ? od.detalle_distribucion
       : od.detalle_distribucion
@@ -805,41 +798,34 @@ async function retornaOrdenesPorLiquidarLocal(): Promise<OrdenPorLiquidarCliente
     );
     const { usd: montoOrden } = resolverMontosOrden({
       total_recaudar_usd: od.total_recaudar_usd,
-      tasa_cambio: od.tasa_cambio,
+      tasa_cambio: null,
       sum_lineas_usd: sumUsd,
     });
     const saldo = Math.max(0, montoOrden - (abonosMap.get(od.id) ?? 0));
-
-    let dias = 0;
-    if (od.fecha_despacho) {
-      const iso = String(od.fecha_despacho).slice(0, 10);
-      const [y, m, d] = iso.split("-").map(Number);
-      if (y && m && d) {
-        const fecha = new Date(y, m - 1, d);
-        dias = Math.max(
-          0,
-          Math.floor(
-            (hoy.getTime() - fecha.getTime()) / (1000 * 60 * 60 * 24),
-          ),
-        );
-      }
-    }
-
-    items.push({
-      orden_id: od.id,
-      correlativo: Number(od.correlativo ?? 0),
-      cliente_id: od.cliente_id,
+    const prev = byCliente.get(od.cliente_id) ?? {
       razon_social: cliente?.razon_social ?? "—",
-      dias_vencidos: dias,
-      monto_por_liquidar: Math.round(saldo * 100) / 100,
-    });
+      rif_nit: cliente?.rif_nit ?? "—",
+      cant_ordenes: 0,
+      monto_por_liquidar: 0,
+    };
+    prev.cant_ordenes += 1;
+    prev.monto_por_liquidar += Math.round(saldo * 100) / 100;
+    byCliente.set(od.cliente_id, prev);
   }
 
-  items.sort((a, b) => b.dias_vencidos - a.dias_vencidos || b.correlativo - a.correlativo);
-  return items;
+  return [...byCliente.entries()]
+    .map(([cliente_id, v]) => ({
+      cliente_id,
+      razon_social: v.razon_social,
+      rif_nit: v.rif_nit,
+      dias_vencidos: 0,
+      cant_ordenes: v.cant_ordenes,
+      monto_por_liquidar: Math.round(v.monto_por_liquidar * 100) / 100,
+    }))
+    .sort((a, b) => b.monto_por_liquidar - a.monto_por_liquidar);
 }
 
-/** Cartera de órdenes por liquidar (una fila por orden). */
+/** Cartera por liquidar: una fila por cliente (`retorna_ordenes_por_liquidar`). */
 export async function retornaOrdenesPorLiquidarAction(): Promise<
   | { ok: true; items: OrdenPorLiquidarCliente[] }
   | { ok: false; error: string; code?: string }
@@ -855,12 +841,7 @@ export async function retornaOrdenesPorLiquidarAction(): Promise<
     return { ok: false, error: "No tienes acceso a órdenes por liquidar." };
   }
 
-  // Preferir cálculo local: el RPC usa total_recaudar_usd que hoy suele ser bs/tasa.
-  const local = await retornaOrdenesPorLiquidarLocal();
-  if (local.length) {
-    return { ok: true, items: local };
-  }
-
+  // Preferir JSONB del SP (incluye dias_vencidos / cant_ordenes).
   const response = await callDbProcedure<unknown>("retorna_ordenes_por_liquidar");
 
   if (response.success) {
@@ -872,9 +853,11 @@ export async function retornaOrdenesPorLiquidarAction(): Promise<
     const items = rows
       .map(mapOrdenPorLiquidar)
       .filter((x): x is OrdenPorLiquidarCliente => x != null);
-    return { ok: true, items };
+    if (items.length || response.data != null) {
+      return { ok: true, items };
+    }
   }
 
+  const local = await retornaOrdenesPorLiquidarLocal();
   return { ok: true, items: local };
 }
-

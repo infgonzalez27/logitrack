@@ -9,7 +9,12 @@ import {
 } from "@/lib/actions/tasa-cambio";
 import { NuevaRendicionForm } from "./nueva-rendicion-form";
 
-export default async function NuevaRendicionPage() {
+export default async function NuevaRendicionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cliente_id?: string; volver?: string }>;
+}) {
+  const { cliente_id: clienteIdParam, volver } = await searchParams;
   await ensureTasaCambioDelDia();
   const supabase = await createClient();
   const [{ data: clientes }, formasResult, cuentasResult, tasaResult] =
@@ -23,6 +28,9 @@ export default async function NuevaRendicionPage() {
       retornaCuentasBancariasEmpresaAction(true),
       retornaUltimaTasaCambioAction(),
     ]);
+
+  const volverHref =
+    volver && volver.startsWith("/") ? volver : "/rendiciones";
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -38,6 +46,8 @@ export default async function NuevaRendicionPage() {
         cuentasError={cuentasResult.ok ? null : cuentasResult.error}
         tasaDelDia={tasaResult.ok ? tasaResult.tasa : null}
         tasaError={tasaResult.ok ? null : tasaResult.error}
+        initialClienteId={clienteIdParam?.trim() || undefined}
+        volverHref={volverHref}
       />
     </div>
   );
