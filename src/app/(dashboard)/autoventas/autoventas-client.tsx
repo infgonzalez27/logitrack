@@ -1,15 +1,24 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { LogiImage } from "@/components/media/logi-image";
+import { ProductoCatalogo } from "@/components/productos/producto-catalogo";
+import { resolveProductoImage } from "@/lib/product-images";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   cargarInventarioMovilAutoVentasAction,
+  obtenerResumenAutoVentasJornada,
   registrarVentaEnRutaAction,
   reversarInventarioMovilAutoVentasAction,
 } from "@/lib/actions/autoventas";
+import type {
+  ProductoListaRpc,
+  ResumenAutoVentaData,
+} from "@/types/database";
 
 type CamionItem = {
   id: string;
@@ -23,13 +32,6 @@ type ClienteItem = {
   razon_social: string;
   rif_nit: string;
   direccion_fiscal: string | null;
-};
-
-type ProductoItem = {
-  id: string;
-  codigo_producto: string;
-  nombre: string;
-  precio_lista1: number;
 };
 
 type ContenedorItem = {
@@ -48,6 +50,7 @@ type InventarioMovilRow = {
     codigo_producto: string;
     nombre: string;
     precio_lista1: number;
+    imagen_path?: string | null;
   } | null;
 };
 
@@ -61,6 +64,11 @@ type OrdenAutoVentaRow = {
   created_at: string;
   camion_id: string;
   clientes?: { razon_social: string } | null;
+};
+
+type LineaCarga = {
+  producto_id: string;
+  cantidad: number;
 };
 
 type LineaVenta = {
@@ -78,7 +86,7 @@ type LineaContenedor = {
 type Props = {
   camiones: CamionItem[];
   clientes: ClienteItem[];
-  productos: ProductoItem[];
+  productos: ProductoListaRpc[];
   contenedores: ContenedorItem[];
   inventarioMovil: InventarioMovilRow[];
   ordenesJornada: OrdenAutoVentaRow[];
@@ -102,22 +110,27 @@ export function AutoVentasClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [camionId, setCamionId] = useState(camiones[0]?.id ?? "");
-  const [tab, setTab] = useState<"resumen" | "venta" | "carga">("resumen");
+  const [tab, setTab] = useState<"resumen" | "venta" | "carga">("carga");
   const [mensaje, setMensaje] = useState<{
     tipo: "success" | "error";
     texto: string;
   } | null>(null);
+  const [resumenRpc, setResumenRpc] = useState<ResumenAutoVentaData | null>(
+    null,
+  );
+  const [cargandoResumen, setCargandoResumen] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
+  const [buscarCliente, setBuscarCliente] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [lineasVenta, setLineasVenta] = useState<LineaVenta[]>([]);
   const [lineasContenedor, setLineasContenedor] = useState<LineaContenedor[]>(
     [],
   );
-  const [lineasCarga, setLineasCarga] = useState<
-    { producto_id: string; cantidad: number }[]
-  >([]);
-  const [buscarCliente, setBuscarCliente] = useState("");
+  const [lineasCarga, setLineasCarga] = useState<LineaCarga[]>([]);
+  const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
+    () => Object.fromEntries(productos.map((p) => [p.id, p])),
+  );
 
   const inventarioCamion = useMemo(
     () => inventarioMovil.filter((i) => i.camion_id === camionId),
@@ -139,58 +152,125 @@ export function AutoVentasClient({
     );
   }, [clientes, buscarCliente]);
 
+  /** Catálogo para venta: stock = disponible en el camión seleccionado. */
+  const productosParaVenta = useMemo((): ProductoListaRpc[] => {
+    return productos
+      .map((p) => {
+        const inv = inventarioCamion.find((i) => i.producto_id === p.id);
+        const disponible = Math.max(
+          0,
+          (inv?.cantidad_cargada ?? 0) - (inv?.cantidad_entregada ?? 0),
+        );
+        return { ...p, stock_disponible: disponible };
+      })
+      .filter((p) => p.stock_disponible > 0);
+  }, [productos, inventarioCamion]);
+
+  useEffect(() => {
+    if (!camionId) {
+      setResumenRpc(null);
+      return;
+    }
+    let cancelled = false;
+    setCargandoResumen(true);
+    void obtenerResumenAutoVentasJornada(camionId).then((res) => {
+      if (cancelled) return;
+      setCargandoResumen(false);
+      if (res.success && res.data) setResumenRpc(res.data);
+      else setResumenRpc(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [camionId]);
+
+  const ventasHoyCount =
+    resumenRpc?.total_ordenes_autoventa ?? ordenesCamion.length;
+  const totalFacturadoUsd =
+    resumenRpc?.total_facturado_usd ??
+    ordenesCamion.reduce((s, o) => s + o.total_recaudar_usd, 0);
+  const totalFacturadoBs =
+    resumenRpc?.total_facturado_bs ??
+    ordenesCamion.reduce((s, o) => s + o.total_recaudar_bs, 0);
+  const inventarioResumen =
+    resumenRpc?.inventario_movil?.length
+      ? resumenRpc.inventario_movil
+      : inventarioCamion.map((item) => ({
+          producto_id: item.producto_id,
+          codigo: item.productos?.codigo_producto ?? "",
+          nombre: item.productos?.nombre ?? "—",
+          cantidad_cargada: item.cantidad_cargada,
+          cantidad_entregada: item.cantidad_entregada,
+          cantidad_disponible: Math.max(
+            0,
+            item.cantidad_cargada - item.cantidad_entregada,
+          ),
+        }));
+  const ventasResumen =
+    resumenRpc?.ventas?.length
+      ? resumenRpc.ventas
+      : ordenesCamion.map((o) => ({
+          orden_id: o.id,
+          correlativo: o.correlativo,
+          factura_origen_numero: o.factura_origen_numero,
+          cliente_nombre: o.clientes?.razon_social ?? "—",
+          estado: o.estado,
+          total_recaudar_usd: o.total_recaudar_usd,
+          total_recaudar_bs: o.total_recaudar_bs,
+          created_at: o.created_at,
+        }));
+
   const totalVentaUsd = lineasVenta.reduce(
     (s, l) => s + l.cantidad * l.precio_unitario,
     0,
   );
+  const totalCargaUnidades = lineasCarga.reduce((s, l) => s + l.cantidad, 0);
 
-  const disponibleProducto = (productoId: string) => {
-    const item = inventarioCamion.find((i) => i.producto_id === productoId);
-    return Math.max(
-      0,
-      (item?.cantidad_cargada ?? 0) - (item?.cantidad_entregada ?? 0),
-    );
-  };
+  function registrarEnCatalogo(producto: ProductoListaRpc) {
+    setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
+  }
 
-  const agregarLineaVenta = () => {
-    const desdeStock = inventarioCamion.find(
-      (i) =>
-        (i.cantidad_cargada || 0) - (i.cantidad_entregada || 0) > 0 &&
-        productos.some((p) => p.id === i.producto_id),
-    );
-    const prod =
-      productos.find((p) => p.id === desdeStock?.producto_id) ?? productos[0];
-    if (!prod) return;
-    setLineasVenta((prev) => [
-      ...prev,
-      {
-        producto_id: prod.id,
-        cantidad: 1,
-        precio_unitario: Number(prod.precio_lista1 || 0),
-      },
-    ]);
-  };
-
-  const actualizarLineaVenta = (
-    index: number,
-    campo: keyof LineaVenta,
-    valor: string | number,
-  ) => {
-    setLineasVenta((prev) => {
-      const next = [...prev];
-      if (campo === "producto_id") {
-        const prod = productos.find((p) => p.id === valor);
-        next[index] = {
-          ...next[index],
-          producto_id: String(valor),
-          precio_unitario: Number(prod?.precio_lista1 || 0),
+  function agregarCarga(producto: ProductoListaRpc, cantidad: number) {
+    const qty = Math.max(1, Math.floor(cantidad) || 1);
+    registrarEnCatalogo(producto);
+    setLineasCarga((prev) => {
+      const idx = prev.findIndex((l) => l.producto_id === producto.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          cantidad: next[idx].cantidad + qty,
         };
-      } else {
-        next[index] = { ...next[index], [campo]: Number(valor) };
+        return next;
       }
-      return next;
+      return [...prev, { producto_id: producto.id, cantidad: qty }];
     });
-  };
+  }
+
+  function agregarVenta(producto: ProductoListaRpc, cantidad: number) {
+    const qty = Math.max(1, Math.floor(cantidad) || 1);
+    registrarEnCatalogo(producto);
+    const precio = Number(producto.precio_lista1 ?? producto.precio ?? 0);
+    setLineasVenta((prev) => {
+      const idx = prev.findIndex((l) => l.producto_id === producto.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          cantidad: next[idx].cantidad + qty,
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          producto_id: producto.id,
+          cantidad: qty,
+          precio_unitario: precio,
+        },
+      ];
+    });
+  }
 
   const handleGuardarVenta = () => {
     setMensaje(null);
@@ -380,13 +460,18 @@ export function AutoVentasClient({
 
       {tab === "resumen" ? (
         <div className="space-y-4">
+          {cargandoResumen ? (
+            <p className="text-sm text-lt-text-muted">
+              Consultando resumen de jornada…
+            </p>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-3">
             <Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-lt-text-subtle">
                 Ventas hoy
               </p>
               <p className="mt-1 text-2xl font-bold text-lt-text">
-                {ordenesCamion.length}
+                {ventasHoyCount}
               </p>
             </Card>
             <Card className="p-4">
@@ -394,9 +479,7 @@ export function AutoVentasClient({
                 Facturado USD
               </p>
               <p className="mt-1 text-2xl font-bold text-lt-success-text">
-                {formatCurrency(
-                  ordenesCamion.reduce((s, o) => s + o.total_recaudar_usd, 0),
-                )}
+                {formatCurrency(totalFacturadoUsd)}
               </p>
             </Card>
             <Card className="p-4">
@@ -404,9 +487,7 @@ export function AutoVentasClient({
                 Facturado Bs
               </p>
               <p className="mt-1 text-2xl font-bold text-lt-text">
-                {formatNumber(
-                  ordenesCamion.reduce((s, o) => s + o.total_recaudar_bs, 0),
-                )}
+                {formatNumber(totalFacturadoBs)}
               </p>
             </Card>
           </div>
@@ -424,7 +505,7 @@ export function AutoVentasClient({
               <Button
                 type="button"
                 variant="secondary"
-                disabled={isPending || inventarioCamion.length === 0}
+                disabled={isPending || inventarioResumen.length === 0}
                 onClick={handleReversar}
               >
                 Devolver sobrante a almacén
@@ -446,7 +527,7 @@ export function AutoVentasClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {inventarioCamion.length === 0 ? (
+                  {inventarioResumen.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}
@@ -456,34 +537,28 @@ export function AutoVentasClient({
                       </td>
                     </tr>
                   ) : (
-                    inventarioCamion.map((item) => {
-                      const disponible = Math.max(
-                        0,
-                        item.cantidad_cargada - item.cantidad_entregada,
-                      );
-                      return (
-                        <tr
-                          key={item.id}
-                          className="border-b border-lt-border-light"
-                        >
-                          <td className="px-2 py-2 font-mono text-xs text-lt-text-muted">
-                            {item.productos?.codigo_producto || "—"}
-                          </td>
-                          <td className="px-2 py-2 font-medium text-lt-text">
-                            {item.productos?.nombre || "—"}
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums">
-                            {formatNumber(item.cantidad_cargada)}
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums">
-                            {formatNumber(item.cantidad_entregada)}
-                          </td>
-                          <td className="px-2 py-2 text-right font-semibold tabular-nums text-lt-success-text">
-                            {formatNumber(disponible)}
-                          </td>
-                        </tr>
-                      );
-                    })
+                    inventarioResumen.map((item) => (
+                      <tr
+                        key={item.producto_id}
+                        className="border-b border-lt-border-light"
+                      >
+                        <td className="px-2 py-2 font-mono text-xs text-lt-text-muted">
+                          {item.codigo || "—"}
+                        </td>
+                        <td className="px-2 py-2 font-medium text-lt-text">
+                          {item.nombre || "—"}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatNumber(item.cantidad_cargada)}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {formatNumber(item.cantidad_entregada)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-semibold tabular-nums text-lt-success-text">
+                          {formatNumber(item.cantidad_disponible)}
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
@@ -497,7 +572,7 @@ export function AutoVentasClient({
                   Ventas AutoVenta de hoy
                 </h2>
                 <p className="text-sm text-lt-text-muted">
-                  Órdenes `por_liquidar` listas para rendición
+                  Órdenes por liquidar listas para rendición
                 </p>
               </div>
               <Button href="/rendiciones/nuevo" variant="secondary">
@@ -516,7 +591,7 @@ export function AutoVentasClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {ordenesCamion.length === 0 ? (
+                  {ventasResumen.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}
@@ -526,9 +601,9 @@ export function AutoVentasClient({
                       </td>
                     </tr>
                   ) : (
-                    ordenesCamion.map((o) => (
+                    ventasResumen.map((o) => (
                       <tr
-                        key={o.id}
+                        key={o.orden_id}
                         className="border-b border-lt-border-light"
                       >
                         <td className="px-2 py-2 font-semibold text-lt-text">
@@ -537,9 +612,7 @@ export function AutoVentasClient({
                             ? ` · ${o.factura_origen_numero}`
                             : ""}
                         </td>
-                        <td className="px-2 py-2">
-                          {o.clientes?.razon_social || "—"}
-                        </td>
+                        <td className="px-2 py-2">{o.cliente_nombre || "—"}</td>
                         <td className="px-2 py-2">
                           <span className="rounded-lg bg-lt-surface-muted px-2 py-0.5 text-xs font-medium">
                             {o.estado}
@@ -564,20 +637,142 @@ export function AutoVentasClient({
         </div>
       ) : null}
 
-      {tab === "venta" ? (
-        <Card className="space-y-5 p-4">
-          <div>
+      {tab === "carga" ? (
+        <div className="space-y-4">
+          <Card className="space-y-2 p-4">
             <h2 className="text-base font-semibold text-lt-text">
-              Registrar venta en ruta
+              Cargar almacén móvil
             </h2>
             <p className="text-sm text-lt-text-muted">
-              Descuenta del inventario móvil y crea orden por liquidar
-              (es_autoventa).
+              Elige productos con imagen y filtros (igual que una orden) y
+              transfiere stock del almacén central al camión.
             </p>
-          </div>
+          </Card>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2">
+          <Card title="Catálogo de productos">
+            <ProductoCatalogo
+              productos={productos}
+              onAdd={agregarCarga}
+              selectedIds={lineasCarga.map((l) => l.producto_id)}
+              addLabel="Añadir a la carga"
+              stockLabel="Almacén"
+            />
+          </Card>
+
+          <Card title="Productos a cargar en el camión">
+            {!lineasCarga.length ? (
+              <p className="text-sm text-lt-text-muted">
+                Agrega productos desde el catálogo.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {lineasCarga.map((linea) => {
+                  const producto = catalogo[linea.producto_id];
+                  const fallback = producto
+                    ? resolveProductoImage(producto.nombre)
+                    : null;
+                  return (
+                    <li
+                      key={linea.producto_id}
+                      className="grid gap-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/40 p-3 sm:grid-cols-[72px_1fr_auto]"
+                    >
+                      <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-white">
+                        <LogiImage
+                          path={producto?.imagen_path}
+                          type="producto"
+                          alt={producto?.nombre ?? "Producto"}
+                          fallbackSrc={fallback}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <div className="min-w-0 space-y-2">
+                        <p className="truncate text-sm font-medium text-lt-text">
+                          {producto?.nombre ?? "Producto"}
+                        </p>
+                        <p className="text-xs text-lt-text-muted">
+                          {producto?.codigo_producto ?? "—"}
+                        </p>
+                        <Input
+                          label="Cantidad a cargar"
+                          type="number"
+                          min={1}
+                          max={producto?.stock_disponible}
+                          value={linea.cantidad}
+                          onChange={(e) =>
+                            setLineasCarga((prev) =>
+                              prev.map((l) =>
+                                l.producto_id === linea.producto_id
+                                  ? {
+                                      ...l,
+                                      cantidad: Math.max(
+                                        1,
+                                        Number(e.target.value) || 1,
+                                      ),
+                                    }
+                                  : l,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="flex items-start justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() =>
+                            setLineasCarga((prev) =>
+                              prev.filter(
+                                (l) => l.producto_id !== linea.producto_id,
+                              ),
+                            )
+                          }
+                        >
+                          Quitar
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="mt-4 text-sm text-lt-text-muted">
+              Unidades a cargar:{" "}
+              <span className="font-medium text-lt-text">
+                {formatNumber(totalCargaUnidades)}
+              </span>
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setTab("resumen")}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={isPending || !lineasCarga.length}
+                onClick={handleCargar}
+              >
+                {isPending ? "Cargando…" : "Cargar al camión"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {tab === "venta" ? (
+        <div className="space-y-4">
+          <Card className="space-y-4 p-4">
+            <div>
+              <h2 className="text-base font-semibold text-lt-text">
+                Registrar venta en ruta
+              </h2>
+              <p className="text-sm text-lt-text-muted">
+                Solo productos con stock en el camión seleccionado.
+              </p>
+            </div>
+            <div className="space-y-1.5">
               <label className="block text-sm font-medium text-lt-text">
                 Cliente *
               </label>
@@ -601,339 +796,216 @@ export function AutoVentasClient({
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className="block text-sm font-medium text-lt-text">
-                Observaciones
-              </label>
-              <input
-                value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value)}
-                className={inputClass}
-                placeholder="Opcional"
-              />
-            </div>
-          </div>
+            <Input
+              label="Observaciones"
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              placeholder="Opcional"
+            />
+          </Card>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-lt-text">Productos</h3>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={agregarLineaVenta}
-                disabled={!productos.length}
-              >
-                + Producto
-              </Button>
-            </div>
-            {lineasVenta.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-lt-border px-3 py-4 text-center text-sm text-lt-text-muted">
-                Agrega productos disponibles en el camión.
+          <Card title="Catálogo en camión">
+            {!productosParaVenta.length ? (
+              <p className="rounded-xl border border-dashed border-lt-border px-4 py-8 text-center text-sm text-lt-text-muted">
+                No hay stock en este camión. Carga el almacén móvil primero.
               </p>
             ) : (
-              <div className="space-y-2">
-                {lineasVenta.map((linea, idx) => (
-                  <div
-                    key={idx}
-                    className="grid gap-2 rounded-xl border border-lt-border bg-lt-surface-muted p-3 sm:grid-cols-12 sm:items-end"
-                  >
-                    <div className="sm:col-span-5">
-                      <label className="mb-1 block text-xs text-lt-text-muted">
-                        Producto
-                      </label>
-                      <select
-                        value={linea.producto_id}
-                        onChange={(e) =>
-                          actualizarLineaVenta(idx, "producto_id", e.target.value)
-                        }
-                        className={inputClass}
-                      >
-                        {productos.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.codigo_producto} — {p.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="mt-1 text-xs text-lt-text-muted">
-                        Disponible:{" "}
-                        <strong>{disponibleProducto(linea.producto_id)}</strong>
-                      </p>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs text-lt-text-muted">
-                        Cantidad
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={linea.cantidad}
-                        onChange={(e) =>
-                          actualizarLineaVenta(idx, "cantidad", e.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs text-lt-text-muted">
-                        Precio USD
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={linea.precio_unitario}
-                        onChange={(e) =>
-                          actualizarLineaVenta(
-                            idx,
-                            "precio_unitario",
-                            e.target.value,
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <p className="mb-1 text-xs text-lt-text-muted">Subtotal</p>
-                      <p className="py-2 font-semibold tabular-nums">
-                        {formatCurrency(
-                          linea.cantidad * linea.precio_unitario,
-                        )}
-                      </p>
-                    </div>
-                    <div className="sm:col-span-1">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full"
-                        onClick={() =>
-                          setLineasVenta((prev) =>
-                            prev.filter((_, i) => i !== idx),
-                          )
-                        }
-                      >
-                        ×
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <ProductoCatalogo
+                productos={productosParaVenta}
+                onAdd={agregarVenta}
+                selectedIds={lineasVenta.map((l) => l.producto_id)}
+                addLabel="Añadir a la venta"
+                stockLabel="En camión"
+              />
             )}
-            <p className="text-right text-sm font-semibold text-lt-text">
+          </Card>
+
+          <Card title="Productos de la venta">
+            {!lineasVenta.length ? (
+              <p className="text-sm text-lt-text-muted">
+                Agrega productos desde el catálogo del camión.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {lineasVenta.map((linea) => {
+                  const producto = catalogo[linea.producto_id];
+                  const fallback = producto
+                    ? resolveProductoImage(producto.nombre)
+                    : null;
+                  return (
+                    <li
+                      key={linea.producto_id}
+                      className="grid gap-3 rounded-xl border border-lt-border-light bg-lt-surface-muted/40 p-3 sm:grid-cols-[72px_1fr_auto]"
+                    >
+                      <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-white">
+                        <LogiImage
+                          path={producto?.imagen_path}
+                          type="producto"
+                          alt={producto?.nombre ?? "Producto"}
+                          fallbackSrc={fallback}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <div className="min-w-0 space-y-2">
+                        <p className="truncate text-sm font-medium text-lt-text">
+                          {producto?.nombre ?? "Producto"}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            label="Cantidad"
+                            type="number"
+                            min={1}
+                            value={linea.cantidad}
+                            onChange={(e) =>
+                              setLineasVenta((prev) =>
+                                prev.map((l) =>
+                                  l.producto_id === linea.producto_id
+                                    ? {
+                                        ...l,
+                                        cantidad: Math.max(
+                                          1,
+                                          Number(e.target.value) || 1,
+                                        ),
+                                      }
+                                    : l,
+                                ),
+                              )
+                            }
+                          />
+                          <Input
+                            label="Precio USD"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={linea.precio_unitario}
+                            onChange={(e) =>
+                              setLineasVenta((prev) =>
+                                prev.map((l) =>
+                                  l.producto_id === linea.producto_id
+                                    ? {
+                                        ...l,
+                                        precio_unitario: Number(
+                                          e.target.value,
+                                        ),
+                                      }
+                                    : l,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-start justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() =>
+                            setLineasVenta((prev) =>
+                              prev.filter(
+                                (l) => l.producto_id !== linea.producto_id,
+                              ),
+                            )
+                          }
+                        >
+                          Quitar
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="mt-4 text-sm font-semibold text-lt-text">
               Total: {formatCurrency(totalVentaUsd)} ·{" "}
               {formatNumber(totalVentaUsd * tasaOficial)} Bs
             </p>
-          </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-lt-text">
-                Envases / contenedores (opcional)
-              </h3>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!contenedores.length}
-                onClick={() => {
-                  if (!contenedores[0]) return;
-                  setLineasContenedor((prev) => [
-                    ...prev,
-                    {
-                      contenedor_id: contenedores[0].id,
-                      cantidad_entregada: 0,
-                      cantidad_retirada: 0,
-                    },
-                  ]);
-                }}
-              >
-                + Envase
-              </Button>
-            </div>
-            {lineasContenedor.map((linea, idx) => (
-              <div
-                key={idx}
-                className="grid gap-2 rounded-xl border border-lt-border p-3 sm:grid-cols-12 sm:items-end"
-              >
-                <div className="sm:col-span-5">
-                  <select
-                    value={linea.contenedor_id}
-                    onChange={(e) =>
-                      setLineasContenedor((prev) => {
-                        const next = [...prev];
-                        next[idx] = {
-                          ...next[idx],
-                          contenedor_id: e.target.value,
-                        };
-                        return next;
-                      })
-                    }
-                    className={inputClass}
-                  >
-                    {contenedores.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.codigo ? `${c.codigo} — ` : ""}
-                        {c.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="sm:col-span-3">
-                  <label className="mb-1 block text-xs text-lt-text-muted">
-                    Entregados
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={linea.cantidad_entregada}
-                    onChange={(e) =>
-                      setLineasContenedor((prev) => {
-                        const next = [...prev];
-                        next[idx] = {
-                          ...next[idx],
-                          cantidad_entregada: Number(e.target.value),
-                        };
-                        return next;
-                      })
-                    }
-                    className={inputClass}
-                  />
-                </div>
-                <div className="sm:col-span-3">
-                  <label className="mb-1 block text-xs text-lt-text-muted">
-                    Retirados
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={linea.cantidad_retirada}
-                    onChange={(e) =>
-                      setLineasContenedor((prev) => {
-                        const next = [...prev];
-                        next[idx] = {
-                          ...next[idx],
-                          cantidad_retirada: Number(e.target.value),
-                        };
-                        return next;
-                      })
-                    }
-                    className={inputClass}
-                  />
-                </div>
-                <div className="sm:col-span-1">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() =>
-                      setLineasContenedor((prev) =>
-                        prev.filter((_, i) => i !== idx),
-                      )
-                    }
-                  >
-                    ×
-                  </Button>
-                </div>
+            <div className="mt-4 space-y-3 border-t border-lt-border-light pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-lt-text">
+                  Envases (opcional)
+                </h3>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!contenedores.length}
+                  onClick={() => {
+                    if (!contenedores[0]) return;
+                    setLineasContenedor((prev) => [
+                      ...prev,
+                      {
+                        contenedor_id: contenedores[0].id,
+                        cantidad_entregada: 0,
+                        cantidad_retirada: 0,
+                      },
+                    ]);
+                  }}
+                >
+                  + Envase
+                </Button>
               </div>
-            ))}
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setTab("resumen")}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              disabled={isPending}
-              onClick={handleGuardarVenta}
-            >
-              {isPending ? "Guardando…" : "Registrar venta"}
-            </Button>
-          </div>
-        </Card>
-      ) : null}
-
-      {tab === "carga" ? (
-        <Card className="space-y-5 p-4">
-          <div>
-            <h2 className="text-base font-semibold text-lt-text">
-              Cargar almacén móvil
-            </h2>
-            <p className="text-sm text-lt-text-muted">
-              Transfiere stock del almacén central al camión (sin radar).
-            </p>
-          </div>
-
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!productos.length}
-              onClick={() =>
-                setLineasCarga((prev) => [
-                  ...prev,
-                  {
-                    producto_id: productos[0]?.id ?? "",
-                    cantidad: 1,
-                  },
-                ])
-              }
-            >
-              + Producto a cargar
-            </Button>
-          </div>
-
-          {lineasCarga.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-lt-border px-3 py-4 text-center text-sm text-lt-text-muted">
-              Agrega los productos a bajar del almacén.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {lineasCarga.map((linea, idx) => (
+              {lineasContenedor.map((linea, idx) => (
                 <div
                   key={idx}
                   className="grid gap-2 rounded-xl border border-lt-border p-3 sm:grid-cols-12 sm:items-end"
                 >
-                  <div className="sm:col-span-8">
+                  <div className="sm:col-span-5">
                     <select
-                      value={linea.producto_id}
+                      value={linea.contenedor_id}
                       onChange={(e) =>
-                        setLineasCarga((prev) => {
+                        setLineasContenedor((prev) => {
                           const next = [...prev];
                           next[idx] = {
                             ...next[idx],
-                            producto_id: e.target.value,
+                            contenedor_id: e.target.value,
                           };
                           return next;
                         })
                       }
                       className={inputClass}
                     >
-                      {productos.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.codigo_producto} — {p.nombre}
+                      {contenedores.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.codigo ? `${c.codigo} — ` : ""}
+                          {c.nombre}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div className="sm:col-span-3">
-                    <input
+                    <Input
+                      label="Entregados"
                       type="number"
-                      min={1}
-                      value={linea.cantidad}
+                      min={0}
+                      value={linea.cantidad_entregada}
                       onChange={(e) =>
-                        setLineasCarga((prev) => {
+                        setLineasContenedor((prev) => {
                           const next = [...prev];
                           next[idx] = {
                             ...next[idx],
-                            cantidad: Number(e.target.value),
+                            cantidad_entregada: Number(e.target.value),
                           };
                           return next;
                         })
                       }
-                      className={inputClass}
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <Input
+                      label="Retirados"
+                      type="number"
+                      min={0}
+                      value={linea.cantidad_retirada}
+                      onChange={(e) =>
+                        setLineasContenedor((prev) => {
+                          const next = [...prev];
+                          next[idx] = {
+                            ...next[idx],
+                            cantidad_retirada: Number(e.target.value),
+                          };
+                          return next;
+                        })
+                      }
                     />
                   </div>
                   <div className="sm:col-span-1">
@@ -942,7 +1014,7 @@ export function AutoVentasClient({
                       variant="secondary"
                       className="w-full"
                       onClick={() =>
-                        setLineasCarga((prev) =>
+                        setLineasContenedor((prev) =>
                           prev.filter((_, i) => i !== idx),
                         )
                       }
@@ -953,21 +1025,25 @@ export function AutoVentasClient({
                 </div>
               ))}
             </div>
-          )}
 
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setTab("resumen")}
-            >
-              Cancelar
-            </Button>
-            <Button type="button" disabled={isPending} onClick={handleCargar}>
-              {isPending ? "Cargando…" : "Cargar al camión"}
-            </Button>
-          </div>
-        </Card>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setTab("resumen")}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={isPending || !lineasVenta.length}
+                onClick={handleGuardarVenta}
+              >
+                {isPending ? "Guardando…" : "Registrar venta"}
+              </Button>
+            </div>
+          </Card>
+        </div>
       ) : null}
     </div>
   );

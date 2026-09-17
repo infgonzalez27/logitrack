@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ProductoCatalogo } from "./producto-catalogo";
+import { ProductoCatalogo } from "@/components/productos/producto-catalogo";
 import { FechaDespachoField } from "@/components/ui/fecha-despacho-field";
 import { LogiImage } from "@/components/media/logi-image";
 import { resolveProductoImage } from "@/lib/product-images";

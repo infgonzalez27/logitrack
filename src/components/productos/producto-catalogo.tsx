@@ -18,10 +18,16 @@ export function ProductoCatalogo({
   productos,
   onAdd,
   selectedIds = [],
+  addLabel = "Añadir al carrito",
+  stockLabel = "Stock",
+  showPrice = true,
 }: {
   productos: ProductoListaRpc[];
   onAdd: (producto: ProductoListaRpc, cantidad: number) => void;
   selectedIds?: string[];
+  addLabel?: string;
+  stockLabel?: string;
+  showPrice?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [marca, setMarca] = useState<string>("");
@@ -156,11 +162,13 @@ export function ProductoCatalogo({
                   </h3>
                   <p className="text-[10px] text-lt-text-muted sm:text-xs">
                     {p.codigo_producto ? `${p.codigo_producto} · ` : ""}
-                    Stock {p.stock_disponible}
+                    {stockLabel} {p.stock_disponible}
                   </p>
-                  <p className="text-base font-bold text-lt-text sm:text-lg">
-                    ${formatNumber(Number(precio))}
-                  </p>
+                  {showPrice ? (
+                    <p className="text-base font-bold text-lt-text sm:text-lg">
+                      ${formatNumber(Number(precio))}
+                    </p>
+                  ) : null}
 
                   {sinStock ? (
                     <Button
@@ -220,7 +228,7 @@ export function ProductoCatalogo({
                         className="w-full px-2 text-xs sm:text-sm"
                         onClick={() => añadir(p)}
                       >
-                        Añadir al carrito
+                        {addLabel}
                       </Button>
                     </div>
                   )}

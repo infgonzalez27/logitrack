@@ -377,7 +377,36 @@ export interface Fpago {
   fpago_concepto: string;
   /** true = pide referencia/banco; false = efectivo (sin esos campos). */
   fpago_info: boolean;
+  /** Pago móvil, transferencia, Zelle, Binance, etc. */
+  es_bancario?: boolean;
 }
+
+export type ReporteFormaPagoMovimiento = {
+  rendicion_id: string;
+  fecha_rendicion: string;
+  tasa_cambio: number | null;
+  cliente_id: string;
+  cliente_nombre: string;
+  cliente_rif: string;
+  fpago_id: string;
+  fpago_concepto: string;
+  es_bancario: boolean;
+  referencia_bancaria: string | null;
+  cuenta_bancaria: string | null;
+  capture_url: string | null;
+  monto_bs: number | null;
+  monto_usd: number | null;
+};
+
+export type ReporteFormasPagoData = {
+  fecha_desde: string;
+  fecha_hasta: string;
+  solo_bancarios: boolean;
+  total_registros: number;
+  monto_total_bs: number;
+  monto_total_usd: number;
+  movimientos: ReporteFormaPagoMovimiento[];
+};
 
 /** Cuentas bancarias destino de la empresa (DB-028). */
 export interface CuentaBancariaEmpresa {

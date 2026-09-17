@@ -1243,6 +1243,145 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ---
 
+### 2.40. Registro de Venta en Ruta AutoVenta (`registrar_venta_en_ruta_autoventa`)
+- **Firma SQL:** `registrar_venta_en_ruta_autoventa(p_vendedor_id UUID, p_cliente_id UUID, p_camion_id UUID, p_productos_json JSONB, p_contenedores_json JSONB DEFAULT '[]'::jsonb, p_observaciones TEXT DEFAULT NULL, p_tasa_cambio NUMERIC DEFAULT NULL)`
+- **Descripción:** Registra una venta en caliente directamente desde el camión en ruta (AutoVenta sin radar). Genera la orden en estado `por_liquidar`, valida la existencia del stock en `inventario_movil` del camión, descuenta el stock entregado y asienta el movimiento de envases/contenedores prestados y retirados.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_venta_en_ruta_autoventa', {
+    p_vendedor_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab',
+    p_cliente_id: 'b2c3d4e5-f6a7-8901-bcde-234567890abc',
+    p_camion_id: 'c3d4e5f6-a7b8-9012-cdef-34567890abcd',
+    p_productos_json: [
+      { producto_id: 'd4e5f6a7-b8c9-0123-def0-4567890abcde', cantidad: 10, precio_unitario: 5.00 }
+    ],
+    p_contenedores_json: [
+      { contenedor_id: 'e5f6a7b8-c9d0-1234-ef01-567890abcdef', cantidad_entregada: 2, cantidad_retirada: 1 }
+    ],
+    p_observaciones: 'Venta realizada en ruta'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "message": "Venta en ruta (AutoVenta) registrada exitosamente.",
+    "data": {
+      "orden_id": "f6a7b8c9-d0e1-2345-f012-67890abcdef1",
+      "correlativo": 1050,
+      "factura_origen_numero": "AV-001050",
+      "cliente_id": "b2c3d4e5-f6a7-8901-bcde-234567890abc",
+      "camion_id": "c3d4e5f6-a7b8-9012-cdef-34567890abcd",
+      "estado": "por_liquidar",
+      "es_autoventa": true,
+      "total_recaudar_usd": 50.00,
+      "total_recaudar_bs": 2500.00,
+      "tasa_cambio": 50.00
+    },
+    "error": null
+  }
+  ```
+
+---
+
+### 2.41. Resumen de Jornada AutoVentas (`retorna_resumen_autoventas_jornada`)
+- **Firma SQL:** `retorna_resumen_autoventas_jornada(p_camion_id UUID, p_fecha DATE DEFAULT CURRENT_DATE)`
+- **Descripción:** Devuelve el resumen consolidado de la jornada activa de AutoVentas para un camión: inventario cargado, vendido y disponible por producto, más el resumen financiero de facturas registradas en la ruta.
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_resumen_autoventas_jornada', {
+    p_camion_id: 'c3d4e5f6-a7b8-9012-cdef-34567890abcd',
+    p_fecha: '2026-09-17'
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "camion_id": "c3d4e5f6-a7b8-9012-cdef-34567890abcd",
+      "fecha": "2026-09-17",
+      "total_ordenes_autoventa": 5,
+      "total_facturado_usd": 450.00,
+      "total_facturado_bs": 22500.00,
+      "inventario_movil": [
+        {
+          "producto_id": "d4e5f6a7-b8c9-0123-def0-4567890abcde",
+          "codigo": "PROD-001",
+          "nombre": "Harina Pan 1kg",
+          "cantidad_cargada": 100,
+          "cantidad_entregada": 40,
+          "cantidad_disponible": 60
+        }
+      ],
+      "ventas": [
+        {
+          "orden_id": "f6a7b8c9-d0e1-2345-f012-67890abcdef1",
+          "correlativo": 1050,
+          "factura_origen_numero": "AV-001050",
+          "cliente_nombre": "Comercializadora Ejemplo C.A.",
+          "estado": "por_liquidar",
+          "total_recaudar_usd": 50.00,
+          "total_recaudar_bs": 2500.00,
+          "created_at": "2026-09-17T14:30:00Z"
+        }
+      ]
+    },
+    "error": null
+  }
+  ```
+
+---
+
+### 2.42. Reporte Gerencial de Formas de Pago por Rango de Fecha (`reporte_formas_pago_rendicion`)
+- **Firma SQL:** `reporte_formas_pago_rendicion(p_fecha_desde DATE DEFAULT NULL, p_fecha_hasta DATE DEFAULT NULL, p_solo_bancarios BOOLEAN DEFAULT FALSE)`
+- **Descripción:** Genera la consulta detallada e informe gerencial de las Formas de Pago recibidas en rendiciones de cuentas aprobadas durante un rango de fechas. Soporta filtrado exclusivo de transacciones bancarias/electrónicas (donde `es_bancario = TRUE`: Pago Móvil, Transferencia, Zelle, Binance).
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('reporte_formas_pago_rendicion', {
+    p_fecha_desde: '2026-09-01',
+    p_fecha_hasta: '2026-09-30',
+    p_solo_bancarios: true
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "fecha_desde": "2026-09-01",
+      "fecha_hasta": "2026-09-30",
+      "solo_bancarios": true,
+      "total_registros": 12,
+      "monto_total_bs": 45000.00,
+      "monto_total_usd": 900.00,
+      "movimientos": [
+        {
+          "rendicion_id": "c1d2e3f4-a5b6-7890-cdef-1234567890ab",
+          "fecha_rendicion": "2026-09-15T10:30:00Z",
+          "tasa_cambio": 50.00,
+          "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+          "cliente_nombre": "Comercializadora Ejemplo C.A.",
+          "cliente_rif": "J-12345678-9",
+          "fpago_id": "1a5b84c8-47bc-4ee0-880c-7833215be11b",
+          "fpago_concepto": "Pago movil",
+          "es_bancario": true,
+          "referencia_bancaria": "REF-987654",
+          "cuenta_bancaria": "0102-XXXX",
+          "capture_url": null,
+          "monto_bs": 10000.00,
+          "monto_usd": 200.00
+        }
+      ]
+    },
+    "error": null
+  }
+  ```
+
+---
+
+---
+
 ## 3. Códigos de Error Comunes para Control en Frontend
 
 Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar notificaciones o flujos condicionales específicos. Aquí tienes la lista de códigos de error planificados:

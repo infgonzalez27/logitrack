@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { listarProductosAction } from "@/lib/actions/productos";
 import { joinOne } from "@/lib/supabase/join";
 import { PageHeader } from "@/components/layout/page-header";
 import { AutoVentasClient } from "./autoventas-client";
@@ -29,7 +30,7 @@ export default async function AutoVentasPage() {
   const [
     { data: camionesData },
     { data: clientesData },
-    { data: productosData },
+    productosResult,
     { data: contenedoresData },
     { data: inventarioMovilData },
     { data: ordenesData },
@@ -45,10 +46,7 @@ export default async function AutoVentasPage() {
       .select("id, razon_social, rif_nit, direccion_fiscal")
       .eq("activo", true)
       .order("razon_social", { ascending: true }),
-    supabase
-      .from("productos")
-      .select("id, codigo_producto, nombre, precio_lista1")
-      .order("nombre", { ascending: true }),
+    listarProductosAction(),
     supabase
       .from("tipos_contenedores")
       .select("id, codigo, nombre")
@@ -56,7 +54,7 @@ export default async function AutoVentasPage() {
     supabase
       .from("inventario_movil")
       .select(
-        "id, camion_id, producto_id, cantidad_cargada, cantidad_entregada, productos(codigo_producto, nombre, precio_lista1)",
+        "id, camion_id, producto_id, cantidad_cargada, cantidad_entregada, productos(codigo_producto, nombre, precio_lista1, imagen_path)",
       ),
     supabase
       .from("ordenes_distribucion")
@@ -75,6 +73,7 @@ export default async function AutoVentasPage() {
   ]);
 
   const tasaOficial = Number(tasaData?.[0]?.tasa_cambio || 1);
+  const productos = productosResult.ok ? productosResult.productos : [];
 
   const inventarioMovil = (inventarioMovilData ?? []).map((row) => {
     const prod = joinOne(row.productos);
@@ -89,6 +88,9 @@ export default async function AutoVentasPage() {
             codigo_producto: String(prod.codigo_producto ?? ""),
             nombre: String(prod.nombre ?? ""),
             precio_lista1: Number(prod.precio_lista1 || 0),
+            imagen_path: prod.imagen_path
+              ? String(prod.imagen_path)
+              : null,
           }
         : null,
     };
@@ -118,6 +120,10 @@ export default async function AutoVentasPage() {
         description="Carga el camión, vende en caliente sin radar y liquida por rendición. Las órdenes con es_autoventa no entran al radar."
       />
 
+      {!productosResult.ok ? (
+        <p className="lt-alert-error">{productosResult.error}</p>
+      ) : null}
+
       <AutoVentasClient
         camiones={(camionesData ?? []).map((c) => ({
           id: String(c.id),
@@ -133,12 +139,7 @@ export default async function AutoVentasPage() {
             ? String(c.direccion_fiscal)
             : null,
         }))}
-        productos={(productosData ?? []).map((p) => ({
-          id: String(p.id),
-          codigo_producto: String(p.codigo_producto ?? ""),
-          nombre: String(p.nombre ?? ""),
-          precio_lista1: Number(p.precio_lista1 || 0),
-        }))}
+        productos={productos}
         contenedores={(contenedoresData ?? []).map((t) => ({
           id: String(t.id),
           codigo: t.codigo ? String(t.codigo) : null,

@@ -14,7 +14,7 @@ import {
   esFormaPagoEnBs,
   resolverMontosOrden,
 } from "@/lib/rendiciones/moneda";
-import type { CuentaBancariaEmpresa, Fpago, OrdenPorLiquidarCliente } from "@/types/database";
+import type { CuentaBancariaEmpresa, Fpago, OrdenPorLiquidarCliente, ReporteFormasPagoData } from "@/types/database";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -880,3 +880,80 @@ export async function retornaOrdenesPorLiquidarAction(): Promise<
   const local = await retornaOrdenesPorLiquidarLocal();
   return { ok: true, items: local };
 }
+
+/** §2.42 — `reporte_formas_pago_rendicion` (rendiciones aprobadas). */
+export async function reporteFormasPagoRendicionAction(input?: {
+  fecha_desde?: string | null;
+  fecha_hasta?: string | null;
+  solo_bancarios?: boolean;
+}): Promise<
+  | { ok: true; data: ReporteFormasPagoData }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (rol !== "admin" && rol !== "gerente") {
+    return {
+      ok: false,
+      error: "Solo gerencia o admin pueden consultar este reporte.",
+      code: "ACCESO_DENEGADO",
+    };
+  }
+
+  const response = await callDbProcedure<ReporteFormasPagoData>(
+    "reporte_formas_pago_rendicion",
+    {
+      p_fecha_desde: input?.fecha_desde?.trim() || null,
+      p_fecha_hasta: input?.fecha_hasta?.trim() || null,
+      p_solo_bancarios: input?.solo_bancarios === true,
+    },
+  );
+
+  if (!response.success || !response.data) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(
+        response,
+        "No se pudo generar el reporte de formas de pago.",
+      ),
+      code: response.error?.code,
+    };
+  }
+
+  const data = response.data;
+  return {
+    ok: true,
+    data: {
+      fecha_desde: String(data.fecha_desde),
+      fecha_hasta: String(data.fecha_hasta),
+      solo_bancarios: Boolean(data.solo_bancarios),
+      total_registros: Number(data.total_registros ?? 0),
+      monto_total_bs: Number(data.monto_total_bs ?? 0),
+      monto_total_usd: Number(data.monto_total_usd ?? 0),
+      movimientos: Array.isArray(data.movimientos)
+        ? data.movimientos.map((m) => ({
+            rendicion_id: String(m.rendicion_id),
+            fecha_rendicion: String(m.fecha_rendicion),
+            tasa_cambio:
+              m.tasa_cambio != null ? Number(m.tasa_cambio) : null,
+            cliente_id: String(m.cliente_id),
+            cliente_nombre: String(m.cliente_nombre ?? "—"),
+            cliente_rif: String(m.cliente_rif ?? "—"),
+            fpago_id: String(m.fpago_id),
+            fpago_concepto: String(m.fpago_concepto ?? "—"),
+            es_bancario: Boolean(m.es_bancario),
+            referencia_bancaria: m.referencia_bancaria
+              ? String(m.referencia_bancaria)
+              : null,
+            cuenta_bancaria: m.cuenta_bancaria
+              ? String(m.cuenta_bancaria)
+              : null,
+            capture_url: m.capture_url ? String(m.capture_url) : null,
+            monto_bs: m.monto_bs != null ? Number(m.monto_bs) : null,
+            monto_usd: m.monto_usd != null ? Number(m.monto_usd) : null,
+          }))
+        : [],
+    },
+  };
+}
+
