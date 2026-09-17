@@ -287,6 +287,13 @@ export function NuevaRendicionForm({
   );
   const diferencia = totalRendicion - totalOrdenes;
   const faltanteCobrar = Math.max(0, totalOrdenes - totalRendicion);
+  /** Estimación previa al SP: cuánto del saldo acumulado cubriría el faltante. */
+  const saldoFavorUsadoEstimado = Math.min(
+    saldoFavor,
+    Math.max(0, totalOrdenes - totalRendicion),
+  );
+  /** Estimación previa al SP: sobrante de pagos que generaría crédito nuevo. */
+  const saldoFavorGeneradoEstimado = Math.max(0, diferencia);
 
   // Sincroniza tasa del día en el borrador cuando llega del servidor.
   useEffect(() => {
@@ -712,9 +719,9 @@ export function NuevaRendicionForm({
               : ""}
           </p>
           <p className="mt-0.5 text-xs opacity-80">
-            Crédito disponible del cliente (consulta automática al seleccionar).
-            Al guardar, el SP puede usarlo y/o generar nuevo saldo si hay
-            sobrante.
+            Crédito disponible del cliente (consulta al seleccionar). Al
+            guardar, el sistema puede usarlo y/o generar sobrante si paga de
+            más.
           </p>
         </div>
       ) : null}
@@ -1101,21 +1108,32 @@ export function NuevaRendicionForm({
               value={formatNumber(totalOrdenes)}
             />
           </div>
-          <div className="text-right text-sm">
+          <div className="text-right text-sm space-y-0.5">
             {saldoFavor > 0 ? (
               <p className="text-lt-text-muted">
-                Acumulado previo: {formatCurrency(saldoFavor)}
+                Saldo a favor acumulado: {formatCurrency(saldoFavor)}
+                {saldoFavorBs != null
+                  ? ` · ${formatNumber(saldoFavorBs)} Bs`
+                  : ""}
               </p>
             ) : null}
-            {diferencia > 0 ? (
+            {saldoFavorUsadoEstimado > 0 ? (
+              <p className="text-lt-text">
+                Saldo a favor a usar (est.):{" "}
+                {formatCurrency(saldoFavorUsadoEstimado)}
+              </p>
+            ) : null}
+            {saldoFavorGeneradoEstimado > 0 ? (
               <p className="text-lt-success-text">
-                Nuevo saldo a favor (sobrante): {formatCurrency(diferencia)}
+                Saldo a favor a generar (est.):{" "}
+                {formatCurrency(saldoFavorGeneradoEstimado)}
               </p>
-            ) : diferencia < 0 ? (
+            ) : faltanteCobrar > saldoFavorUsadoEstimado ? (
               <p className="text-lt-danger-text">
-                Faltante: {formatCurrency(Math.abs(diferencia))}
+                Faltante:{" "}
+                {formatCurrency(faltanteCobrar - saldoFavorUsadoEstimado)}
               </p>
-            ) : clienteId ? (
+            ) : clienteId && ordenes.length > 0 && pagos.length > 0 ? (
               <p className="text-lt-text-muted">Cuadra sin diferencia</p>
             ) : null}
           </div>

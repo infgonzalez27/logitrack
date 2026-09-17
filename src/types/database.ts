@@ -218,12 +218,91 @@ export interface OrdenDistribucion {
   total_recaudar_usd?: number | null;
   creado_por: string | null;
   created_at: string;
+  /** Venta en ruta sin radar (`registrar_venta_en_ruta_autoventa`). */
+  es_autoventa?: boolean;
   clientes?: Cliente | null;
   camiones?: Camion | null;
   /** @deprecated FK a choferes eliminada; usar despachador_id + perfiles. */
   choferes?: Chofer | null;
   detalle_distribucion?: DetalleDistribucion[];
 }
+
+export type VentaAutoVentaProductoPayload = {
+  producto_id: string;
+  cantidad: number;
+  valor_unitario_usd?: number;
+  precio_unitario?: number;
+};
+
+export type VentaAutoVentaContenedorPayload = {
+  contenedor_id: string;
+  cantidad_entregada?: number;
+  cantidad_retirada?: number;
+};
+
+export type VentaAutoVentaParams = {
+  vendedor_id?: string;
+  cliente_id: string;
+  camion_id: string;
+  productos_json: VentaAutoVentaProductoPayload[];
+  contenedores_json?: VentaAutoVentaContenedorPayload[];
+  observaciones?: string;
+  tasa_cambio?: number;
+};
+
+export type ResumenAutoVentaItem = {
+  producto_id: string;
+  codigo: string;
+  nombre: string;
+  cantidad_cargada: number;
+  cantidad_entregada: number;
+  cantidad_disponible: number;
+};
+
+export type ResumenAutoVentaVenta = {
+  orden_id: string;
+  correlativo: number;
+  factura_origen_numero: string;
+  cliente_nombre: string;
+  estado: string;
+  total_recaudar_usd: number;
+  total_recaudar_bs: number;
+  created_at: string;
+};
+
+export type ResumenAutoVentaData = {
+  camion_id: string;
+  fecha: string;
+  total_ordenes_autoventa: number;
+  total_facturado_usd: number;
+  total_facturado_bs: number;
+  inventario_movil: ResumenAutoVentaItem[];
+  ventas: ResumenAutoVentaVenta[];
+};
+
+export type HistoricoContenedoresData = {
+  cliente_id: string;
+  rif_nit: string;
+  razon_social: string;
+  fecha_inicial: string;
+  fecha_limite: string;
+  saldo_anterior: number;
+  total_entregados: number;
+  total_retirados: number;
+  saldo_final: number;
+  movimientos: Array<{
+    id: string;
+    fecha_movimiento: string;
+    orden_id: string | null;
+    correlativo_orden: number | null;
+    factura_origen_numero: string | null;
+    contenedor_id: string;
+    codigo_contenedor: string | null;
+    nombre_contenedor: string | null;
+    cantidad_entregada: number;
+    cantidad_retirada: number;
+  }>;
+};
 
 /** Fila de `retorna_ordenes_distribucion_segun_estado`. */
 export type OrdenListaRpc = {

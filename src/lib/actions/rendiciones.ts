@@ -579,7 +579,8 @@ export async function registrarRendicionCuentasAction(input: {
     rendicion_id: string;
     total_ordenes: number;
     total_pagos: number;
-    saldo_favor_generado: number;
+    saldo_favor_usado?: number;
+    saldo_favor_generado?: number;
     tasa_cambio?: number;
   }>("registrar_rendicion_cuentas", {
     p_cliente_id: clienteId,
@@ -650,14 +651,32 @@ export async function registrarRendicionCuentasAction(input: {
   const rendicionId = response.data?.rendicion_id;
   revalidatePath("/rendiciones");
   revalidatePath("/ordenes");
+  revalidatePath("/visita");
 
   if (rendicionId) {
-    redirect(`/rendiciones?ok=${encodeURIComponent(rendicionId)}`);
+    const usado = Number(response.data?.saldo_favor_usado ?? 0);
+    const generado = Number(response.data?.saldo_favor_generado ?? 0);
+    const totalOrdenes = Number(response.data?.total_ordenes ?? 0);
+    const totalPagos = Number(response.data?.total_pagos ?? 0);
+    const qs = new URLSearchParams({
+      ok: rendicionId,
+      usado: String(usado),
+      generado: String(generado),
+      ordenes: String(totalOrdenes),
+      pagos: String(totalPagos),
+    });
+    redirect(`/rendiciones?${qs.toString()}`);
   }
 
   return {
     success: true,
-    data: response.data,
+    data: {
+      rendicion_id: response.data?.rendicion_id,
+      total_ordenes: Number(response.data?.total_ordenes ?? 0),
+      total_pagos: Number(response.data?.total_pagos ?? 0),
+      saldo_favor_usado: Number(response.data?.saldo_favor_usado ?? 0),
+      saldo_favor_generado: Number(response.data?.saldo_favor_generado ?? 0),
+    },
   };
 }
 

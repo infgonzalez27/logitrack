@@ -14,12 +14,23 @@ import { AprobarRendicionButton } from "./aprobar-rendicion-button";
 export default async function RendicionesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string }>;
+  searchParams: Promise<{
+    ok?: string;
+    usado?: string;
+    generado?: string;
+    ordenes?: string;
+    pagos?: string;
+  }>;
 }) {
-  const { ok } = await searchParams;
+  const { ok, usado, generado, ordenes, pagos } = await searchParams;
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
   const canApprove = rol === "admin" || rol === "gerente";
+
+  const saldoUsado = Number(usado ?? 0);
+  const saldoGenerado = Number(generado ?? 0);
+  const totalOrdenes = Number(ordenes ?? 0);
+  const totalPagos = Number(pagos ?? 0);
 
   const supabase = await createClient();
   const { data } = await supabase
@@ -35,10 +46,25 @@ export default async function RendicionesPage({
         action={<Button href="/rendiciones/nuevo">Nueva rendición</Button>}
       />
       {ok ? (
-        <p className="lt-alert-success">
-          Rendición registrada en revisión. Un gerente debe aprobarla para
-          liquidar las órdenes asociadas.
-        </p>
+        <div className="lt-alert-success space-y-1">
+          <p>
+            Rendición registrada en revisión. Un gerente debe aprobarla para
+            liquidar las órdenes asociadas.
+          </p>
+          {(totalOrdenes > 0 || totalPagos > 0) && (
+            <p className="text-sm">
+              Órdenes: {formatCurrency(totalOrdenes)} · Pagos:{" "}
+              {formatCurrency(totalPagos)}
+            </p>
+          )}
+          <p className="text-sm">
+            Saldo a favor usado:{" "}
+            <strong>{formatCurrency(saldoUsado)}</strong>
+            {" · "}
+            Saldo a favor generado:{" "}
+            <strong>{formatCurrency(saldoGenerado)}</strong>
+          </p>
+        </div>
       ) : null}
       <Card>
         <DataTable

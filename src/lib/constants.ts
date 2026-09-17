@@ -88,6 +88,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/visita", label: "Visita / cartera" },
       { href: "/ordenes", label: "Órdenes de distribución" },
+      { href: "/autoventas", label: "AutoVentas (venta en ruta)" },
       { href: "/radar", label: "Radar" },
     ],
   },

@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { joinOne } from "@/lib/supabase/join";
+import { callDbProcedure } from "@/lib/actions/db-rpc";
+import type { HistoricoContenedoresData } from "@/types/database";
 
 export type SaldoContenedorConsulta = {
   id: string;
@@ -17,6 +19,7 @@ export type MovimientoContenedorConsulta = {
   id: string;
   orden_id: string | null;
   orden_correlativo: number | null;
+  factura_origen_numero: string | null;
   contenedor_id: string;
   contenedor_nombre: string;
   cantidad_entregada: number;
@@ -27,6 +30,13 @@ export type MovimientoContenedorConsulta = {
 export type TipoContenedorOption = {
   id: string;
   label: string;
+};
+
+export type HistoricoContenedoresConsulta = {
+  cliente: { id: string; razon_social: string; rif_nit: string } | null;
+  saldos: SaldoContenedorConsulta[];
+  historico: HistoricoContenedoresData | null;
+  historicoError: string | null;
 };
 
 export async function listarTiposContenedoresConsulta(): Promise<
@@ -111,15 +121,43 @@ export async function listarSaldosContenedores(input?: {
   });
 }
 
+/** Historial vía `retorna_movimientos_contenedores_segun_cliente_id_rango_fechas`. */
+export async function obtenerHistoricoContenedoresCliente(
+  clienteId: string,
+  fechaInicial?: string,
+  fechaLimite?: string,
+): Promise<{
+  data: HistoricoContenedoresData | null;
+  error: string | null;
+}> {
+  const response = await callDbProcedure<HistoricoContenedoresData>(
+    "retorna_movimientos_contenedores_segun_cliente_id_rango_fechas",
+    {
+      p_cliente_id: clienteId,
+      p_fecha_inicial: fechaInicial || null,
+      p_fecha_limite: fechaLimite || null,
+    },
+  );
+
+  if (!response.success || !response.data) {
+    return {
+      data: null,
+      error:
+        response.error?.message ||
+        response.message ||
+        "No se pudo consultar el historial de contenedores.",
+    };
+  }
+
+  return { data: response.data, error: null };
+}
+
 export async function obtenerClienteContenedoresResumen(
   clienteId: string,
-): Promise<{
-  cliente: { id: string; razon_social: string; rif_nit: string } | null;
-  saldos: SaldoContenedorConsulta[];
-  movimientos: MovimientoContenedorConsulta[];
-}> {
+  opts?: { fechaInicial?: string; fechaLimite?: string },
+): Promise<HistoricoContenedoresConsulta> {
   const supabase = await createClient();
-  const [{ data: cliente }, saldos, { data: movs }] = await Promise.all([
+  const [{ data: cliente }, saldos, historicoResult] = await Promise.all([
     supabase
       .from("clientes")
       .select("id, razon_social, rif_nit")
@@ -129,33 +167,12 @@ export async function obtenerClienteContenedoresResumen(
       clienteId,
       soloConSaldo: false,
     }),
-    supabase
-      .from("movimientos_contenedores")
-      .select(
-        "id, orden_id, contenedor_id, cantidad_entregada, cantidad_retirada, created_at, tipos_contenedores(codigo, nombre), ordenes_distribucion(correlativo)",
-      )
-      .eq("cliente_id", clienteId)
-      .order("created_at", { ascending: false })
-      .limit(100),
+    obtenerHistoricoContenedoresCliente(
+      clienteId,
+      opts?.fechaInicial,
+      opts?.fechaLimite,
+    ),
   ]);
-
-  const movimientos: MovimientoContenedorConsulta[] = (movs ?? []).map((m) => {
-    const tipo = joinOne(m.tipos_contenedores);
-    const orden = joinOne(m.ordenes_distribucion);
-    const codigo = tipo?.codigo ? String(tipo.codigo).trim() : "";
-    const nombre = String(tipo?.nombre ?? m.contenedor_id).trim();
-    return {
-      id: String(m.id),
-      orden_id: m.orden_id ? String(m.orden_id) : null,
-      orden_correlativo:
-        orden?.correlativo != null ? Number(orden.correlativo) : null,
-      contenedor_id: String(m.contenedor_id),
-      contenedor_nombre: codigo ? `${codigo} — ${nombre}` : nombre,
-      cantidad_entregada: Number(m.cantidad_entregada) || 0,
-      cantidad_retirada: Number(m.cantidad_retirada) || 0,
-      created_at: String(m.created_at),
-    };
-  });
 
   return {
     cliente: cliente
@@ -166,6 +183,7 @@ export async function obtenerClienteContenedoresResumen(
         }
       : null,
     saldos,
-    movimientos,
+    historico: historicoResult.data,
+    historicoError: historicoResult.error,
   };
 }

@@ -8,11 +8,14 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PrintButton } from "@/components/print/print-button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
+import { ContenedoresHistoricoFiltros } from "./contenedores-historico-filtros";
 
 export default async function ContenedoresClientePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ clienteId: string }>;
+  searchParams: Promise<{ desde?: string; hasta?: string }>;
 }) {
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
@@ -27,13 +30,19 @@ export default async function ContenedoresClientePage({
   }
 
   const { clienteId } = await params;
-  const resumen = await obtenerClienteContenedoresResumen(clienteId);
+  const { desde, hasta } = await searchParams;
+  const resumen = await obtenerClienteContenedoresResumen(clienteId, {
+    fechaInicial: desde?.trim() || undefined,
+    fechaLimite: hasta?.trim() || undefined,
+  });
   if (!resumen.cliente) notFound();
 
   const totalPendiente = resumen.saldos.reduce(
     (s, r) => s + r.saldo_pendiente,
     0,
   );
+  const hist = resumen.historico;
+  const movimientos = hist?.movimientos ?? [];
 
   return (
     <div className="lt-print-document space-y-6">
@@ -54,7 +63,7 @@ export default async function ContenedoresClientePage({
       />
 
       <p className="text-sm text-lt-text-muted">
-        Saldo total pendiente:{" "}
+        Saldo total pendiente (actual):{" "}
         <span className="font-semibold text-lt-text">
           {formatNumber(totalPendiente)}
         </span>
@@ -82,49 +91,92 @@ export default async function ContenedoresClientePage({
                   {formatNumber(row.saldo_pendiente)}
                 </span>
               ),
-              actualizado: formatDate(row.updated_at),
+              actualizado: row.updated_at
+                ? formatDate(row.updated_at)
+                : "—",
             },
           }))}
         />
       </Card>
 
+      <Card className="lt-no-print space-y-3 p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-lt-text-subtle">
+          Historial por rango de fechas
+        </h2>
+        <ContenedoresHistoricoFiltros
+          defaultDesde={desde ?? hist?.fecha_inicial ?? ""}
+          defaultHasta={hasta ?? hist?.fecha_limite ?? ""}
+        />
+        {resumen.historicoError ? (
+          <p className="lt-alert-error">{resumen.historicoError}</p>
+        ) : hist ? (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-xl bg-lt-surface-muted px-3 py-2">
+              <p className="text-xs text-lt-text-muted">Saldo anterior</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {formatNumber(hist.saldo_anterior)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-lt-surface-muted px-3 py-2">
+              <p className="text-xs text-lt-text-muted">Entregados</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {formatNumber(hist.total_entregados)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-lt-surface-muted px-3 py-2">
+              <p className="text-xs text-lt-text-muted">Retirados</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {formatNumber(hist.total_retirados)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-lt-surface-muted px-3 py-2">
+              <p className="text-xs text-lt-text-muted">Saldo final (rango)</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {formatNumber(hist.saldo_final)}
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </Card>
+
       <Card>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-lt-text-subtle">
-          Movimientos recientes
+          Movimientos del período
         </h2>
         <DataTable
-          emptyMessage="Sin movimientos registrados para este cliente."
+          emptyMessage="Sin movimientos en el rango seleccionado."
           columns={[
             { key: "fecha", label: "Fecha" },
             { key: "orden", label: "Orden" },
             { key: "contenedor", label: "Contenedor" },
-            { key: "entregado", label: "Entregado" },
-            { key: "retirado", label: "Retirado" },
+            { key: "entregada", label: "Entregados" },
+            { key: "retirada", label: "Retirados" },
           ]}
-          rows={resumen.movimientos.map((m) => ({
-            id: m.id,
-            cells: {
-              fecha: formatDate(m.created_at),
-              orden:
-                m.orden_correlativo != null ? (
-                  m.orden_id ? (
-                    <Link
-                      href={`/ordenes/${m.orden_id}`}
-                      className="lt-no-print font-medium text-lt-primary underline-offset-2 hover:underline"
-                    >
-                      #{m.orden_correlativo}
-                    </Link>
-                  ) : (
-                    `#${m.orden_correlativo}`
-                  )
-                ) : (
-                  "—"
+          rows={movimientos.map((m) => {
+            const codigo = m.codigo_contenedor?.trim() || "";
+            const nombre = (m.nombre_contenedor || m.contenedor_id).trim();
+            return {
+              id: String(m.id),
+              cells: {
+                fecha: formatDate(m.fecha_movimiento),
+                orden:
+                  m.correlativo_orden != null
+                    ? `#${m.correlativo_orden}`
+                    : m.factura_origen_numero || "—",
+                contenedor: codigo ? `${codigo} — ${nombre}` : nombre,
+                entregada: (
+                  <span className="tabular-nums">
+                    {formatNumber(m.cantidad_entregada)}
+                  </span>
                 ),
-              contenedor: m.contenedor_nombre,
-              entregado: formatNumber(m.cantidad_entregada),
-              retirado: formatNumber(m.cantidad_retirada),
-            },
-          }))}
+                retirada: (
+                  <span className="tabular-nums">
+                    {formatNumber(m.cantidad_retirada)}
+                  </span>
+                ),
+              },
+            };
+          })}
         />
       </Card>
     </div>

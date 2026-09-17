@@ -68,6 +68,8 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/ordenes",
 
+    "/autoventas",
+
     "/radar",
 
     "/clientes",
@@ -102,12 +104,13 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
   ],
 
-  despachador: ["/radar", "/ordenes", "/contenedores"],
+  despachador: ["/radar", "/ordenes", "/autoventas", "/contenedores"],
 
   vendedor: [
     "/",
     "/visita",
     "/ordenes",
+    "/autoventas",
     "/radar",
     "/clientes",
     "/rutas",
@@ -182,7 +185,13 @@ export function homeHrefForRole(rol: RolNombre | null): string {
 export function getNavSectionsForRole(rol: RolNombre | null) {
   if (rol === "despachador") {
     return [
-      { title: "Ruta", items: [{ href: "/radar", label: "Radar" }] },
+      {
+        title: "Ruta",
+        items: [
+          { href: "/radar", label: "Radar" },
+          { href: "/autoventas", label: "AutoVentas (venta en ruta)" },
+        ],
+      },
       {
         title: "Consulta",
         items: [
@@ -247,6 +256,9 @@ export function canAccessHref(rol: RolNombre | null, href: string): boolean {
     }
     if (/^\/ordenes\/[^/]+\/editar/.test(href)) return false;
     if (href === "/contenedores" || href.startsWith("/contenedores/")) {
+      return true;
+    }
+    if (href === "/autoventas" || href.startsWith("/autoventas/")) {
       return true;
     }
     return href === "/ordenes" || href.startsWith("/ordenes/");
