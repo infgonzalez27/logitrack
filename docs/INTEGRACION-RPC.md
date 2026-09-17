@@ -1488,6 +1488,53 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ---
 
+### 2.42. Reporte Gerencial de Formas de Pago por Rango de Fecha (`reporte_formas_pago_rendicion`)
+- **Firma SQL:** `reporte_formas_pago_rendicion(p_fecha_desde DATE DEFAULT NULL, p_fecha_hasta DATE DEFAULT NULL, p_solo_bancarios BOOLEAN DEFAULT FALSE)`
+- **Descripción:** Genera la consulta detallada e informe gerencial de las Formas de Pago recibidas en rendiciones de cuentas aprobadas durante un rango de fechas. Soporta filtrado exclusivo de transacciones bancarias/electrónicas (donde `es_bancario = TRUE`: Pago Móvil, Transferencia, Zelle, Binance).
+- **Uso en Frontend / Backend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('reporte_formas_pago_rendicion', {
+    p_fecha_desde: '2026-09-01',
+    p_fecha_hasta: '2026-09-30',
+    p_solo_bancarios: true
+  });
+  ```
+- **Respuesta esperada en `data` (Éxito):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "fecha_desde": "2026-09-01",
+      "fecha_hasta": "2026-09-30",
+      "solo_bancarios": true,
+      "total_registros": 12,
+      "monto_total_bs": 45000.00,
+      "monto_total_usd": 900.00,
+      "movimientos": [
+        {
+          "rendicion_id": "c1d2e3f4-a5b6-7890-cdef-1234567890ab",
+          "fecha_rendicion": "2026-09-15T10:30:00Z",
+          "tasa_cambio": 50.00,
+          "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+          "cliente_nombre": "Comercializadora Ejemplo C.A.",
+          "cliente_rif": "J-12345678-9",
+          "fpago_id": "1a5b84c8-47bc-4ee0-880c-7833215be11b",
+          "fpago_concepto": "Pago movil",
+          "es_bancario": true,
+          "referencia_bancaria": "REF-987654",
+          "cuenta_bancaria": "0102-XXXX",
+          "capture_url": null,
+          "monto_bs": 10000.00,
+          "monto_usd": 200.00
+        }
+      ]
+    },
+    "error": null
+  }
+  ```
+
+---
+
 ## 3. Códigos de Error Comunes para Control en Frontend
 
 Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar notificaciones o flujos condicionales específicos. Aquí tienes la lista de códigos de error planificados:
