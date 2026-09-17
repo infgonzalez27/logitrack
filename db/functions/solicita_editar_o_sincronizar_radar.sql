@@ -86,7 +86,8 @@ BEGIN
       AND c.despachador_id = v_despachador_id
       AND o.fecha_despacho::date = v_fecha_despacho
       AND o.estado IN ('aprobada', 'en_transito', 'por_liquidar', 'liquidada', 'devuelta')
-      AND (o.radar_id IS NULL OR o.radar_id = p_radar_id);
+      AND (o.radar_id IS NULL OR o.radar_id = p_radar_id)
+      AND COALESCE(o.es_autoventa, FALSE) = FALSE;
 
     GET DIAGNOSTICS v_vinculadas = ROW_COUNT;
 

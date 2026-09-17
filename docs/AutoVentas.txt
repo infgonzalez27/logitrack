@@ -1,0 +1,8 @@
+### Auto ventas - Carga de inventario movil sin radar
+Existe un proceso de ventas que es sin Radar.
+Se carga el camion con distintos productos y el vendedor junto con el despachador sale a vender
+Visitan a los clientes, le hacen su orden de distribución y la rendición de cuentas si es posible
+Como propones que se haga esto con las Functions que ya se tienen y si hay que crear mas
+
+## Importante es que el SP STORE PROCEDURE que genera el radar no tome en cuenta las ordenes hechas por autoventas 
+creo que con el nuevo campo es_autoventa en .T. el SP que genera el radar no lo toma en cuenta. Verifica 

@@ -1,4 +1,4 @@
-# Ciclo de Vida del Agente (Agent Loop) y Backlog de Tareas de Base de Datos
+﻿# Ciclo de Vida del Agente (Agent Loop) y Backlog de Tareas de Base de Datos
 
 **Proyecto:** LogiTrack  
 **Propósito:** Definir el proceso iterativo que deben seguir los agentes de IA (u otros programadores de base de datos) para implementar funciones SQL en Supabase, y listar el backlog priorizado de tareas del sistema.
@@ -371,3 +371,13 @@ Este es el backlog oficial de las tareas de base de datos pendientes para el sis
 
 
 
+
+- [x] **Tarea DB-037: Funciones RPC de Saldo e Historial de Movimientos de Contenedores por Cliente**
+  - **Función:** Crear dos funciones RPC para consulta de saldo e historial de contenedores según la especificación en docs/task_20260915c_retorna_movimientos_historico_contenedores.txt:
+    1. etorna_saldo_contenedores_segun_clientes(p_cliente_id UUID DEFAULT NULL): Si p_cliente_id es NULL, retorna los clientes con saldo_pendiente > 0. Si se pasa p_cliente_id, retorna el saldo de ese cliente (o saldo 0 con sus datos si no tiene saldo registrado).
+    2. etorna_movimientos_contenedores_segun_cliente_id_rango_fechas(p_cliente_id UUID, p_fecha_inicial DATE, p_fecha_limite DATE): Trae el historial de movimientos en el rango de fechas con cálculo de saldo anterior acumulado a p_fecha_inicial.
+  - **Inputs:**
+    - RPC 1: p_cliente_id UUID DEFAULT NULL
+    - RPC 2: p_cliente_id UUID, p_fecha_inicial DATE, p_fecha_limite DATE
+  - **Migración:** 20260915210000_retorna_movimientos_historico_contenedores.sql
+  - **Documentación:** [docs/INTEGRACION-RPC.md](file:///d:/ProyectosWeb/LogiTrack/docs/INTEGRACION-RPC.md)

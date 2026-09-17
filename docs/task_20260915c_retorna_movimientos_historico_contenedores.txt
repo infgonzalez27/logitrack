@@ -1,0 +1,6 @@
+## Consulta de saldo de contenedores por cliente.
+#1 Crea una Function retorna_saldo_contenedores_segun_clientes(cliente_id) que me traiga el saldo de contenedores de los clientes, si el frontend no pasa el UUID del cliente que traiga los que tienen saldo si pasa 
+el UUID del cliente que traiga el saldo de solo ese cliente.
+Si pasa como parametro un UUID de un cliente que no tiene saldo que lo traiga con saldo en 0, seguramente quiere consultar su historial
+
+#2 Crea una Function retorna_movimientos_contenedores_segun_cliente_id_rango_fechas(cliente_id, dFecha_inicial, dFecha_limite) que me traiga el historial de movimientos de contenedores según rango de fechas con un saldo anterior a la fecha inicial del parametro

@@ -65,52 +65,33 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
     "/",
 
     "/ordenes",
-
+    "/autoventas",
     "/clientes",
-
     "/proveedores",
-
     "/camiones",
-
     "/choferes",
-
     "/productos",
-
     "/inventario-almacen",
-
     "/inventario-movil",
-
     "/rendiciones",
-
     "/facturas-compras",
-
     "/pagos-proveedores",
-
     "/usuarios",
-
   ],
 
   despachador: [
-
     "/",
-
     "/ordenes",
-
+    "/autoventas",
     "/clientes",
-
     "/camiones",
-
     "/choferes",
-
     "/productos",
-
     "/inventario-almacen",
-
     "/inventario-movil",
-
   ],
 
-  vendedor: ["/", "/ordenes", "/clientes"],
+  vendedor: ["/", "/ordenes", "/autoventas", "/clientes"],
 
   chofer: ["/ordenes", "/inventario-movil"],
 
