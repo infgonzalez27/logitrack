@@ -1,0 +1,15 @@
+Consulta de formas de pago según rango de fecha
+Para la gerencia es importante poder imprimir dos reporte basado en las tablas rendiciones_cuentas join con detalle_rendicion_fpagos 
+que tenga rendiciones_cuentas.fecha_rendicion, detalle_rendicion_fpagos.fpago_id, fpagos.fpago_concepto, detalle_rendicion_fpagos.referencia_bancaria y detalle_rendicion_fpagos.monto_bs
+sería un reporte completo de todos los fpago_id y otro reporte con solo aquellos fpago_id que sean referentes a transaciones bancarias y son los siguientes fpago_id:
+1a5b84c8-47bc-4ee0-880c-7833215be11b - Pago Movil
+2b6c95d9-58cd-4ff1-991d-8944326cf22c - Transferencia
+5e9fc80c-8bef-4224-cc4f-bc77659f255f - ZELLE
+6fa0d91d-9c00-4335-dd5f-cd88760a366a - BINANCE
+
+Sería conveniente crear en la tabla fpagos un campo bolean acerca de eso?
+bancario = .T.
+
+Aunque Zelle y Binance no es bancario igualmente se trata como tal.
+
+Dame tu asesoría

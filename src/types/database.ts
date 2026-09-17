@@ -228,6 +228,40 @@ export interface ResumenAutoVentaData {
   ventas: ResumenAutoVentaVenta[];
 }
 
+export interface FormaPago {
+  fpago_id: string;
+  fpago_concepto: string;
+  fpago_info: boolean;
+  es_bancario: boolean;
+}
+
+export interface ReporteFormasPagoMovimiento {
+  rendicion_id: string;
+  fecha_rendicion: string;
+  tasa_cambio: number;
+  cliente_id: string;
+  cliente_nombre: string;
+  cliente_rif: string | null;
+  fpago_id: string;
+  fpago_concepto: string;
+  es_bancario: boolean;
+  referencia_bancaria: string | null;
+  cuenta_bancaria: string | null;
+  capture_url: string | null;
+  monto_bs: number;
+  monto_usd: number;
+}
+
+export interface ReporteFormasPagoData {
+  fecha_desde: string;
+  fecha_hasta: string;
+  solo_bancarios: boolean;
+  total_registros: number;
+  monto_total_bs: number;
+  monto_total_usd: number;
+  movimientos: ReporteFormasPagoMovimiento[];
+}
+
 export interface DetalleDistribucion {
   id: string;
   orden_id: string;

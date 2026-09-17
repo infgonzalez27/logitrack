@@ -105,7 +105,10 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     title: "Rendiciones",
-    items: [{ href: "/rendiciones", label: "Rendición de cuentas" }],
+    items: [
+      { href: "/rendiciones", label: "Rendición de cuentas" },
+      { href: "/rendiciones/reporte-pagos", label: "Reporte de formas de pago" },
+    ],
   },
   {
     title: "Compras",
