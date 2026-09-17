@@ -75,10 +75,19 @@ export default async function ClienteVisitaPage({
         <p className="lt-alert-error">{abonos.error}</p>
       ) : null}
 
-      {abonos.ok && saldoFavor > 0 ? (
-        <p className="rounded-xl border border-lt-border bg-lt-surface-muted px-4 py-3 text-sm text-lt-text">
-          Saldo a favor del cliente:{" "}
+      {abonos.ok ? (
+        <p
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            saldoFavor > 0
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+              : "border-lt-border bg-lt-surface-muted text-lt-text"
+          }`}
+        >
+          Saldo a favor acumulado a la fecha:{" "}
           <strong>{formatCurrency(saldoFavor)}</strong>
+          {abonos.data.saldo_favor_bs != null
+            ? ` · ${formatNumber(abonos.data.saldo_favor_bs)} Bs`
+            : null}
         </p>
       ) : null}
 

@@ -637,7 +637,7 @@ export function NuevaRendicionForm({
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-medium text-white/80">
-              Saldo a favor
+              Saldo a favor acumulado
             </label>
             <input
               readOnly
@@ -650,7 +650,11 @@ export function NuevaRendicionForm({
                     }`
                   : "—"
               }
-              className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
+              className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-semibold ${
+                clienteId && saldoFavor > 0
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                  : "border-white/20 bg-white/95 text-lt-text"
+              }`}
             />
           </div>
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-4">
@@ -692,6 +696,28 @@ export function NuevaRendicionForm({
           </div>
         </div>
       </section>
+
+      {clienteId && !cargandoOrdenes && !ordenesError ? (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            saldoFavor > 0
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+              : "border-lt-border bg-lt-surface-muted text-lt-text"
+          }`}
+        >
+          <p className="font-semibold">
+            Saldo a favor acumulado a la fecha: {formatCurrency(saldoFavor)}
+            {saldoFavorBs != null
+              ? ` · ${formatNumber(saldoFavorBs)} Bs`
+              : ""}
+          </p>
+          <p className="mt-0.5 text-xs opacity-80">
+            Crédito disponible del cliente (consulta automática al seleccionar).
+            Al guardar, el SP puede usarlo y/o generar nuevo saldo si hay
+            sobrante.
+          </p>
+        </div>
+      ) : null}
 
       <section className="overflow-hidden rounded-2xl border border-lt-border bg-lt-surface shadow-sm">
         <div className="border-b border-lt-border-light bg-lt-surface-muted px-4 py-3">
@@ -1076,9 +1102,14 @@ export function NuevaRendicionForm({
             />
           </div>
           <div className="text-right text-sm">
+            {saldoFavor > 0 ? (
+              <p className="text-lt-text-muted">
+                Acumulado previo: {formatCurrency(saldoFavor)}
+              </p>
+            ) : null}
             {diferencia > 0 ? (
               <p className="text-lt-success-text">
-                Saldo a favor: {formatCurrency(diferencia)}
+                Nuevo saldo a favor (sobrante): {formatCurrency(diferencia)}
               </p>
             ) : diferencia < 0 ? (
               <p className="text-lt-danger-text">
