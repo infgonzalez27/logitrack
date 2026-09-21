@@ -127,7 +127,9 @@ export function ProductoCatalogo({
         <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3 sm:gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
           {filtrados.map((p) => {
             const fallback = resolveProductoImage(p.nombre);
-            const precio = p.precio_lista1 ?? p.precio ?? 0;
+            const precio = p.precio ?? p.precio_lista1 ?? 0;
+            const precioLista = p.precio_lista ?? p.precio_lista1 ?? precio;
+            const pct = Number(p.porcentaje_descuento ?? 0);
             const ya = selected.has(p.id);
             const activo = activoId === p.id;
             const qty = qtyOf(p.id);
@@ -165,9 +167,17 @@ export function ProductoCatalogo({
                     {stockLabel} {p.stock_disponible}
                   </p>
                   {showPrice ? (
-                    <p className="text-base font-bold text-lt-text sm:text-lg">
-                      ${formatNumber(Number(precio))}
-                    </p>
+                    <div className="space-y-0.5">
+                      <p className="text-base font-bold text-lt-text sm:text-lg">
+                        ${formatNumber(Number(precio))}
+                      </p>
+                      {pct > 0 ? (
+                        <p className="text-[10px] font-medium text-emerald-700 sm:text-xs">
+                          -{formatNumber(pct)}% · lista $
+                          {formatNumber(Number(precioLista))}
+                        </p>
+                      ) : null}
+                    </div>
                   ) : null}
 
                   {sinStock ? (

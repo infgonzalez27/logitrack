@@ -8,7 +8,7 @@ import {
   uploadCaptureRendicionAction,
   type OrdenParaRendicion,
 } from "@/lib/actions/rendiciones";
-import { formatCurrency, formatDateOnly, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDateOnly, formatMoneyInput, formatNumber, parseLocaleNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -135,11 +135,15 @@ export function NuevaRendicionForm({
   const [cargandoOrdenes, setCargandoOrdenes] = useState(false);
 
   const [borradorFpagoId, setBorradorFpagoId] = useState("");
-  const [borradorMontoUsd, setBorradorMontoUsd] = useState("0.00");
-  const [borradorMontoBs, setBorradorMontoBs] = useState("0.00");
+  const [borradorMontoUsd, setBorradorMontoUsd] = useState(() =>
+    formatMoneyInput(0),
+  );
+  const [borradorMontoBs, setBorradorMontoBs] = useState(() =>
+    formatMoneyInput(0),
+  );
   const [borradorTasa, setBorradorTasa] = useState(() =>
     tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0
-      ? String(Number(tasaDelDia.tasa_cambio))
+      ? formatMoneyInput(Number(tasaDelDia.tasa_cambio), 4)
       : "",
   );
   const [borradorFechaPago, setBorradorFechaPago] = useState(hoyLocal);
@@ -165,7 +169,7 @@ export function NuevaRendicionForm({
 
   const tasaValor =
     (() => {
-      const t = Number(borradorTasa);
+      const t = parseLocaleNumber(borradorTasa);
       if (Number.isFinite(t) && t > 0) return t;
       if (tasaOficial != null && tasaOficial > 0) return tasaOficial;
       if (tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0) {
@@ -234,7 +238,7 @@ export function NuevaRendicionForm({
         result.data.tasa_oficial_actual > 0
       ) {
         setTasaOficial(result.data.tasa_oficial_actual);
-        setBorradorTasa(String(result.data.tasa_oficial_actual));
+        setBorradorTasa(formatMoneyInput(result.data.tasa_oficial_actual, 4));
       }
       // Cobranza/Abono inicia en 0 por orden.
       const inicial: Record<string, string> = {};
@@ -281,12 +285,63 @@ export function NuevaRendicionForm({
     () => ordenes.reduce((sum, o) => sum + o.monto_rendicion, 0),
     [ordenes],
   );
-  const totalRendicion = useMemo(
+  const totalPagosIncluidos = useMemo(
     () => pagos.reduce((sum, p) => sum + p.monto_usd, 0),
     [pagos],
   );
+  /** Monto USD del pago en captura (aún no incluido en la lista). */
+  const usdBorrador = useMemo(() => {
+    if (!formaSeleccionada) return 0;
+    const tasa =
+      parseLocaleNumber(borradorTasa) > 0
+        ? parseLocaleNumber(borradorTasa)
+        : tasaValor != null && tasaValor > 0
+          ? tasaValor
+          : null;
+    if (borradorEnBs) {
+      const montoBs = parseLocaleNumber(borradorMontoBs);
+      if (!Number.isFinite(montoBs) || montoBs <= 0 || tasa == null || tasa <= 0) {
+        return 0;
+      }
+      return convertirBsAUsd(montoBs, tasa);
+    }
+    const montoUsd = parseLocaleNumber(borradorMontoUsd);
+    return Number.isFinite(montoUsd) && montoUsd > 0 ? montoUsd : 0;
+  }, [
+    formaSeleccionada,
+    borradorEnBs,
+    borradorMontoBs,
+    borradorMontoUsd,
+    borradorTasa,
+    tasaValor,
+  ]);
+  const bsBorrador = useMemo(() => {
+    if (!formaSeleccionada || usdBorrador <= 0) return 0;
+    if (borradorEnBs) {
+      const montoBs = parseLocaleNumber(borradorMontoBs);
+      return Number.isFinite(montoBs) && montoBs > 0 ? montoBs : 0;
+    }
+    const tasa =
+      parseLocaleNumber(borradorTasa) > 0
+        ? parseLocaleNumber(borradorTasa)
+        : tasaValor != null && tasaValor > 0
+          ? tasaValor
+          : null;
+    return tasa != null ? convertirUsdABs(usdBorrador, tasa) : 0;
+  }, [
+    formaSeleccionada,
+    usdBorrador,
+    borradorEnBs,
+    borradorMontoBs,
+    borradorTasa,
+    tasaValor,
+  ]);
+  // Totales en vivo: pagos incluidos + lo que ya está escrito en el formulario.
+  const totalRendicion = totalPagosIncluidos + usdBorrador;
   const diferencia = totalRendicion - totalOrdenes;
   const faltanteCobrar = Math.max(0, totalOrdenes - totalRendicion);
+  /** Faltante solo con pagos ya en la lista (para precargar el borrador). */
+  const faltanteSinBorrador = Math.max(0, totalOrdenes - totalPagosIncluidos);
   /** Estimación previa al SP: cuánto del saldo acumulado cubriría el faltante. */
   const saldoFavorUsadoEstimado = Math.min(
     saldoFavor,
@@ -298,61 +353,73 @@ export function NuevaRendicionForm({
   // Sincroniza tasa del día en el borrador cuando llega del servidor.
   useEffect(() => {
     if (tasaOficial != null && tasaOficial > 0 && !borradorTasa) {
-      setBorradorTasa(String(tasaOficial));
+      setBorradorTasa(formatMoneyInput(tasaOficial, 4));
     } else if (
       tasaDelDia != null &&
       Number(tasaDelDia.tasa_cambio) > 0 &&
       !borradorTasa
     ) {
-      setBorradorTasa(String(Number(tasaDelDia.tasa_cambio)));
+      setBorradorTasa(formatMoneyInput(Number(tasaDelDia.tasa_cambio), 4));
     }
   }, [tasaOficial, tasaDelDia, borradorTasa]);
 
-  // Coloca el faltante a cobrar en Monto $ (flecha del total → campo).
+  // Precarga el faltante en Monto $ (solo según pagos ya incluidos, no el borrador).
   useEffect(() => {
-    const usd = faltanteCobrar;
-    setBorradorMontoUsd(usd > 0 ? usd.toFixed(2) : "0.00");
+    const usd = faltanteSinBorrador;
+    setBorradorMontoUsd(formatMoneyInput(usd > 0 ? usd : 0));
     const tasa =
-      Number(borradorTasa) > 0
-        ? Number(borradorTasa)
+      parseLocaleNumber(borradorTasa) > 0
+        ? parseLocaleNumber(borradorTasa)
         : tasaValor != null && tasaValor > 0
           ? tasaValor
           : null;
     if (tasa != null && usd > 0) {
-      setBorradorMontoBs(convertirUsdABs(usd, tasa).toFixed(2));
+      setBorradorMontoBs(formatMoneyInput(convertirUsdABs(usd, tasa)));
     } else {
-      setBorradorMontoBs("0.00");
+      setBorradorMontoBs(formatMoneyInput(0));
     }
-    // Solo al cambiar el faltante (cobranzas / pagos incluidos).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faltanteCobrar]);
+  }, [faltanteSinBorrador]);
 
   function onMontoUsdChange(value: string) {
     setBorradorMontoUsd(value);
-    const usd = Number(value);
+    const usd = parseLocaleNumber(value);
     if (!Number.isFinite(usd) || usd < 0 || tasaValor == null || tasaValor <= 0) {
       return;
     }
-    setBorradorMontoBs(convertirUsdABs(usd, tasaValor).toFixed(2));
+    setBorradorMontoBs(formatMoneyInput(convertirUsdABs(usd, tasaValor)));
   }
 
   function onMontoBsChange(value: string) {
     setBorradorMontoBs(value);
-    const bs = Number(value);
+    const bs = parseLocaleNumber(value);
     if (!Number.isFinite(bs) || bs < 0 || tasaValor == null || tasaValor <= 0) {
       return;
     }
-    setBorradorMontoUsd(convertirBsAUsd(bs, tasaValor).toFixed(2));
+    setBorradorMontoUsd(formatMoneyInput(convertirBsAUsd(bs, tasaValor)));
   }
 
   function onTasaChange(value: string) {
     setBorradorTasa(value);
-    const tasa = Number(value);
-    const usd = Number(borradorMontoUsd);
+    const tasa = parseLocaleNumber(value);
+    const usd = parseLocaleNumber(borradorMontoUsd);
     if (!Number.isFinite(tasa) || tasa <= 0) return;
     if (Number.isFinite(usd) && usd >= 0) {
-      setBorradorMontoBs(convertirUsdABs(usd, tasa).toFixed(2));
+      setBorradorMontoBs(formatMoneyInput(convertirUsdABs(usd, tasa)));
     }
+  }
+
+  function formatMontoOnBlur(
+    value: string,
+    setter: (v: string) => void,
+    fractionDigits = 2,
+  ) {
+    const n = parseLocaleNumber(value);
+    if (!Number.isFinite(n) || n < 0) {
+      setter(formatMoneyInput(0, fractionDigits));
+      return;
+    }
+    setter(formatMoneyInput(n, fractionDigits));
   }
 
   function resetFormulario() {
@@ -365,8 +432,8 @@ export function NuevaRendicionForm({
     setOrdenesDisponibles([]);
     setOrdenesError(null);
     setBorradorFpagoId("");
-    setBorradorMontoUsd("0.00");
-    setBorradorMontoBs("0.00");
+    setBorradorMontoUsd(formatMoneyInput(0));
+    setBorradorMontoBs(formatMoneyInput(0));
     setBorradorFechaPago(hoyLocal());
     setBorradorReferencia("");
     setBorradorCuentaId(cuentasBancarias[0]?.id ?? "");
@@ -417,45 +484,45 @@ export function NuevaRendicionForm({
     setBorradorCaptureUrl(result.url);
   }
 
-  function incluirPago() {
-    setError(null);
+  function tryBuildPagoFromBorrador():
+    | { ok: true; pago: PagoAgregado }
+    | { ok: false; error: string } {
     if (!formaSeleccionada) {
-      setError("Selecciona una forma de pago.");
-      return;
+      return { ok: false, error: "Selecciona una forma de pago." };
     }
     const tasa =
-      Number(borradorTasa) > 0
-        ? Number(borradorTasa)
+      parseLocaleNumber(borradorTasa) > 0
+        ? parseLocaleNumber(borradorTasa)
         : tasaValor != null && tasaValor > 0
           ? tasaValor
           : null;
 
-    const montoUsd = Number(borradorMontoUsd);
-    const montoBs = Number(borradorMontoBs);
+    const montoUsd = parseLocaleNumber(borradorMontoUsd);
+    const montoBs = parseLocaleNumber(borradorMontoBs);
     if (borradorEnBs) {
       if (!Number.isFinite(montoBs) || montoBs <= 0) {
-        setError("El monto en Bs debe ser mayor a 0.");
-        return;
+        return { ok: false, error: "El monto en Bs debe ser mayor a 0." };
       }
       if (tasa == null || tasa <= 0) {
-        setError(
-          "Indica la TASA BCV para convertir bolívares. Regístrala en Tasas de cambio si falta.",
-        );
-        return;
+        return {
+          ok: false,
+          error:
+            "Indica la TASA BCV para convertir bolívares. Regístrala en Tasas de cambio si falta.",
+        };
       }
     } else if (!Number.isFinite(montoUsd) || montoUsd <= 0) {
-      setError("El monto en $ debe ser mayor a 0.");
-      return;
+      return { ok: false, error: "El monto en $ debe ser mayor a 0." };
     }
 
     if (formaSeleccionada.fpago_info) {
       if (!borradorReferencia.trim()) {
-        setError("Ingresa la referencia bancaria.");
-        return;
+        return { ok: false, error: "Ingresa la referencia bancaria." };
       }
       if (!borradorCuentaId) {
-        setError("Selecciona la cuenta bancaria de la empresa.");
-        return;
+        return {
+          ok: false,
+          error: "Selecciona la cuenta bancaria de la empresa.",
+        };
       }
     }
 
@@ -470,12 +537,11 @@ export function NuevaRendicionForm({
           ? montoBs
           : 0;
     const montoIngresado = borradorEnBs ? montoBs : montoUsd;
-
     const cuenta = cuentasBancarias.find((c) => c.id === borradorCuentaId);
 
-    setPagos((prev) => [
-      ...prev,
-      {
+    return {
+      ok: true,
+      pago: {
         key: newKey(),
         fpago_id: formaSeleccionada.fpago_id,
         concepto: formaSeleccionada.fpago_concepto,
@@ -500,17 +566,30 @@ export function NuevaRendicionForm({
         capture_url: borradorCaptureUrl,
         preview_url: borradorPreview,
       },
-    ]);
+    };
+  }
 
+  function clearBorradorPago() {
     setBorradorFpagoId("");
-    setBorradorMontoUsd("0.00");
-    setBorradorMontoBs("0.00");
+    setBorradorMontoUsd(formatMoneyInput(0));
+    setBorradorMontoBs(formatMoneyInput(0));
     setBorradorFechaPago(fechaPago);
     setBorradorReferencia("");
     setBorradorCaptureUrl(null);
     setBorradorPreview(null);
     setPagoSeleccionadoKey(null);
     if (captureInputRef.current) captureInputRef.current.value = "";
+  }
+
+  function incluirPago() {
+    setError(null);
+    const built = tryBuildPagoFromBorrador();
+    if (!built.ok) {
+      setError(built.error);
+      return;
+    }
+    setPagos((prev) => [...prev, built.pago]);
+    clearBorradorPago();
   }
 
   function quitarPagoSeleccionado() {
@@ -530,8 +609,28 @@ export function NuevaRendicionForm({
       setError("Selecciona un cliente.");
       return;
     }
-    if (!pagos.length) {
-      setError("Agrega al menos una opción de pago.");
+
+    // Si hay un pago en el borrador y la lista está vacía, inclúyelo al guardar.
+    let pagosAEnviar = pagos;
+    if (!pagosAEnviar.length && formaSeleccionada) {
+      const built = tryBuildPagoFromBorrador();
+      if (!built.ok) {
+        setError(
+          built.error === "Selecciona una forma de pago."
+            ? "Agrega al menos una opción de pago con «Incluir pago»."
+            : built.error,
+        );
+        return;
+      }
+      pagosAEnviar = [built.pago];
+      setPagos(pagosAEnviar);
+      clearBorradorPago();
+    }
+
+    if (!pagosAEnviar.length) {
+      setError(
+        "Agrega al menos una opción de pago con el botón «Incluir pago».",
+      );
       return;
     }
     if (!ordenes.length) {
@@ -565,7 +664,7 @@ export function NuevaRendicionForm({
           monto_recaudado: o.monto_rendicion,
           monto_recaudado_bs: o.monto_rendicion_bs,
         })),
-        pagos: pagos.map((p) => ({
+        pagos: pagosAEnviar.map((p) => ({
           fpago_id: p.fpago_id,
           monto: p.monto_ingresado,
           en_bs: p.en_bs,
@@ -903,28 +1002,31 @@ export function NuevaRendicionForm({
             />
             <Input
               label="Monto $"
-              type="number"
-              min={0}
-              step="0.01"
+              inputMode="decimal"
               value={borradorMontoUsd}
               onChange={(e) => onMontoUsdChange(e.target.value)}
+              onBlur={() =>
+                formatMontoOnBlur(borradorMontoUsd, setBorradorMontoUsd)
+              }
             />
             <Input
               label="TASA BCV"
-              type="number"
-              min={0}
-              step="0.0001"
+              inputMode="decimal"
               value={borradorTasa}
               onChange={(e) => onTasaChange(e.target.value)}
+              onBlur={() =>
+                formatMontoOnBlur(borradorTasa, setBorradorTasa, 4)
+              }
               placeholder="Tasa del día"
             />
             <Input
               label="Monto Bs"
-              type="number"
-              min={0}
-              step="0.01"
+              inputMode="decimal"
               value={borradorMontoBs}
               onChange={(e) => onMontoBsChange(e.target.value)}
+              onBlur={() =>
+                formatMontoOnBlur(borradorMontoBs, setBorradorMontoBs)
+              }
             />
           </div>
 
@@ -989,9 +1091,14 @@ export function NuevaRendicionForm({
               onClick={incluirPago}
               disabled={formasPago.length === 0}
             >
-              Incluir otra forma de pago
+              Incluir pago
             </Button>
           </div>
+          <p className="text-xs text-lt-text-muted">
+            Al escribir el monto, Total Rendición y Faltante se actualizan. Usa
+            «Incluir pago» solo si vas a agregar otra forma de pago; si no,
+            pulsa Guardar.
+          </p>
         </div>
 
         <div className="hidden overflow-x-auto md:block">
@@ -1008,90 +1115,156 @@ export function NuevaRendicionForm({
               </tr>
             </thead>
             <tbody>
-              {pagos.length === 0 ? (
+              {pagos.length === 0 && usdBorrador <= 0 ? (
                 <tr>
                   <td
                     colSpan={7}
                     className="px-4 py-8 text-center text-lt-text-muted"
                   >
-                    Incluye opciones de pago con «Incluir otra forma de pago».
+                    Completa la forma de pago arriba; el total se actualiza al
+                    escribir. Luego Guardar.
                   </td>
                 </tr>
               ) : (
-                pagos.map((p) => (
-                  <tr
-                    key={p.key}
-                    className={`cursor-pointer border-t border-lt-border-light ${
-                      pagoSeleccionadoKey === p.key
-                        ? "bg-lt-primary-muted"
-                        : "hover:bg-lt-surface-muted"
-                    }`}
-                    onClick={() => setPagoSeleccionadoKey(p.key)}
-                  >
-                    <td className="px-4 py-3 font-medium text-lt-text">
-                      {p.concepto}
-                    </td>
-                    <td className="px-4 py-3">{p.fecha || "—"}</td>
-                    <td className="px-4 py-3">
-                      {p.en_bs
-                        ? `${formatNumber(p.monto_ingresado)} Bs`
-                        : formatCurrency(p.monto_ingresado)}
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                      {formatCurrency(p.monto_usd)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatNumber(p.monto_bs)}
-                    </td>
-                    <td className="px-4 py-3 text-lt-text-muted">
-                      {p.cuenta_label ?? "—"}
-                      {p.referencia_bancaria
-                        ? ` · ${p.referencia_bancaria}`
-                        : ""}
-                    </td>
-                    <td className="px-4 py-3">
-                      {p.preview_url || p.capture_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.preview_url ?? p.capture_url ?? ""}
-                          alt=""
-                          className="h-9 w-9 rounded object-cover"
-                        />
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  </tr>
-                ))
+                <>
+                  {pagos.map((p) => (
+                    <tr
+                      key={p.key}
+                      className={`cursor-pointer border-t border-lt-border-light ${
+                        pagoSeleccionadoKey === p.key
+                          ? "bg-lt-primary-muted"
+                          : "hover:bg-lt-surface-muted"
+                      }`}
+                      onClick={() => setPagoSeleccionadoKey(p.key)}
+                    >
+                      <td className="px-4 py-3 font-medium text-lt-text">
+                        {p.concepto}
+                      </td>
+                      <td className="px-4 py-3">{p.fecha || "—"}</td>
+                      <td className="px-4 py-3">
+                        {p.en_bs
+                          ? `${formatNumber(p.monto_ingresado)} Bs`
+                          : formatCurrency(p.monto_ingresado)}
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        {formatCurrency(p.monto_usd)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {formatNumber(p.monto_bs)}
+                      </td>
+                      <td className="px-4 py-3 text-lt-text-muted">
+                        {p.cuenta_label ?? "—"}
+                        {p.referencia_bancaria
+                          ? ` · ${p.referencia_bancaria}`
+                          : ""}
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.preview_url || p.capture_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={p.preview_url ?? p.capture_url ?? ""}
+                            alt=""
+                            className="h-9 w-9 rounded object-cover"
+                          />
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {usdBorrador > 0 && formaSeleccionada ? (
+                    <tr className="border-t border-dashed border-lt-border bg-lt-surface-muted/60 text-lt-text-muted">
+                      <td className="px-4 py-3 font-medium">
+                        {formaSeleccionada.fpago_concepto}{" "}
+                        <span className="text-xs font-normal">(en captura)</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {borradorFechaPago || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {borradorEnBs
+                          ? `${formatNumber(parseLocaleNumber(borradorMontoBs))} Bs`
+                          : formatCurrency(usdBorrador)}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-lt-text">
+                        {formatCurrency(usdBorrador)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {formatNumber(bsBorrador)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {pideInfoBancaria
+                          ? [
+                              cuentasOptions.find(
+                                (c) => c.value === borradorCuentaId,
+                              )?.label,
+                              borradorReferencia.trim() || null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "—"
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {borradorPreview || borradorCaptureUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={borradorPreview ?? borradorCaptureUrl ?? ""}
+                            alt=""
+                            className="h-9 w-9 rounded object-cover opacity-70"
+                          />
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ) : null}
+                </>
               )}
             </tbody>
           </table>
         </div>
 
         <ul className="space-y-2 p-4 md:hidden">
-          {pagos.length === 0 ? (
+          {pagos.length === 0 && usdBorrador <= 0 ? (
             <li className="py-4 text-center text-sm text-lt-text-muted">
-              Incluye opciones de pago con «Incluir otra forma de pago».
+              Completa la forma de pago arriba; el total se actualiza al escribir.
             </li>
           ) : (
-            pagos.map((p) => (
-              <li
-                key={p.key}
-                className={`rounded-xl border p-3 ${
-                  pagoSeleccionadoKey === p.key
-                    ? "border-lt-primary bg-lt-primary-muted"
-                    : "border-lt-border-light"
-                }`}
-                onClick={() => setPagoSeleccionadoKey(p.key)}
-              >
-                <p className="font-semibold text-lt-text">{p.concepto}</p>
-                <p className="mt-1 text-sm text-lt-text-muted">
-                  {p.en_bs
-                    ? `${formatNumber(p.monto_ingresado)} Bs → ${formatCurrency(p.monto_usd)}`
-                    : formatCurrency(p.monto_usd)}
-                </p>
-              </li>
-            ))
+            <>
+              {pagos.map((p) => (
+                <li
+                  key={p.key}
+                  className={`rounded-xl border p-3 ${
+                    pagoSeleccionadoKey === p.key
+                      ? "border-lt-primary bg-lt-primary-muted"
+                      : "border-lt-border-light"
+                  }`}
+                  onClick={() => setPagoSeleccionadoKey(p.key)}
+                >
+                  <p className="font-semibold text-lt-text">{p.concepto}</p>
+                  <p className="mt-1 text-sm text-lt-text-muted">
+                    {p.en_bs
+                      ? `${formatNumber(p.monto_ingresado)} Bs → ${formatCurrency(p.monto_usd)}`
+                      : formatCurrency(p.monto_usd)}
+                  </p>
+                </li>
+              ))}
+              {usdBorrador > 0 && formaSeleccionada ? (
+                <li className="rounded-xl border border-dashed border-lt-border-light bg-lt-surface-muted/60 p-3">
+                  <p className="font-semibold text-lt-text">
+                    {formaSeleccionada.fpago_concepto}{" "}
+                    <span className="text-xs font-normal text-lt-text-muted">
+                      (en captura)
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-lt-text-muted">
+                    {borradorEnBs
+                      ? `${formatNumber(parseLocaleNumber(borradorMontoBs))} Bs → ${formatCurrency(usdBorrador)}`
+                      : formatCurrency(usdBorrador)}
+                  </p>
+                </li>
+              ) : null}
+            </>
           )}
         </ul>
 
@@ -1133,7 +1306,7 @@ export function NuevaRendicionForm({
                 Faltante:{" "}
                 {formatCurrency(faltanteCobrar - saldoFavorUsadoEstimado)}
               </p>
-            ) : clienteId && ordenes.length > 0 && pagos.length > 0 ? (
+            ) : clienteId && ordenes.length > 0 && totalRendicion > 0 ? (
               <p className="text-lt-text-muted">Cuadra sin diferencia</p>
             ) : null}
           </div>

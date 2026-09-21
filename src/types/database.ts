@@ -508,15 +508,31 @@ export type ProductoListaRpc = {
   nombre: string;
   codigo_producto?: string | null;
   codigo_barras: string | null;
+  /** Precio cobrable (post-descuento si hay cliente). */
   precio: number;
   precio_lista1?: number;
   precio_lista2?: number;
   precio_lista3?: number;
+  /** Precio de lista original (RPC con p_cliente_id). */
+  precio_lista?: number;
+  porcentaje_descuento?: number;
+  precio_final_usd?: number;
   stock_disponible: number;
   contenedor_id?: string | null;
   unidades_por_contenedor?: number | null;
   imagen_path?: string | null;
 };
+
+export interface DescuentoClienteProducto {
+  id: string;
+  cliente_id: string;
+  producto_id: string;
+  porcentaje_descuento: number;
+  precio_pactado_usd: number | null;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 export type RadarCliente = {
   id: string;
@@ -736,6 +752,7 @@ export interface Database {
       camiones: TableDef<Camion>;
       choferes: TableDef<Chofer>;
       productos: TableDef<Producto>;
+      descuentos_cliente_producto: TableDef<DescuentoClienteProducto>;
       inventario_almacen: TableDef<InventarioAlmacen>;
       inventario_movil: TableDef<InventarioMovil>;
       ordenes_distribucion: TableDef<OrdenDistribucion>;
@@ -969,6 +986,7 @@ export interface Database {
       retorna_lista_productos_segun_parametros: {
         Args: {
           p_parametro: string;
+          p_cliente_id?: string | null;
         };
         Returns: ProductoListaRpc[];
       };

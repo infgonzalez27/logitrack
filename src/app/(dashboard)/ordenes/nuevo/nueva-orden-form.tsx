@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createOrdenAction } from "@/lib/actions/ordenes";
+import { listarProductosAction } from "@/lib/actions/productos";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -33,6 +34,15 @@ function defaultFechaDespachoLocal(): string {
   return `${fechaHoyCaracas()}T08:00`;
 }
 
+function precioNetoProducto(producto: ProductoListaRpc): number {
+  return (
+    producto.precio_final_usd ??
+    producto.precio ??
+    producto.precio_lista1 ??
+    0
+  );
+}
+
 export function NuevaOrdenForm({
   clientes,
   camiones,
@@ -60,15 +70,53 @@ export function NuevaOrdenForm({
   const [clienteId, setClienteId] = useState(initialClienteId ?? "");
   const [camionId, setCamionId] = useState("");
   const [fechaDespacho, setFechaDespacho] = useState(defaultFechaDespachoLocal);
+  const [catalogoProductos, setCatalogoProductos] =
+    useState<ProductoListaRpc[]>(productos);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
     () => Object.fromEntries(productos.map((p) => [p.id, p])),
   );
   const [lineas, setLineas] = useState<Linea[]>([]);
+  const [cargandoPrecios, setCargandoPrecios] = useState(false);
 
   const clienteSeleccionado = useMemo(
     () => clientes.find((c) => c.value === clienteId) ?? null,
     [clientes, clienteId],
   );
+
+  // Catálogo con descuentos del cliente seleccionado (INTEGRACION-RPC).
+  useEffect(() => {
+    if (!clienteId) {
+      setCatalogoProductos(productos);
+      setCatalogo(Object.fromEntries(productos.map((p) => [p.id, p])));
+      return;
+    }
+
+    let active = true;
+    setCargandoPrecios(true);
+
+    void listarProductosAction(".F.", clienteId).then((res) => {
+      if (!active) return;
+      setCargandoPrecios(false);
+      if (!res.ok) return;
+
+      setCatalogoProductos(res.productos);
+      setCatalogo(Object.fromEntries(res.productos.map((p) => [p.id, p])));
+      setLineas((prev) =>
+        prev.map((linea) => {
+          const p = res.productos.find((prod) => prod.id === linea.producto_id);
+          if (!p) return linea;
+          return {
+            ...linea,
+            valor_unitario_usd: precioNetoProducto(p),
+          };
+        }),
+      );
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [clienteId, productos]);
 
   function registrarProducto(producto: ProductoListaRpc) {
     setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
@@ -91,7 +139,7 @@ export function NuevaOrdenForm({
         {
           producto_id: producto.id,
           cantidad_solicitada: qty,
-          valor_unitario_usd: producto.precio_lista1 ?? producto.precio ?? 0,
+          valor_unitario_usd: precioNetoProducto(producto),
         },
       ];
     });
@@ -248,8 +296,17 @@ export function NuevaOrdenForm({
           {productosError ? (
             <p className="mb-4 text-sm text-lt-danger-text">{productosError}</p>
           ) : null}
+          {!clienteId ? (
+            <p className="mb-4 text-sm text-amber-700">
+              Selecciona un cliente para ver precios con descuento aplicables.
+            </p>
+          ) : cargandoPrecios ? (
+            <p className="mb-4 text-sm text-lt-text-muted">
+              Actualizando precios del cliente…
+            </p>
+          ) : null}
           <ProductoCatalogo
-            productos={productos}
+            productos={catalogoProductos}
             onAdd={agregarProducto}
             selectedIds={lineas.map((l) => l.producto_id)}
           />
@@ -267,6 +324,7 @@ export function NuevaOrdenForm({
                 const fallback = producto
                   ? resolveProductoImage(producto.nombre)
                   : null;
+                const pct = Number(producto?.porcentaje_descuento ?? 0);
                 return (
                   <li
                     key={linea.producto_id}
@@ -282,8 +340,13 @@ export function NuevaOrdenForm({
                       />
                     </div>
                     <div className="min-w-0 space-y-2">
-                      <p className="truncate text-sm font-medium text-lt-text">
-                        {producto?.nombre ?? "Producto"}
+                      <p className="flex flex-wrap items-center gap-2 truncate text-sm font-medium text-lt-text">
+                        <span>{producto?.nombre ?? "Producto"}</span>
+                        {pct > 0 ? (
+                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            -{formatNumber(pct)}% OFF
+                          </span>
+                        ) : null}
                       </p>
                       <div className="grid grid-cols-2 gap-2">
                         <Input

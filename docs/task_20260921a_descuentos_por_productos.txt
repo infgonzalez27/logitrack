@@ -1,0 +1,5 @@
+*** Descuentos en clientes
+La empresa aplica a algunos clientes descuentos distintos por productos. Hay que aplicar una lógica para poder aplicar esos descuentos al momento
+de crear la orden de distribución por cada producto que aplique.
+
+

@@ -104,13 +104,17 @@ async function buscarProductosEnTabla(
 
 async function listarProductosDesdeRpc(
   parametro: string,
+  clienteId?: string,
 ): Promise<
   { ok: true; productos: ProductoListaRpc[] } | { ok: false; error: string }
 > {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(
     "retorna_lista_productos_segun_parametros",
-    { p_parametro: parametro },
+    {
+      p_parametro: parametro,
+      p_cliente_id: clienteId || null,
+    },
   );
 
   if (error) {
@@ -152,9 +156,15 @@ async function enriquecerProductosLista(
         ...p,
         codigo_producto: p.codigo_producto ?? row.codigo_producto,
         codigo_barras: p.codigo_barras ?? row.codigo_barras,
-        precio_lista1: p.precio_lista1 ?? row.precio_lista1 ?? p.precio,
+        // No pisar `precio` (puede venir con descuento del RPC).
+        precio_lista1:
+          p.precio_lista ?? p.precio_lista1 ?? row.precio_lista1 ?? p.precio,
         precio_lista2: p.precio_lista2 ?? row.precio_lista2 ?? 0,
         precio_lista3: p.precio_lista3 ?? row.precio_lista3 ?? 0,
+        precio_lista:
+          p.precio_lista ?? p.precio_lista1 ?? row.precio_lista1 ?? p.precio,
+        porcentaje_descuento: p.porcentaje_descuento ?? 0,
+        precio_final_usd: p.precio_final_usd ?? p.precio,
         contenedor_id: p.contenedor_id ?? row.contenedor_id ?? null,
         unidades_por_contenedor:
           p.unidades_por_contenedor ?? row.unidades_por_contenedor ?? null,
@@ -166,6 +176,7 @@ async function enriquecerProductosLista(
 
 export async function buscarProductosOrdenAction(
   parametro: string,
+  clienteId?: string,
 ): Promise<
   | { ok: true; productos: ProductoListaRpc[] }
   | { ok: false; error: string }
@@ -183,16 +194,25 @@ export async function buscarProductosOrdenAction(
     };
   }
 
+  if (clienteId) {
+    return listarProductosDesdeRpc(p, clienteId);
+  }
+
   return buscarProductosEnTabla(p);
 }
 
 export async function listarProductosAction(
   parametro?: string,
+  clienteId?: string,
 ): Promise<
   | { ok: true; productos: ProductoListaRpc[] }
   | { ok: false; error: string }
 > {
   const q = parametro?.trim() ?? "";
+
+  if (clienteId) {
+    return listarProductosDesdeRpc(q || ".F.", clienteId);
+  }
 
   if (!q) {
     return listarProductosDesdeRpc("");
