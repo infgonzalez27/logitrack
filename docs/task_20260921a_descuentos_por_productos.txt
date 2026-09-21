@@ -2,4 +2,6 @@
 La empresa aplica a algunos clientes descuentos distintos por productos. Hay que aplicar una lógica para poder aplicar esos descuentos al momento
 de crear la orden de distribución por cada producto que aplique.
 
+En las ordenes de distribución debe visualizarse el precio de lista, el descuento y el monto final detallado para los productos que se le
+aplique descuento, igualmente impreso
 

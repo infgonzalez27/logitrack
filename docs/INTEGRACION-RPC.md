@@ -1623,3 +1623,30 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
 - `obtenerDescuentosClienteAction(clienteId: string)`: Obtiene los descuentos del cliente con información del producto.
 - `guardarDescuentoClienteAction(input: { cliente_id, producto_id, porcentaje_descuento, precio_pactado_usd })`: Guarda o actualiza la regla de descuento de un cliente.
 - `eliminarDescuentoClienteAction(id: string, clienteId: string)`: Elimina la regla de descuento.
+
+---
+
+### 4. `retorna_radar_despachador` (Metadatos de Descuentos en Detalle)
+
+- **Firma SQL:** `retorna_radar_despachador()`
+- **Actualización:** En el array `detalles` de cada orden de distribución, se incluyen los siguientes campos adicionales de auditoría de descuento:
+  - `precio_lista_usd` (`NUMERIC`): Precio de lista base del producto en USD.
+  - `porcentaje_descuento` (`NUMERIC`): Porcentaje de descuento % aplicado al producto.
+  - `monto_descuento_usd` (`NUMERIC`): Monto total descontado en USD en la línea.
+- **Estructura JSON de cada ítem en `detalles`:**
+  ```json
+  {
+    "detalle_id": "UUID_DETALLE",
+    "producto_id": "UUID_PRODUCTO",
+    "codigo_producto": "PROD-001",
+    "nombre_producto": "Queso Paisa 1kg",
+    "cantidad_solicitada": 10,
+    "cantidad_despachada": 10,
+    "valor_unitario_usd": 8.50,
+    "subtotal_recaudar_usd": 85.00,
+    "precio_lista_usd": 10.00,
+    "porcentaje_descuento": 15.00,
+    "monto_descuento_usd": 15.00,
+    "estado_entrega": "pendiente"
+  }
+  ```

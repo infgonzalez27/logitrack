@@ -146,12 +146,19 @@ export default async function OrdenDetallePage({
             { key: "producto", label: "Producto" },
             { key: "solicitada", label: "Solicitada" },
             { key: "despachada", label: "Despachada" },
-            { key: "unitario", label: "Unit. USD" },
+            { key: "precio_lista", label: "P. Lista USD" },
+            { key: "descuento", label: "Desc. (%)" },
+            { key: "unitario", label: "Precio Neto USD" },
             { key: "subtotal", label: "Subtotal USD" },
             { key: "entrega", label: "Estado entrega" },
           ]}
-          rows={detalle.map((linea) => {
+          rows={detalle.map((linea: any) => {
             const producto = joinOne(linea.productos);
+            const tieneDescuento = Number(linea.porcentaje_descuento || 0) > 0 || 
+              (linea.precio_lista_usd && Number(linea.precio_lista_usd) > Number(linea.valor_unitario_usd));
+            const precioLista = linea.precio_lista_usd ? Number(linea.precio_lista_usd) : Number(linea.valor_unitario_usd || 0);
+            const porcentajeDesc = Number(linea.porcentaje_descuento || 0);
+
             return {
               id: linea.id,
               cells: {
@@ -160,7 +167,19 @@ export default async function OrdenDetallePage({
                 producto: producto?.nombre ?? "—",
                 solicitada: formatNumber(linea.cantidad_solicitada),
                 despachada: formatNumber(linea.cantidad_despachada),
-                unitario: formatCurrency(linea.valor_unitario_usd ?? linea.valor_unitario_recaudar),
+                precio_lista: formatCurrency(precioLista),
+                descuento: tieneDescuento ? (
+                  <Badge tone="success">
+                    {porcentajeDesc > 0 ? `-${porcentajeDesc}%` : "Especial"}
+                  </Badge>
+                ) : (
+                  "—"
+                ),
+                unitario: (
+                  <span className={tieneDescuento ? "font-semibold text-emerald-600 dark:text-emerald-400" : ""}>
+                    {formatCurrency(linea.valor_unitario_usd ?? linea.valor_unitario_recaudar)}
+                  </span>
+                ),
                 subtotal: formatCurrency(linea.subtotal_recaudar_usd ?? linea.subtotal_recaudar),
                 entrega: labelEstadoEntrega(linea.estado_entrega),
               },
