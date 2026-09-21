@@ -224,9 +224,9 @@ BEGIN
             cantidad_solicitada,
             cantidad_despachada,
             valor_unitario_usd,
-            valor_total_usd,
-            secuencia_orden,
-            created_at
+            subtotal_recaudar_usd,
+            secuencia_entrega,
+            estado_entrega
         ) VALUES (
             gen_random_uuid(),
             v_orden_id,
@@ -236,7 +236,7 @@ BEGIN
             v_val_usd,
             v_subtotal_usd,
             v_secuencia,
-            NOW()
+            'entregado'
         );
 
         v_secuencia := v_secuencia + 1;

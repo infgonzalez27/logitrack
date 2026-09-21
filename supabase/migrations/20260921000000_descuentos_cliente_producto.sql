@@ -1,3 +1,103 @@
+-- Migration: 20260921000000_descuentos_cliente_producto.sql
+-- Description: Módulo de descuentos de clientes por producto y actualización de RPCs crear_orden_distribucion y retorna_lista_productos_segun_parametros
+
+-- 1. Crear tabla de descuentos por cliente y producto
+CREATE TABLE IF NOT EXISTS public.descuentos_cliente_producto (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cliente_id UUID NOT NULL REFERENCES public.clientes(id) ON DELETE CASCADE,
+    producto_id UUID NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
+    porcentaje_descuento NUMERIC(5,2) NOT NULL DEFAULT 0.00,
+    precio_pactado_usd NUMERIC(14,2) DEFAULT NULL,
+    activo BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT unique_cliente_producto_descuento UNIQUE (cliente_id, producto_id)
+);
+
+-- RLS y Permisos
+ALTER TABLE public.descuentos_cliente_producto ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Permitir lectura publica a autenticados en descuentos_cliente_producto"
+    ON public.descuentos_cliente_producto FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "Permitir todo a autenticados en descuentos_cliente_producto"
+    ON public.descuentos_cliente_producto FOR ALL
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
+
+-- Índices
+CREATE INDEX IF NOT EXISTS idx_descuentos_cliente_id ON public.descuentos_cliente_producto(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_descuentos_producto_id ON public.descuentos_cliente_producto(producto_id);
+
+-- 2. Alterar detalle_distribucion para agregar columnas de auditoria de descuento
+ALTER TABLE public.detalle_distribucion 
+    ADD COLUMN IF NOT EXISTS precio_lista_usd NUMERIC(14,2) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS porcentaje_descuento NUMERIC(5,2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS monto_descuento_usd NUMERIC(14,2) DEFAULT 0.00;
+
+-- 3. Actualizar función RPC retorna_lista_productos_segun_parametros
+DROP FUNCTION IF EXISTS public.retorna_lista_productos_segun_parametros(TEXT);
+DROP FUNCTION IF EXISTS public.retorna_lista_productos_segun_parametros(TEXT, UUID);
+
+CREATE OR REPLACE FUNCTION public.retorna_lista_productos_segun_parametros(
+    p_parametro TEXT,
+    p_cliente_id UUID DEFAULT NULL
+)
+RETURNS TABLE (
+    id UUID,
+    nombre TEXT,
+    codigo_barras TEXT,
+    precio NUMERIC, 
+    stock_disponible INT,
+    imagen_path TEXT,
+    precio_lista NUMERIC,
+    porcentaje_descuento NUMERIC,
+    precio_final_usd NUMERIC
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY 
+    SELECT 
+        p.id, 
+        p.nombre, 
+        p.codigo_barras, 
+        ROUND(
+            CASE 
+                WHEN d.id IS NOT NULL AND d.activo = true AND d.precio_pactado_usd IS NOT NULL THEN d.precio_pactado_usd
+                WHEN d.id IS NOT NULL AND d.activo = true AND d.porcentaje_descuento > 0 THEN COALESCE(p.precio_lista1, 0.00) * (1.00 - (d.porcentaje_descuento / 100.00))
+                ELSE COALESCE(p.precio_lista1, 0.00)
+            END,
+            2
+        ) AS precio,
+        COALESCE(i.stock_disponible, 0)::INT AS stock_disponible,
+        p.imagen_path,
+        COALESCE(p.precio_lista1, 0.00) AS precio_lista,
+        CASE 
+            WHEN d.id IS NOT NULL AND d.activo = true THEN COALESCE(d.porcentaje_descuento, 0.00)
+            ELSE 0.00
+        END AS porcentaje_descuento,
+        ROUND(
+            CASE 
+                WHEN d.id IS NOT NULL AND d.activo = true AND d.precio_pactado_usd IS NOT NULL THEN d.precio_pactado_usd
+                WHEN d.id IS NOT NULL AND d.activo = true AND d.porcentaje_descuento > 0 THEN COALESCE(p.precio_lista1, 0.00) * (1.00 - (d.porcentaje_descuento / 100.00))
+                ELSE COALESCE(p.precio_lista1, 0.00)
+            END,
+            2
+        ) AS precio_final_usd
+    FROM public.productos p
+    LEFT JOIN public.inventario_almacen i ON p.id = i.producto_id
+    LEFT JOIN public.descuentos_cliente_producto d ON p.id = d.producto_id AND d.cliente_id = p_cliente_id AND d.activo = true
+    WHERE 
+        (p_parametro = '.F.' OR p.nombre ILIKE '%' || p_parametro || '%' OR p.codigo_barras ILIKE '%' || p_parametro || '%');
+END;
+$$;
+
+-- 4. Actualizar función RPC crear_orden_distribucion
 CREATE OR REPLACE FUNCTION public.crear_orden_distribucion(
     p_vendedor_id UUID,
     p_cliente_id UUID,

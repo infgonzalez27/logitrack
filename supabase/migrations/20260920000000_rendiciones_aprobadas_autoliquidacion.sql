@@ -1,3 +1,5 @@
+-- Migration: Rendiciones de cuentas se registran como aprobadas por defecto y liquidan automáticamente las órdenes asociadas
+
 CREATE OR REPLACE FUNCTION public.registrar_rendicion_cuentas(
     p_cliente_id UUID,
     p_observaciones TEXT,
@@ -166,7 +168,7 @@ BEGIN
         );
     END IF;
 
-    -- 4. Crear el registro principal (Cabecera) en rendiciones_cuentas
+    -- 4. Crear el registro principal (Cabecera) en rendiciones_cuentas con estado = 'aprobada'
     INSERT INTO public.rendiciones_cuentas (
         cliente_id,
         fecha_rendicion,

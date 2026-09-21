@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createOrdenAction } from "@/lib/actions/ordenes";
+import { listarProductosAction } from "@/lib/actions/productos";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -24,7 +25,7 @@ export function NuevaOrdenForm({
   choferes,
   choferesError = null,
   choferesAviso = null,
-  productos,
+  productos: initialProductos,
   productosError = null,
 }: {
   clientes: Option[];
@@ -41,8 +42,9 @@ export function NuevaOrdenForm({
   const [clienteId, setClienteId] = useState("");
   const [camionId, setCamionId] = useState("");
   const [choferId, setChoferId] = useState("");
+  const [productosLista, setProductosLista] = useState<ProductoListaRpc[]>(initialProductos);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(() =>
-    Object.fromEntries(productos.map((p) => [p.id, p])),
+    Object.fromEntries(initialProductos.map((p) => [p.id, p])),
   );
   const [lineas, setLineas] = useState<Linea[]>([
     {
@@ -51,6 +53,38 @@ export function NuevaOrdenForm({
       valor_unitario_recaudar: 0,
     },
   ]);
+
+  // Cargar catálogo adaptado a los descuentos del cliente seleccionado
+  useEffect(() => {
+    if (!clienteId) return;
+
+    let active = true;
+    async function updateProductosForCliente() {
+      const res = await listarProductosAction("", clienteId);
+      if (active && res.ok) {
+        setProductosLista(res.productos);
+        setCatalogo(Object.fromEntries(res.productos.map((p) => [p.id, p])));
+
+        // Actualizar precios de líneas ya seleccionadas con los nuevos precios descontados
+        setLineas((prevLineas) =>
+          prevLineas.map((linea) => {
+            if (!linea.producto_id) return linea;
+            const p = res.productos.find((prod) => prod.id === linea.producto_id);
+            if (!p) return linea;
+            return {
+              ...linea,
+              valor_unitario_recaudar: p.precio ?? p.precio_lista1 ?? 0,
+            };
+          }),
+        );
+      }
+    }
+
+    updateProductosForCliente();
+    return () => {
+      active = false;
+    };
+  }, [clienteId]);
 
   function updateLinea(index: number, patch: Partial<Linea>) {
     setLineas((prev) =>
@@ -162,7 +196,7 @@ export function NuevaOrdenForm({
               <LineaProductoRow
                 key={index}
                 linea={linea}
-                catalogo={productos}
+                catalogo={productosLista}
                 producto={
                   linea.producto_id
                     ? catalogo[linea.producto_id]

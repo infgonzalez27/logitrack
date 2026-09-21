@@ -367,6 +367,18 @@ type TableDef<T> = {
   Relationships: [];
 };
 
+export interface DescuentoClienteProducto {
+  id: string;
+  cliente_id: string;
+  producto_id: string;
+  porcentaje_descuento: number;
+  precio_pactado_usd: number | null;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+  productos?: Producto | null;
+}
+
 export type ProductoOrdenRpc = {
   producto_id: string;
   cantidad: number;
@@ -383,6 +395,10 @@ export type ProductoListaRpc = {
   precio_lista2?: number;
   precio_lista3?: number;
   stock_disponible: number;
+  imagen_path?: string | null;
+  precio_lista?: number;
+  porcentaje_descuento?: number;
+  precio_final_usd?: number;
 };
 
 export type PerfilUsuarioEditar = {
@@ -527,6 +543,7 @@ export interface Database {
       retorna_lista_productos_segun_parametros: {
         Args: {
           p_parametro: string;
+          p_cliente_id?: string | null;
         };
         Returns: ProductoListaRpc[];
       };

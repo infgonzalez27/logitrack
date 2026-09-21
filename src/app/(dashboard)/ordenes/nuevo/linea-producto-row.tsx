@@ -113,15 +113,25 @@ export function LineaProductoRow({
         </div>
       ) : (
         <div className="flex items-start justify-between gap-3 rounded-xl border border-lt-border-light bg-lt-surface px-3 py-2.5">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-lt-text">
-              {producto?.nombre ?? "Producto seleccionado"}
+          <div className="min-w-0 space-y-1">
+            <p className="truncate text-sm font-medium text-lt-text flex items-center gap-2">
+              <span>{producto?.nombre ?? "Producto seleccionado"}</span>
+              {Boolean(producto?.porcentaje_descuento) && (
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-semibold px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  -{producto?.porcentaje_descuento}% OFF (Descuento Cliente)
+                </span>
+              )}
             </p>
             <p className="text-xs text-lt-text-muted">
               Código: {producto?.codigo_producto ?? "—"} · Stock:{" "}
-              {producto?.stock_disponible ?? 0} · Precio lista: $
+              {producto?.stock_disponible ?? 0} · Precio Lista: $
               {formatoPrecio(
-                producto?.precio_lista1 ?? producto?.precio ?? 0,
+                producto?.precio_lista1 ?? producto?.precio_lista ?? producto?.precio ?? 0,
+              )}
+              {Boolean(producto?.porcentaje_descuento) && (
+                <span className="ml-1 text-emerald-400 font-medium">
+                  · Precio Cliente Neto: ${formatoPrecio(producto?.precio ?? 0)}
+                </span>
               )}
             </p>
           </div>

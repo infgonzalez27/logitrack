@@ -144,7 +144,7 @@ export async function createRendicionAction(
   const { error } = await supabase.from("rendiciones_cuentas").insert({
     cliente_id: String(formData.get("cliente_id")),
     observaciones: String(formData.get("observaciones") || "") || null,
-    estado: "revision",
+    estado: "aprobada",
   });
 
   if (error) return { error: error.message };

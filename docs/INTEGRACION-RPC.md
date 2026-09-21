@@ -1574,3 +1574,52 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
   - p_cliente_id (UUID, Requerido).
   - p_fecha_inicial (DATE, Opcional, por defecto hace 30 días).
   - p_fecha_limite (DATE, Opcional, por defecto fecha actual).
+
+---
+
+## RPCs y Contratos para Descuentos de Clientes por Producto
+
+### 1. `retorna_lista_productos_segun_parametros`
+
+- **Descripción:** Consulta el catálogo de productos por búsqueda de texto o `.F.`. Si se suministra `p_cliente_id`, calcula de forma dinámica los precios netos finales considerando los descuentos configurados en la tabla `descuentos_cliente_producto`.
+- **Firma SQL:** `retorna_lista_productos_segun_parametros(p_parametro TEXT, p_cliente_id UUID DEFAULT NULL)`
+- **Parámetros:**
+  - `p_parametro` (`TEXT`): Cadena de texto a buscar o `.F.` para retornar todos los productos.
+  - `p_cliente_id` (`UUID`, Opcional, defecto `NULL`): ID del cliente para consultar y aplicar reglas de descuento.
+- **Campos Retornados:**
+  - `id` (`UUID`)
+  - `nombre` (`TEXT`)
+  - `codigo_barras` (`TEXT`)
+  - `precio` (`NUMERIC`): Precio unitario final cobrable en USD (post-descuento).
+  - `stock_disponible` (`INT`)
+  - `imagen_path` (`TEXT`)
+  - `precio_lista` (`NUMERIC`): Precio de lista original en USD (`precio_lista1`).
+  - `porcentaje_descuento` (`NUMERIC`): Porcentaje de descuento % activo para el cliente.
+  - `precio_final_usd` (`NUMERIC`): Precio final neto en USD.
+
+- **Uso en Server Action / Componentes (Next.js):**
+  ```typescript
+  import { listarProductosAction } from "@/lib/actions/productos";
+
+  // Obtenemos catálogo personalizado para un cliente específico
+  const { ok, productos } = await listarProductosAction("", clienteId);
+  ```
+
+---
+
+### 2. Comportamiento en `crear_orden_distribucion` con Descuentos de Cliente
+
+- Al ejecutar `crear_orden_distribucion`:
+  - Para cada ítem del `p_productos_json`, la RPC verifica si el cliente posee un descuento activo en `descuentos_cliente_producto`.
+  - Si existe un porcentaje de descuento o precio pactado, ajusta de manera automática el `valor_unitario_usd` y calcula los subtotales/totales netos de la orden.
+  - Registra en `detalle_distribucion` los campos de trazabilidad: `precio_lista_usd`, `porcentaje_descuento`, `monto_descuento_usd` y `valor_unitario_usd`.
+
+---
+
+### 3. Server Actions para Gestión de Descuentos (`src/lib/actions/descuentos.ts`)
+
+Para interactuar con la tabla `descuentos_cliente_producto` desde los componentes de Next.js (ej. modal en la lista de clientes):
+
+- `obtenerDescuentosClienteAction(clienteId: string)`: Obtiene los descuentos del cliente con información del producto.
+- `guardarDescuentoClienteAction(input: { cliente_id, producto_id, porcentaje_descuento, precio_pactado_usd })`: Guarda o actualiza la regla de descuento de un cliente.
+- `eliminarDescuentoClienteAction(id: string, clienteId: string)`: Elimina la regla de descuento.

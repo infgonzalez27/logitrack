@@ -98,13 +98,17 @@ async function buscarProductosEnTabla(
 
 async function listarProductosDesdeRpc(
   parametro: string,
+  clienteId?: string,
 ): Promise<
   { ok: true; productos: ProductoListaRpc[] } | { ok: false; error: string }
 > {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(
     "retorna_lista_productos_segun_parametros",
-    { p_parametro: parametro },
+    { 
+      p_parametro: parametro,
+      p_cliente_id: clienteId || null,
+    },
   );
 
   if (error) {
@@ -156,6 +160,7 @@ async function enriquecerProductosLista(
 
 export async function buscarProductosOrdenAction(
   parametro: string,
+  clienteId?: string,
 ): Promise<
   | { ok: true; productos: ProductoListaRpc[] }
   | { ok: false; error: string }
@@ -173,22 +178,19 @@ export async function buscarProductosOrdenAction(
     };
   }
 
-  return buscarProductosEnTabla(p);
+  return listarProductosDesdeRpc(p, clienteId);
 }
 
 export async function listarProductosAction(
   parametro?: string,
+  clienteId?: string,
 ): Promise<
   | { ok: true; productos: ProductoListaRpc[] }
   | { ok: false; error: string }
 > {
   const q = parametro?.trim() ?? "";
 
-  if (!q) {
-    return listarProductosDesdeRpc("");
-  }
-
-  return buscarProductosEnTabla(q);
+  return listarProductosDesdeRpc(q, clienteId);
 }
 
 export async function obtenerProductoParaEditarAction(
