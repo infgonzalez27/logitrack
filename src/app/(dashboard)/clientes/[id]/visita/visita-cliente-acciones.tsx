@@ -20,7 +20,7 @@ export function VisitaClienteAcciones({
     <div className="flex flex-wrap gap-3">
       {puedeRendir ? (
         <Button href={rendicionHref} variant="secondary">
-          Rendición de cuentas
+          Cobranzas
         </Button>
       ) : (
         <Button
@@ -29,7 +29,7 @@ export function VisitaClienteAcciones({
           disabled
           title="Este cliente no tiene órdenes por liquidar"
         >
-          Rendición de cuentas
+          Cobranzas
         </Button>
       )}
       {puedeCrearOrden ? (

@@ -207,11 +207,11 @@ export function getNavSectionsForRole(rol: RolNombre | null) {
   if (rol === "cobrador") {
     return [
       {
-        title: "Rendición de Cuentas",
+        title: "Cobranzas",
         items: [
           { href: "/rendiciones/por-liquidar", label: "Órdenes por liquidar" },
-          { href: "/rendiciones", label: "Rendición de Cuentas" },
-          { href: "/rendiciones/nuevo", label: "Nueva rendición" },
+          { href: "/rendiciones", label: "Cobranzas" },
+          { href: "/rendiciones/nuevo", label: "Nueva cobranza" },
           { href: "/contenedores", label: "Consulta de contenedores" },
         ],
       },

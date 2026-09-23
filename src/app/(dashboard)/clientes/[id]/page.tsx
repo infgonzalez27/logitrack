@@ -59,7 +59,7 @@ export default async function ClienteEditarPage({
     : [];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Editar cliente"
         description={result.cliente.razon_social}

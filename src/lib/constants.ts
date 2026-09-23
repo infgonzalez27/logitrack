@@ -110,10 +110,10 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Rendición de Cuentas",
+    title: "Cobranzas",
     items: [
       { href: "/rendiciones/por-liquidar", label: "Órdenes por liquidar" },
-      { href: "/rendiciones", label: "Rendición de Cuentas" },
+      { href: "/rendiciones", label: "Cobranzas" },
       { href: "/rendiciones/formas-pago", label: "Reporte formas de pago" },
       { href: "/contenedores", label: "Consulta de contenedores" },
     ],
@@ -132,6 +132,12 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/cuentas-bancarias", label: "Cuentas bancarias" },
       { href: "/usuarios", label: "Usuarios" },
       { href: "/usuarios/registrar", label: "Registrar usuario" },
+    ],
+  },
+  {
+    title: "Superadmin",
+    items: [
+      { href: "/admin", label: "Empresas / tenants" },
     ],
   },
 ] as const;

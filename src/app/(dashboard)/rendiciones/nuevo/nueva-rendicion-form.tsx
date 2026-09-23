@@ -688,7 +688,7 @@ export function NuevaRendicionForm({
       <section className="overflow-hidden rounded-2xl border border-lt-border bg-[color-mix(in_srgb,var(--lt-primary)_18%,#0f2a3d)] text-white shadow-sm">
         <div className="border-b border-white/15 px-4 py-3 sm:px-5">
           <h1 className="font-display text-xl tracking-tight sm:text-2xl">
-            Rendición de Cuentas
+            Cobranzas
           </h1>
         </div>
         <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
@@ -1095,7 +1095,7 @@ export function NuevaRendicionForm({
             </Button>
           </div>
           <p className="text-xs text-lt-text-muted">
-            Al escribir el monto, Total Rendición y Faltante se actualizan. Usa
+            Al escribir el monto, Total Cobranza y Faltante se actualizan. Usa
             «Incluir pago» solo si vas a agregar otra forma de pago; si no,
             pulsa Guardar.
           </p>
@@ -1271,7 +1271,7 @@ export function NuevaRendicionForm({
         <div className="flex flex-wrap items-end justify-between gap-3 border-t border-lt-border-light bg-lt-surface-muted px-4 py-4">
           <div className="grid min-w-[16rem] flex-1 gap-3 sm:grid-cols-2 lg:max-w-xl">
             <Input
-              label="Total Rendición $"
+              label="Total Cobranza $"
               readOnly
               value={formatNumber(totalRendicion)}
             />

@@ -47,13 +47,24 @@ export default async function RadarDetallePage({
   );
   const cargaInventarioMovil = Boolean(radarRow?.carga_inventario_movil);
 
+  const correlativo = reporte.ok ? reporte.reporte.radar.correlativo : null;
+  const fechaDespacho = reporte.ok
+    ? reporte.reporte.radar.fecha_despacho
+    : null;
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <PageHeader
-        title="Detalle del radar"
-        description="Órdenes y paradas vinculadas a este radar."
+        title={
+          correlativo != null ? `Radar # ${correlativo}` : "Detalle del radar"
+        }
+        description={
+          fechaDespacho
+            ? `Fecha de despacho ${fechaDespacho} · Carga y paradas`
+            : "Órdenes y paradas vinculadas a este radar."
+        }
         action={
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 print:hidden">
             {puedeRegenerar ? (
               <RadarRegenerarButton
                 radarId={id}
@@ -73,28 +84,26 @@ export default async function RadarDetallePage({
 
       {reporte.ok ? (
         <>
-          <section className="space-y-3">
+          <section className="space-y-3 print:hidden">
             <RadarParadasView
               reporte={reporte.reporte}
               radarId={id}
               modoDespachador={modoDespachador}
             />
           </section>
-          {!modoDespachador ? (
-            <section className="border-t border-lt-border pt-8">
-              <h2 className="mb-4 text-base font-semibold text-lt-text">
-                Reporte completo
-              </h2>
-              <RadarReporteView reporte={reporte.reporte} />
-            </section>
-          ) : null}
+          <section className="border-t border-lt-border pt-8 print:border-0 print:pt-0">
+            <h2 className="mb-4 text-base font-semibold text-lt-text print:hidden">
+              Reporte de carga
+            </h2>
+            <RadarReporteView reporte={reporte.reporte} />
+          </section>
         </>
       ) : (
-        <p className="lt-alert-error">{reporte.error}</p>
+        <p className="lt-alert-error print:hidden">{reporte.error}</p>
       )}
 
       {puedeAprobar ? (
-        <section className="space-y-3 border-t border-lt-border pt-8">
+        <section className="space-y-3 border-t border-lt-border pt-8 print:hidden">
           <h2 className="text-base font-semibold text-lt-text">
             Aprobación gerencial
           </h2>

@@ -16,7 +16,7 @@ export default async function CuentasBancariasPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Cuentas bancarias"
-        description="Cuentas destino de la empresa para rendición de cuentas. Solo registrar y modificar."
+        description="Cuentas destino de la empresa para cobranzas. Solo registrar y modificar."
       />
       {!cuentasResult.ok ? (
         <p className="lt-alert-error">{cuentasResult.error}</p>

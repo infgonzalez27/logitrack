@@ -204,7 +204,9 @@ export default async function OrdenDetallePage({
             { key: "producto", label: "Producto" },
             { key: "solicitada", label: "Solicitada" },
             { key: "despachada", label: "Despachada" },
-            { key: "unitario_usd", label: "Unit. USD" },
+            { key: "precio_lista", label: "P. Lista USD" },
+            { key: "descuento", label: "Desc. (%)" },
+            { key: "unitario_usd", label: "Precio Neto USD" },
             { key: "subtotal_usd", label: "Subtotal USD" },
             { key: "entrega", label: "Estado entrega" },
           ]}
@@ -216,6 +218,17 @@ export default async function OrdenDetallePage({
                 ? linea.valor_unitario_usd
                 : 0,
             );
+            const precioLista = Number(
+              (linea as { precio_lista_usd?: number | null }).precio_lista_usd ??
+                unitUsd,
+            );
+            const porcentajeDesc = Number(
+              (linea as { porcentaje_descuento?: number | null })
+                .porcentaje_descuento ?? 0,
+            );
+            const tieneDescuento =
+              porcentajeDesc > 0 ||
+              (precioLista > 0 && unitUsd > 0 && precioLista > unitUsd);
             const subUsd = Number(
               linea.subtotal_recaudar_usd != null &&
                 Number(linea.subtotal_recaudar_usd) > 0
@@ -230,7 +243,29 @@ export default async function OrdenDetallePage({
                 producto: producto?.nombre ?? "—",
                 solicitada: formatNumber(linea.cantidad_solicitada),
                 despachada: formatNumber(linea.cantidad_despachada),
-                unitario_usd: unitUsd > 0 ? formatCurrency(unitUsd) : "—",
+                precio_lista:
+                  precioLista > 0 ? formatCurrency(precioLista) : "—",
+                descuento: tieneDescuento ? (
+                  <Badge tone="success">
+                    {porcentajeDesc > 0 ? `-${porcentajeDesc}%` : "Especial"}
+                  </Badge>
+                ) : (
+                  "—"
+                ),
+                unitario_usd:
+                  unitUsd > 0 ? (
+                    <span
+                      className={
+                        tieneDescuento
+                          ? "font-semibold text-emerald-600 dark:text-emerald-400"
+                          : undefined
+                      }
+                    >
+                      {formatCurrency(unitUsd)}
+                    </span>
+                  ) : (
+                    "—"
+                  ),
                 subtotal_usd: subUsd > 0 ? formatCurrency(subUsd) : "—",
                 entrega: labelEstadoEntrega(linea.estado_entrega),
               },
@@ -300,7 +335,7 @@ export default async function OrdenDetallePage({
         <p className="lt-no-print text-sm text-lt-text-muted">
           Esta orden se liquida mediante{" "}
           <a href="/rendiciones/nuevo" className="text-lt-primary underline">
-            Rendición de cuentas
+            Cobranzas
           </a>
           .
         </p>

@@ -1380,6 +1380,63 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ---
 
+### 2.43. Gestión Multi-Tenant (Base de Datos Central)
+
+Esta sección define las funciones para gestionar el aprovisionamiento central de tenants: registro de bases `lt_*` en el catálogo de enrutamiento y asignación de usuarios (p. ej. gerente).
+
+#### 2.43.1. Crear Nueva Empresa (`crea_nueva_empresa`)
+- **Firma SQL:** `crea_nueva_empresa(p_codigo_empresa VARCHAR, p_nombre_empresa VARCHAR, p_supabase_url TEXT, p_supabase_anon_key TEXT)`
+- **Uso en Backend (Server Action):**
+  ```typescript
+  const { data, error } = await supabase.rpc('crea_nueva_empresa', {
+    p_codigo_empresa: 'ramirez',
+    p_nombre_empresa: 'Distribuidora Ramirez C.A.',
+    p_supabase_url: 'https://xyzxyz.supabase.co',
+    p_supabase_anon_key: 'eyJhbGciOiJIUzI1Ni...'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Empresa creada exitosamente.",
+    "data": {
+      "empresa_id": "UUID_DE_LA_EMPRESA",
+      "codigo_empresa": "ramirez",
+      "nombre_empresa": "Distribuidora Ramirez C.A."
+    },
+    "error": null
+  }
+  ```
+
+#### 2.43.2. Asignar Usuario a Empresa (`asignar_usuario_empresa`)
+- **Firma SQL:** `asignar_usuario_empresa(p_user_id UUID, p_empresa_id UUID, p_rol VARCHAR DEFAULT 'operador')`
+- **Uso en Backend (Server Action):**
+  ```typescript
+  const { data, error } = await supabase.rpc('asignar_usuario_empresa', {
+    p_user_id: 'UUID_DEL_USUARIO_EN_AUTH',
+    p_empresa_id: 'UUID_DE_LA_EMPRESA',
+    p_rol: 'gerente'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Usuario asignado a la empresa exitosamente.",
+    "data": {
+      "asignacion_id": "UUID_DE_LA_ASIGNACION",
+      "user_id": "UUID_DEL_USUARIO_EN_AUTH",
+      "empresa_id": "UUID_DE_LA_EMPRESA",
+      "rol": "gerente"
+    },
+    "error": null
+  }
+  ```
+
+- **Panel Superadmin:** `/admin` (solo rol `admin`) crea empresa + gerente en un flujo (`crearEmpresaConGerenteAction`).
+- **Docs operativas:** `docs/logitrack-multi-tenant.md`, `docs/procedimiento_duplicacion_tenant.md`.
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend
@@ -1459,3 +1516,30 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
 - `obtenerDescuentosClienteAction(clienteId: string)`: Obtiene los descuentos del cliente con informaci├│n del producto.
 - `guardarDescuentoClienteAction(input: { cliente_id, producto_id, porcentaje_descuento, precio_pactado_usd })`: Guarda o actualiza la regla de descuento de un cliente.
 - `eliminarDescuentoClienteAction(id: string, clienteId: string)`: Elimina la regla de descuento.
+
+---
+
+### 4. `retorna_radar_despachador` (Metadatos de Descuentos en Detalle)
+
+- **Firma SQL:** `retorna_radar_despachador()`
+- **Actualización:** En el array `detalles` de cada orden de distribución, se incluyen los siguientes campos adicionales de auditoría de descuento:
+  - `precio_lista_usd` (`NUMERIC`): Precio de lista base del producto en USD.
+  - `porcentaje_descuento` (`NUMERIC`): Porcentaje de descuento % aplicado al producto.
+  - `monto_descuento_usd` (`NUMERIC`): Monto total descontado en USD en la línea.
+- **Estructura JSON de cada ítem en `detalles`:**
+  ```json
+  {
+    "detalle_id": "UUID_DETALLE",
+    "producto_id": "UUID_PRODUCTO",
+    "codigo_producto": "PROD-001",
+    "nombre_producto": "Queso Paisa 1kg",
+    "cantidad_solicitada": 10,
+    "cantidad_despachada": 10,
+    "valor_unitario_usd": 8.50,
+    "subtotal_recaudar_usd": 85.00,
+    "precio_lista_usd": 10.00,
+    "porcentaje_descuento": 15.00,
+    "monto_descuento_usd": 15.00,
+    "estado_entrega": "pendiente"
+  }
+  ```

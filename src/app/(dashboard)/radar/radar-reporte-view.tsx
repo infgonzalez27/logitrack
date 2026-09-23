@@ -1,161 +1,192 @@
 "use client";
 
-import Link from "next/link";
-import { Badge, ordenEstadoTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { labelOrdenEstado } from "@/lib/constants";
-import { formatDateOnly, formatNumber } from "@/lib/format";
-import type { OrdenEstado, RadarDetalleReporte } from "@/types/database";
+import { formatNumber } from "@/lib/format";
+import type { RadarDetalleReporte } from "@/types/database";
 
-export function RadarReporteView({ reporte }: { reporte: RadarDetalleReporte }) {
-  const { radar, despachador, resumen_productos, ordenes } = reporte;
-  const ordenId = (o: (typeof ordenes)[number]) =>
-    String(o.orden_id ?? o.id ?? "");
-  const clienteNombre = (o: (typeof ordenes)[number]) =>
+/** Fecha dd/mm/yyyy como en Ejemplo_radar.docx */
+function formatFechaDespacho(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value.includes("T") ? value : `${value}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return value;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+type OrdenReporte = RadarDetalleReporte["ordenes"][number];
+type DetalleReporte = NonNullable<OrdenReporte["detalles"]>[number];
+
+function clienteNombre(o: OrdenReporte): string {
+  return (
     o.cliente?.razon_social ??
     (o.cliente as { nombre?: string } | undefined)?.nombre ??
-    "Cliente";
+    "Cliente"
+  );
+}
+
+function detallesOrden(o: OrdenReporte): DetalleReporte[] {
+  const raw = Array.isArray(o.detalles) ? o.detalles : [];
+  return [...raw].sort((a, b) =>
+    String(a.nombre_producto ?? "").localeCompare(
+      String(b.nombre_producto ?? ""),
+      "es",
+    ),
+  );
+}
+
+/**
+ * Reporte de carga del radar — layout alineado a Ejemplo_radar.docx:
+ * Radar # · Fecha · bloques Cliente (Producto / Cantidad solicitada) · Resumen.
+ */
+export function RadarReporteView({ reporte }: { reporte: RadarDetalleReporte }) {
+  const { radar, despachador, resumen_productos, ordenes } = reporte;
+
+  const ordenesOrdenadas = [...(ordenes ?? [])].sort((a, b) =>
+    clienteNombre(a).localeCompare(clienteNombre(b), "es"),
+  );
+
+  const resumen = [...(resumen_productos ?? [])].sort(
+    (a, b) =>
+      Number(b.cantidad_solicitada) - Number(a.cantidad_solicitada) ||
+      String(a.nombre_producto).localeCompare(String(b.nombre_producto), "es"),
+  );
 
   return (
-    <div className="space-y-4 print:space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="lt-print-document space-y-6 print:space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 print:hidden">
         <div>
-          <h2 className="text-lg font-semibold text-lt-text">
-            Radar #{radar.correlativo}
-          </h2>
           <p className="text-sm text-lt-text-muted">
-            {formatDateOnly(radar.fecha_despacho)} ·{" "}
-            {despachador.nombre_completo}
-            {radar.status_radar ? " · Aprobado" : " · Pendiente de aprobación"}
+            Formato de carga / picking del radar
           </p>
+          {despachador?.nombre_completo ? (
+            <p className="text-sm text-lt-text-muted">
+              Despachador: {despachador.nombre_completo}
+            </p>
+          ) : null}
         </div>
         <Button
           type="button"
           variant="secondary"
-          className="print:hidden"
           onClick={() => window.print()}
         >
           Imprimir reporte
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="p-3">
-          <p className="text-xs text-lt-text-muted">Solicitado</p>
-          <p className="text-xl font-semibold">
-            {formatNumber(Number(radar.total_cantidad_solicitada ?? 0))}
+      <article className="radar-carga-report rounded-xl border border-lt-border bg-lt-surface p-5 text-lt-text print:rounded-none print:border-0 print:bg-transparent print:p-0">
+        <header className="lt-print-keep-together space-y-1 border-b border-lt-border pb-4 print:border-black">
+          <h2 className="font-display text-2xl font-bold tracking-tight">
+            Radar # {radar.correlativo}
+          </h2>
+          <p className="text-base">
+            Fecha de despacho {formatFechaDespacho(radar.fecha_despacho)}
           </p>
-        </Card>
-        <Card className="p-3">
-          <p className="text-xs text-lt-text-muted">Despachado</p>
-          <p className="text-xl font-semibold">
-            {formatNumber(Number(radar.total_cantidad_despachada ?? 0))}
-          </p>
-        </Card>
-        <Card className="p-3">
-          <p className="text-xs text-lt-text-muted">Contenedores retirados</p>
-          <p className="text-xl font-semibold">
-            {formatNumber(Number(radar.total_contenedores_retirados ?? 0))}
-          </p>
-        </Card>
-      </div>
+          {despachador?.nombre_completo ? (
+            <p className="text-sm text-lt-text-muted print:text-black">
+              Despachador: {despachador.nombre_completo}
+            </p>
+          ) : null}
+        </header>
 
-      <Card className="overflow-hidden p-0">
-        <div className="border-b border-lt-border px-4 py-3">
-          <h3 className="font-medium text-lt-text">Resumen de productos</h3>
+        <div className="mt-6 space-y-8 print:mt-4 print:space-y-6">
+          {ordenesOrdenadas.map((o) => {
+            const id = String(o.orden_id ?? o.id ?? o.correlativo ?? "");
+            const lineas = detallesOrden(o);
+            return (
+              <section
+                key={id}
+                className="lt-print-keep-together space-y-2 break-inside-avoid"
+              >
+                <h3 className="text-base font-semibold">
+                  Cliente: {clienteNombre(o)}
+                </h3>
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-lt-border print:border-black">
+                      <th className="py-2 pr-3 text-left font-semibold">
+                        Producto
+                      </th>
+                      <th className="w-36 py-2 text-right font-semibold">
+                        Cantidad solicitada
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineas.map((d, idx) => (
+                      <tr
+                        key={String(d.detalle_id ?? `${id}-${idx}`)}
+                        className="border-b border-lt-border/60 print:border-black/40"
+                      >
+                        <td className="py-2 pr-3 align-top">
+                          {d.nombre_producto ?? "Producto"}
+                        </td>
+                        <td className="py-2 text-right align-top tabular-nums">
+                          {formatNumber(Number(d.cantidad_solicitada ?? 0))}
+                        </td>
+                      </tr>
+                    ))}
+                    {!lineas.length ? (
+                      <tr>
+                        <td
+                          colSpan={2}
+                          className="py-3 text-lt-text-muted print:text-black"
+                        >
+                          Sin líneas de producto.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </section>
+            );
+          })}
+
+          {!ordenesOrdenadas.length ? (
+            <p className="text-sm text-lt-text-muted">
+              No hay órdenes vinculadas a este radar.
+            </p>
+          ) : null}
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-lt-surface-muted text-left text-lt-text-muted">
-              <tr>
-                <th className="px-4 py-2 font-medium">Producto</th>
-                <th className="px-4 py-2 font-medium">Solicitado</th>
-                <th className="px-4 py-2 font-medium">Despachado</th>
+
+        <section className="lt-print-keep-together mt-10 space-y-2 border-t border-lt-border pt-6 print:mt-8 print:border-black print:pt-4">
+          <h3 className="text-lg font-bold">Resumen</h3>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-lt-border print:border-black">
+                <th className="py-2 pr-3 text-left font-semibold">Producto</th>
+                <th className="w-36 py-2 text-right font-semibold">
+                  Cantidad solicitada
+                </th>
               </tr>
             </thead>
             <tbody>
-              {(resumen_productos ?? []).map((p) => (
-                <tr key={p.producto_id} className="border-t border-lt-border">
-                  <td className="px-4 py-2">
-                    <span className="font-medium">{p.nombre_producto}</span>
-                    {p.codigo_producto ? (
-                      <span className="ml-2 text-lt-text-muted">
-                        {p.codigo_producto}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-2">
-                    {formatNumber(Number(p.cantidad_solicitada))}
-                  </td>
-                  <td className="px-4 py-2">
-                    {formatNumber(Number(p.cantidad_despachada))}
+              {resumen.map((p) => (
+                <tr
+                  key={p.producto_id}
+                  className="border-b border-lt-border/60 print:border-black/40"
+                >
+                  <td className="py-2 pr-3 align-top">{p.nombre_producto}</td>
+                  <td className="py-2 text-right align-top tabular-nums font-medium">
+                    {formatNumber(Number(p.cantidad_solicitada ?? 0))}
                   </td>
                 </tr>
               ))}
-              {!resumen_productos?.length ? (
+              {!resumen.length ? (
                 <tr>
                   <td
-                    colSpan={3}
-                    className="px-4 py-6 text-center text-lt-text-muted"
+                    colSpan={2}
+                    className="py-3 text-lt-text-muted print:text-black"
                   >
-                    Sin productos vinculados a este radar.
+                    Sin productos consolidados.
                   </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
-        </div>
-      </Card>
-
-      <Card className="space-y-3 p-4">
-        <h3 className="font-medium text-lt-text">Órdenes del radar</h3>
-        <ul className="divide-y divide-lt-border">
-          {(ordenes ?? []).map((o) => {
-            const id = ordenId(o);
-            const estado = String(o.estado ?? "");
-            return (
-              <li
-                key={id || String(o.correlativo)}
-                className="flex flex-wrap items-center justify-between gap-2 py-3"
-              >
-                <div>
-                  <p className="font-medium text-lt-text">
-                    #{o.correlativo ?? "—"} · {clienteNombre(o)}
-                  </p>
-                  {o.cliente?.rif_nit ? (
-                    <p className="text-xs text-lt-text-muted">
-                      {o.cliente.rif_nit}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-2">
-                  {estado ? (
-                    <Badge tone={ordenEstadoTone(estado as OrdenEstado)}>
-                      {labelOrdenEstado(estado as OrdenEstado)}
-                    </Badge>
-                  ) : null}
-                  {id ? (
-                    <Link
-                      href={`/ordenes/${id}`}
-                      className="text-sm font-medium text-lt-primary print:hidden"
-                    >
-                      Ver orden
-                    </Link>
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-          {!ordenes?.length ? (
-            <li className="py-4 text-center text-sm text-lt-text-muted">
-              No hay órdenes para esta fecha y despachador. Revisa que las
-              órdenes tengan la misma fecha de entrega y cliente con ese
-              despachador.
-            </li>
-          ) : null}
-        </ul>
-      </Card>
+        </section>
+      </article>
     </div>
   );
 }

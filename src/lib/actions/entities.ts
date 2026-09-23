@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { CamionListaRpc } from "@/types/database";
 
-type ActionResult = { error?: string; success?: boolean };
+type ActionResult = { error?: string; success?: boolean; id?: string };
 
 export type CamionOrdenOption = {
   id: string;
@@ -79,25 +79,29 @@ export async function createClienteAction(
       ? Math.floor(maxFacturasRaw)
       : 0;
 
-  const { error } = await supabase.from("clientes").insert({
-    rif_nit: String(formData.get("rif_nit")).trim(),
-    razon_social: String(formData.get("razon_social")).trim(),
-    direccion_fiscal: String(formData.get("direccion_fiscal")).trim(),
-    telefono: String(formData.get("telefono") || "") || null,
-    movil1: String(formData.get("movil1") || "") || null,
-    correo_e: String(formData.get("correo_e") || "") || null,
-    vendedor_id: vendedorId || null,
-    despachador_id: despachadorId || null,
-    id_ruta: idRuta || null,
-    limite_credito: limiteCredito,
-    max_facturas_vencidas: maxFacturas,
-    permiso_despacho_manual: permisoRaw === "true",
-    activo: true,
-  });
+  const { data, error } = await supabase
+    .from("clientes")
+    .insert({
+      rif_nit: String(formData.get("rif_nit")).trim(),
+      razon_social: String(formData.get("razon_social")).trim(),
+      direccion_fiscal: String(formData.get("direccion_fiscal")).trim(),
+      telefono: String(formData.get("telefono") || "") || null,
+      movil1: String(formData.get("movil1") || "") || null,
+      correo_e: String(formData.get("correo_e") || "") || null,
+      vendedor_id: vendedorId || null,
+      despachador_id: despachadorId || null,
+      id_ruta: idRuta || null,
+      limite_credito: limiteCredito,
+      max_facturas_vencidas: maxFacturas,
+      permiso_despacho_manual: permisoRaw === "true",
+      activo: true,
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
   revalidatePath("/clientes");
-  return { success: true };
+  return { success: true, id: data.id };
 }
 
 export async function createProveedorAction(

@@ -66,7 +66,7 @@ function kpisGerencia(
     },
     {
       id: "rendiciones",
-      label: "Rendiciones en revisión",
+      label: "Cobranzas en revisión",
       value: extras.rendicionesRevision,
       href: "/rendiciones",
       tone: "info",

@@ -408,6 +408,27 @@ export type ReporteFormasPagoData = {
   movimientos: ReporteFormaPagoMovimiento[];
 };
 
+/** Catálogo central de tenants lt_* (multi-tenant). */
+export interface Empresa {
+  id: string;
+  codigo_empresa: string;
+  nombre_empresa: string;
+  supabase_url: string;
+  supabase_anon_key: string;
+  activo: boolean;
+  created_at: string;
+}
+
+/** Vínculo auth.users (central) ↔ empresa tenant. */
+export interface UsuarioEmpresa {
+  id: string;
+  user_id: string;
+  empresa_id: string;
+  rol: string;
+  created_at: string;
+  empresas?: Empresa | null;
+}
+
 /** Cuentas bancarias destino de la empresa (DB-028). */
 export interface CuentaBancariaEmpresa {
   id: string;

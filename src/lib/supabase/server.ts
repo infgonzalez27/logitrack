@@ -1,30 +1,9 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { getDynamicTenantClient } from "@/lib/supabase/tenant-router";
 
+/**
+ * Returns the Supabase client for Server Components / Server Actions.
+ * Dynamically resolves the tenant (lt_*) assigned to the current user.
+ */
 export async function createClient() {
-  const cookieStore = await cookies();
-
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
-            );
-          } catch (error) {
-            console.error(
-              "[LogiTrack Supabase] No se pudieron guardar cookies de sesión:",
-              error instanceof Error ? error.message : error,
-            );
-          }
-        },
-      },
-    },
-  );
+  return getDynamicTenantClient();
 }

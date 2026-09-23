@@ -654,18 +654,7 @@ export async function registrarRendicionCuentasAction(input: {
   revalidatePath("/visita");
 
   if (rendicionId) {
-    const usado = Number(response.data?.saldo_favor_usado ?? 0);
-    const generado = Number(response.data?.saldo_favor_generado ?? 0);
-    const totalOrdenes = Number(response.data?.total_ordenes ?? 0);
-    const totalPagos = Number(response.data?.total_pagos ?? 0);
-    const qs = new URLSearchParams({
-      ok: rendicionId,
-      usado: String(usado),
-      generado: String(generado),
-      ordenes: String(totalOrdenes),
-      pagos: String(totalPagos),
-    });
-    redirect(`/rendiciones?${qs.toString()}`);
+    redirect("/rendiciones");
   }
 
   return {

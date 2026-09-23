@@ -7,6 +7,7 @@ import {
   type ClienteEditarInput,
 } from "@/lib/actions/clientes";
 import { OtorgarExcepcionDespachoButton } from "@/components/clientes/otorgar-excepcion-despacho-button";
+import { DescuentosClientePanel } from "@/components/clientes/descuentos-cliente-panel";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -226,6 +227,10 @@ export function ClienteEditarForm({
             />
           ) : null}
         </div>
+      </Card>
+
+      <Card title="Descuentos por producto">
+        <DescuentosClientePanel clienteId={cliente.id} />
       </Card>
 
       {error ? <p className="lt-alert-error">{error}</p> : null}
