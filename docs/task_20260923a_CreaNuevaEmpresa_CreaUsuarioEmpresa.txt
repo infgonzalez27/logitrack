@@ -1,0 +1,4 @@
+## Arquitectura Multi-Tenant & Routing
+Crea los Store Procedure crea_nueva_empresa y asignar_usuario_empresa para que sea llamado desde el frontend
+Usa La Opción 1 (Server Action / API en TypeScript + Stored Procedures) es la mejor y más recomendable para Next.js + Supabase
+Presenta un IMPLEMENTATION-PLAN, crealo como Task y actualiza INTEGRACION-RPC para que lo lea el desarrollador Frontend

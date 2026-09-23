@@ -1650,3 +1650,59 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
     "estado_entrega": "pendiente"
   }
   ```
+
+---
+
+### 2.17. Gestión Multi-Tenant (Base de Datos Central)
+
+Esta sección define las funciones para gestionar el aprovisionamiento central de tenants, es decir, el registro de nuevas bases de datos clónicas en el esquema de enrutamiento y la asignación de operadores.
+
+#### 2.17.1. Crear Nueva Empresa (`crea_nueva_empresa`)
+- **Firma SQL:** `crea_nueva_empresa(p_codigo_empresa VARCHAR, p_nombre_empresa VARCHAR, p_supabase_url TEXT, p_supabase_anon_key TEXT)`
+- **Uso en Backend (Server Action):**
+  ```typescript
+  const { data, error } = await supabase.rpc('crea_nueva_empresa', {
+    p_codigo_empresa: 'LT-RAMIREZ',
+    p_nombre_empresa: 'Distribuidora Ramirez C.A.',
+    p_supabase_url: 'https://xyzxyz.supabase.co',
+    p_supabase_anon_key: 'eyJhbGciOiJIUzI1Ni...'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Empresa creada exitosamente.",
+    "data": {
+      "empresa_id": "UUID_DE_LA_EMPRESA",
+      "codigo_empresa": "LT-RAMIREZ",
+      "nombre_empresa": "Distribuidora Ramirez C.A."
+    },
+    "error": null
+  }
+  ```
+
+#### 2.17.2. Asignar Usuario a Empresa (`asignar_usuario_empresa`)
+- **Firma SQL:** `asignar_usuario_empresa(p_user_id UUID, p_empresa_id UUID, p_rol VARCHAR DEFAULT 'operador')`
+- **Uso en Backend (Server Action):**
+  ```typescript
+  const { data, error } = await supabase.rpc('asignar_usuario_empresa', {
+    p_user_id: 'UUID_DEL_USUARIO_EN_AUTH',
+    p_empresa_id: 'UUID_DE_LA_EMPRESA',
+    p_rol: 'operador'
+  });
+  ```
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Usuario asignado a la empresa exitosamente.",
+    "data": {
+      "asignacion_id": "UUID_DE_LA_ASIGNACION",
+      "user_id": "UUID_DEL_USUARIO_EN_AUTH",
+      "empresa_id": "UUID_DE_LA_EMPRESA",
+      "rol": "operador"
+    },
+    "error": null
+  }
+  ```

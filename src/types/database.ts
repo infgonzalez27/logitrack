@@ -42,6 +42,25 @@ export interface Rol {
   created_at: string;
 }
 
+export interface Empresa {
+  id: string;
+  codigo_empresa: string;
+  nombre_empresa: string;
+  supabase_url: string;
+  supabase_anon_key: string;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface UsuarioEmpresa {
+  id: string;
+  user_id: string;
+  empresa_id: string;
+  rol: string;
+  created_at: string;
+  empresas?: Empresa | null;
+}
+
 export interface Permiso {
   id: string;
   codigo: string;

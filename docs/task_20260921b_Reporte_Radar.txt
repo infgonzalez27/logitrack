@@ -1,0 +1,2 @@
+Se necesita que el usuario solicite un reporte de Radar con los clientes y los productos de cada uno y al final un resumen de productos como el siguiente documento D:\ProyectosWeb\LogiTrack\docs\Ejemplo_radar.docx
+Analiza, y verifica si ya tenemos un SP para eso o es necesario hacer uno, si ya existe para informar al Frontend 

@@ -23,6 +23,7 @@ En el panel de administración de Supabase (o mediante la API de Storage), deben
 | :--- | :--- | :--- |
 | `productos` | Público | Fotografías de catálogo de mercancía y productos. |
 | `usuarios` | Público | Fotografías de perfil y avatares de usuarios/despachadores. |
+| `rendiciones-captures` | Público | Captures y comprobantes de transferencias / depósitos bancarios de rendiciones de cuentas. |
 
 ---
 

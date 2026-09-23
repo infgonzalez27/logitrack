@@ -17,11 +17,13 @@ CREATE TABLE IF NOT EXISTS public.descuentos_cliente_producto (
 -- RLS y Permisos
 ALTER TABLE public.descuentos_cliente_producto ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Permitir lectura publica a autenticados en descuentos_cliente_producto" ON public.descuentos_cliente_producto;
 CREATE POLICY "Permitir lectura publica a autenticados en descuentos_cliente_producto"
     ON public.descuentos_cliente_producto FOR SELECT
     TO authenticated
     USING (true);
 
+DROP POLICY IF EXISTS "Permitir todo a autenticados en descuentos_cliente_producto" ON public.descuentos_cliente_producto;
 CREATE POLICY "Permitir todo a autenticados en descuentos_cliente_producto"
     ON public.descuentos_cliente_producto FOR ALL
     TO authenticated

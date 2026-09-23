@@ -1,0 +1,8 @@
+### Depuracion de tablas
+Tengo una hoja de cálculo con los productos y sus codigos y si usan contenedores
+Para actualizar los productos necesito depurar completamente la tabla de productos pero antes de eso, eliminar todos los registros de las tablas 
+que manejan el id foraneo de productos.id
+
+Deseo vaciar el historial de ordenes.
+El archivo de excel se encuentra en D:\ProyectosWeb\LogiTrack\docs\INVENTARIO_260922_193808.xlsx, obvia la columna C y la columna indica con una 'x' si el 
+producto se le debe asignar contenedor, en la tabla de contenedores solo existe un id, asigna ese
