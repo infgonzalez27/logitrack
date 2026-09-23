@@ -1,0 +1,7 @@
+Elimina todos los registros de las tablas:
+Clientes antes elimina los registros de las tablas que contienen un clave foranea a la tabla clientes
+Elimina todo lo que tiene que ver con el rol choferes, elimina todos los registros de la tabla choferes
+cuentas_bancarias_empresas
+movimientos_contenedores
+movimientos_saldo_favor
+radars
