@@ -11,6 +11,11 @@ export function NuevaEmpresaForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [codigo, setCodigo] = useState("");
+
+  const proyectoPreview = codigo.trim()
+    ? `lt_${codigo.trim().toLowerCase().replace(/^lt_/, "")}`
+    : "lt_…";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,8 +26,6 @@ export function NuevaEmpresaForm() {
     const result = await crearEmpresaConGerenteAction({
       codigoEmpresa: String(form.get("codigoEmpresa") ?? ""),
       nombreEmpresa: String(form.get("nombreEmpresa") ?? ""),
-      supabaseUrl: String(form.get("supabaseUrl") ?? ""),
-      supabaseAnonKey: String(form.get("supabaseAnonKey") ?? ""),
       gerente: {
         nombreCompleto: String(form.get("gerenteNombre") ?? ""),
         email: String(form.get("gerenteEmail") ?? ""),
@@ -47,44 +50,37 @@ export function NuevaEmpresaForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <Card
-        title="Empresa (tenant)"
-        description="Código corto (ej. ramirez → proyecto lt_ramirez). URL y anon key del proyecto Supabase ya creado."
+        title="Empresa"
+        description={`Solo datos comerciales. El aprovisionamiento crea el proyecto Supabase ${proyectoPreview} (clon del template LogiTrack) y registra URL/anon key en el catálogo central.`}
       >
         <div className="space-y-4">
           <Input
             label="Código empresa"
             name="codigoEmpresa"
             required
-            placeholder="ramirez"
+            placeholder="test"
             autoComplete="off"
             pattern="[a-z0-9_\-]+"
-            title="Minúsculas, números, guion o guion bajo"
+            title="Minúsculas, números, guion o guion bajo (sin prefijo lt_)"
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
           />
+          <p className="text-xs text-lt-text-muted">
+            Proyecto Supabase:{" "}
+            <span className="font-mono text-lt-text">{proyectoPreview}</span>
+          </p>
           <Input
             label="Nombre comercial"
             name="nombreEmpresa"
             required
             placeholder="Comercializadora Ramírez C.A."
           />
-          <Input
-            label="Supabase URL"
-            name="supabaseUrl"
-            required
-            type="url"
-            placeholder="https://xxxx.supabase.co"
-          />
-          <Input
-            label="Supabase anon key"
-            name="supabaseAnonKey"
-            required
-            autoComplete="off"
-          />
         </div>
       </Card>
 
       <Card
         title="Gerente de la empresa"
-        description="Se crea en Auth con rol gerente y se vincula a esta empresa en el catálogo central."
+        description="Se crea en Auth (Central) con rol gerente y se vincula a esta empresa."
       >
         <div className="space-y-4">
           <Input
@@ -121,7 +117,7 @@ export function NuevaEmpresaForm() {
 
       <div className="flex flex-wrap gap-3">
         <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Creando…" : "Crear empresa y gerente"}
+          {pending ? "Aprovisionando…" : "Crear empresa y gerente"}
         </Button>
         <Button href="/admin" variant="secondary" disabled={pending}>
           Cancelar

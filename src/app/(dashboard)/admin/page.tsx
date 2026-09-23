@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
@@ -27,7 +26,7 @@ export default async function AdminPage() {
     <div className="space-y-6">
       <PageHeader
         title="Superadmin"
-        description="Catálogo central de bases lt_*. Registra la URL del proyecto Supabase ya provisionado y crea el gerente."
+        description="Alta de empresas lt_*: se aprovisiona el proyecto Supabase y se crea el gerente. No hace falta pegar URL ni anon key."
         action={
           <Button href="/admin/nuevo" variant="primary">
             Nueva empresa
@@ -67,15 +66,9 @@ export default async function AdminPage() {
       </Card>
 
       <p className="text-sm text-lt-text-muted">
-        Antes de registrar aquí, clona el esquema plantilla según{" "}
-        <Link
-          href="/admin/nuevo"
-          className="font-medium text-lt-primary hover:underline"
-        >
-          el alta de empresa
-        </Link>{" "}
-        y el procedimiento en{" "}
-        <code className="text-xs">docs/procedimiento_duplicacion_tenant.md</code>.
+        Tras el alta, Cursor/ops completa el clon de esquema según{" "}
+        <code className="text-xs">docs/procedimiento_duplicacion_tenant.md</code>
+        . El formulario solo pide código, nombre y gerente.
       </p>
     </div>
   );

@@ -15,7 +15,7 @@ export default async function NuevaEmpresaPage() {
     <div className="mx-auto max-w-lg space-y-6">
       <PageHeader
         title="Nueva empresa"
-        description="Registra el tenant lt_* en la BD Central y crea su gerente."
+        description="Registra empresa y gerente. El backend crea el proyecto lt_* y llama a los RPCs de Central."
       />
       <NuevaEmpresaForm />
     </div>

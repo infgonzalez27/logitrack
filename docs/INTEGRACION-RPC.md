@@ -1434,7 +1434,7 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
   }
   ```
 
-- **Panel Superadmin:** `/admin` (solo rol `admin`) crea empresa + gerente en un flujo (`crearEmpresaConGerenteAction`).
+- **Panel Superadmin:** `/admin` (solo rol `admin`). El formulario pide código, nombre y gerente; el Server Action aprovisiona `lt_[codigo]` (Management API) y luego llama `crea_nueva_empresa` + registro de gerente + `asignar_usuario_empresa`. El usuario **no** pega URL ni anon key.
 - **Docs operativas:** `docs/logitrack-multi-tenant.md`, `docs/procedimiento_duplicacion_tenant.md`.
 
 ---

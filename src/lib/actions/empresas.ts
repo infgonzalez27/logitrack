@@ -5,6 +5,10 @@ import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { registerUser } from "@/lib/auth/register-user";
 import { createCentralAdminClient } from "@/lib/supabase/admin";
+import {
+  provisionTenantProject,
+  tenantProjectName,
+} from "@/lib/tenants/provision";
 import type { Empresa } from "@/types/database";
 
 interface RPCResponse<T> {
@@ -41,8 +45,12 @@ async function requireAdmin(): Promise<
   return { ok: true };
 }
 
-function str(formData: FormData, key: string): string {
-  return String(formData.get(key) ?? "").trim();
+function normalizeCodigo(codigo: string): string {
+  return codigo
+    .trim()
+    .toLowerCase()
+    .replace(/^lt_/, "")
+    .replace(/[^a-z0-9_-]/g, "");
 }
 
 /**
@@ -76,108 +84,9 @@ export async function listarEmpresasAction(): Promise<
   }
 }
 
-/**
- * Registra una nueva empresa (tenant lt_*) en la BD Central.
- */
-export async function submitCrearEmpresaAction(formData: FormData) {
-  const guard = await requireAdmin();
-  if (!guard.ok) {
-    return { success: false as const, error: guard.error, code: "ACCESO_DENEGADO" };
-  }
-
-  const params = {
-    p_codigo_empresa: str(formData, "codigoEmpresa"),
-    p_nombre_empresa: str(formData, "nombreEmpresa"),
-    p_supabase_url: str(formData, "supabaseUrl"),
-    p_supabase_anon_key: str(formData, "supabaseAnonKey"),
-  };
-
-  if (
-    !params.p_codigo_empresa ||
-    !params.p_nombre_empresa ||
-    !params.p_supabase_url ||
-    !params.p_supabase_anon_key
-  ) {
-    return {
-      success: false as const,
-      error: "Completa código, nombre, URL y anon key de la empresa.",
-      code: "PARAMETRO_INVALIDO",
-    };
-  }
-
-  const supabase = createCentralAdminClient();
-  const { data, error } = await supabase.rpc("crea_nueva_empresa", params);
-
-  if (error) {
-    return { success: false as const, error: error.message, code: "API_ERROR" };
-  }
-
-  const response = data as RPCResponse<CrearEmpresaData>;
-
-  if (!response.success) {
-    return {
-      success: false as const,
-      error: response.error?.message || "Error al crear la empresa.",
-      code: response.error?.code,
-    };
-  }
-
-  revalidatePath("/admin");
-
-  return { success: true as const, data: response.data };
-}
-
-/**
- * Asigna un usuario (auth.users) a una empresa en el catálogo central.
- */
-export async function submitAsignarUsuarioEmpresaAction(formData: FormData) {
-  const guard = await requireAdmin();
-  if (!guard.ok) {
-    return { success: false as const, error: guard.error, code: "ACCESO_DENEGADO" };
-  }
-
-  const params = {
-    p_user_id: str(formData, "userId"),
-    p_empresa_id: str(formData, "empresaId"),
-    p_rol: str(formData, "rol") || "operador",
-  };
-
-  if (!params.p_user_id || !params.p_empresa_id) {
-    return {
-      success: false as const,
-      error: "Usuario y empresa son requeridos.",
-      code: "PARAMETRO_INVALIDO",
-    };
-  }
-
-  const supabase = createCentralAdminClient();
-  const { data, error } = await supabase.rpc("asignar_usuario_empresa", params);
-
-  if (error) {
-    return { success: false as const, error: error.message, code: "API_ERROR" };
-  }
-
-  const response = data as RPCResponse<AsignarUsuarioEmpresaData>;
-
-  if (!response.success) {
-    return {
-      success: false as const,
-      error: response.error?.message || "Error al asignar el usuario a la empresa.",
-      code: response.error?.code,
-    };
-  }
-
-  revalidatePath("/admin");
-  revalidatePath("/usuarios");
-
-  return { success: true as const, data: response.data };
-}
-
 export type CrearEmpresaConGerenteInput = {
   codigoEmpresa: string;
   nombreEmpresa: string;
-  supabaseUrl: string;
-  supabaseAnonKey: string;
   gerente: {
     email: string;
     password: string;
@@ -187,8 +96,13 @@ export type CrearEmpresaConGerenteInput = {
 };
 
 /**
- * Flujo Superadmin: crea empresa en Central, registra gerente (Auth + perfil)
- * y lo vincula a la empresa con rol `gerente`.
+ * Flujo Superadmin (opción 1: Server Action + RPCs):
+ * 1) Aprovisiona proyecto Supabase `lt_[codigo]` (Management API)
+ * 2) `crea_nueva_empresa` en BD Central con URL/anon key obtenidos
+ * 3) `registra_nuevo_usuario` (gerente)
+ * 4) `asignar_usuario_empresa`
+ *
+ * El usuario del panel NO carga URL ni anon key.
  */
 export async function crearEmpresaConGerenteAction(
   input: CrearEmpresaConGerenteInput,
@@ -198,6 +112,7 @@ export async function crearEmpresaConGerenteAction(
       empresaId: string;
       userId: string;
       codigoEmpresa: string;
+      projectName: string;
     }
   | {
       ok: false;
@@ -212,28 +127,29 @@ export async function crearEmpresaConGerenteAction(
     return { ok: false, error: guard.error, code: "ACCESO_DENEGADO" };
   }
 
-  const codigoEmpresa = input.codigoEmpresa.trim().toLowerCase();
+  const codigoEmpresa = normalizeCodigo(input.codigoEmpresa);
   const nombreEmpresa = input.nombreEmpresa.trim();
-  const supabaseUrl = input.supabaseUrl.trim();
-  const supabaseAnonKey = input.supabaseAnonKey.trim();
   const email = input.gerente.email.trim();
   const password = input.gerente.password;
   const nombreCompleto = input.gerente.nombreCompleto.trim();
   const telefono = (input.gerente.telefono ?? "").trim();
 
-  if (
-    !codigoEmpresa ||
-    !nombreEmpresa ||
-    !supabaseUrl ||
-    !supabaseAnonKey ||
-    !email ||
-    !password ||
-    !nombreCompleto
-  ) {
+  if (!codigoEmpresa || !nombreEmpresa || !email || !password || !nombreCompleto) {
     return {
       ok: false,
-      error: "Completa todos los campos de empresa y gerente.",
+      error: "Completa código, nombre comercial y datos del gerente.",
       code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  let provisioned: Awaited<ReturnType<typeof provisionTenantProject>>;
+  try {
+    provisioned = await provisionTenantProject(codigoEmpresa);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error al aprovisionar el tenant.",
+      code: "PROVISION_FALLIDA",
     };
   }
 
@@ -243,8 +159,8 @@ export async function crearEmpresaConGerenteAction(
     {
       p_codigo_empresa: codigoEmpresa,
       p_nombre_empresa: nombreEmpresa,
-      p_supabase_url: supabaseUrl,
-      p_supabase_anon_key: supabaseAnonKey,
+      p_supabase_url: provisioned.supabaseUrl,
+      p_supabase_anon_key: provisioned.supabaseAnonKey,
     },
   );
 
@@ -256,7 +172,7 @@ export async function crearEmpresaConGerenteAction(
   if (!crearResponse.success || !crearResponse.data?.empresa_id) {
     return {
       ok: false,
-      error: crearResponse.error?.message || "Error al crear la empresa.",
+      error: crearResponse.error?.message || "Error al registrar la empresa en Central.",
       code: crearResponse.error?.code,
     };
   }
@@ -275,7 +191,7 @@ export async function crearEmpresaConGerenteAction(
     revalidatePath("/admin");
     return {
       ok: false,
-      error: `Empresa creada, pero falló el gerente: ${registerResult.error}. Asigna el usuario manualmente a la empresa ${codigoEmpresa}.`,
+      error: `Proyecto ${tenantProjectName(codigoEmpresa)} y empresa en catálogo OK, pero falló el gerente: ${registerResult.error}`,
       code: "GERENTE_NO_CREADO",
       empresaCreada: true,
       empresaId,
@@ -321,5 +237,6 @@ export async function crearEmpresaConGerenteAction(
     empresaId,
     userId: registerResult.userId,
     codigoEmpresa,
+    projectName: provisioned.projectName,
   };
 }
