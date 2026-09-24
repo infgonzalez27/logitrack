@@ -41,32 +41,54 @@ export function createTenantBrowserClient(tenantUrl: string, tenantKey: string) 
 }
 
 /**
- * Resuelve el cliente de Supabase dinámico para la empresa (tenant lt_*) asignada al usuario actual.
- * Si el usuario no posee tenant asignado o falla la resolución, utiliza el cliente con credenciales por defecto.
+ * Resuelve el cliente de datos de un tenant lt_* cuando la URL coincide con
+ * Central (mismo proyecto) o cuando en el futuro exista un puente de auth.
+ * Si el tenant es otro proyecto Supabase, NO se cambia de host: el JWT de
+ * sesión no es portable y rompe getUser / middleware.
  */
 export async function getDynamicTenantClient() {
+  const centralUrl =
+    process.env.NEXT_PUBLIC_CENTRAL_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const centralKey =
+    process.env.NEXT_PUBLIC_CENTRAL_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
   const cookieStore = await cookies();
   const cachedUrl = cookieStore.get(TENANT_URL_COOKIE_NAME)?.value;
   const cachedKey = cookieStore.get(TENANT_KEY_COOKIE_NAME)?.value;
 
-  if (cachedUrl && cachedKey) {
+  if (cachedUrl && cachedKey && sameSupabaseHost(cachedUrl, centralUrl)) {
     return createTenantServerClient(cachedUrl, cachedKey);
   }
 
-  // Si no está en caché en cookies, resolver desde auth.users y BD Central
   const centralClient = await createCentralClient();
-  const { data: { user } } = await centralClient.auth.getUser();
+  const {
+    data: { user },
+  } = await centralClient.auth.getUser();
 
   if (user) {
     const empresa = await resolveUserEmpresa(user.id);
-    if (empresa && empresa.activo && empresa.supabase_url && empresa.supabase_anon_key) {
-      return createTenantServerClient(empresa.supabase_url, empresa.supabase_anon_key);
+    if (
+      empresa?.activo &&
+      empresa.supabase_url &&
+      empresa.supabase_anon_key &&
+      sameSupabaseHost(empresa.supabase_url, centralUrl)
+    ) {
+      return createTenantServerClient(
+        empresa.supabase_url,
+        empresa.supabase_anon_key,
+      );
     }
   }
 
-  // Fallback a las variables por defecto (Máster Template LogiTrack)
-  return createTenantServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  return createTenantServerClient(centralUrl, centralKey);
+}
+
+function sameSupabaseHost(a: string, b: string): boolean {
+  try {
+    return new URL(a).host === new URL(b).host;
+  } catch {
+    return a === b;
+  }
 }
