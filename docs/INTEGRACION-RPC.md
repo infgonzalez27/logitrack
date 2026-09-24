@@ -1751,3 +1751,8 @@ Esta secciÃƒÂ³n define las funciones para gestionar el aprovisionamiento central
     - `SUPABASE_ORG_ID` = `ozotmtdltfhmtihtsals`
     - `SUPABASE_ACCESS_TOKEN` = (Solicita este token al administrador del backend)
 
+
+
+## [2026-09-24] Fix Enrutamiento Multi-Tenant Cliente
+Se modificó el archivo `src/lib/supabase/middleware.ts` para que, al iniciar sesión, el middleware obtenga automáticamente la URL y Key del Tenant desde la base de datos central y los inyecte como cookies (`lt_tenant_url` y `lt_tenant_key`). Además, se modificó `src/lib/supabase/client.ts` para que priorice estas cookies al inicializar el cliente del navegador. Esto soluciona el problema de que los usuarios quedaban viendo los datos del proyecto base en lugar de su tenant privado. 
+**Acción Requerida (Frontend):** Haz un \git pull\ o mezcla estos cambios en tu rama principal y realiza un nuevo despliegue en Vercel (\ercel --prod\). Pide al usuario de prueba que cierre sesión y vuelva a entrar para que el middleware genere las cookies de enrutamiento.
