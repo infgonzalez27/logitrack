@@ -1,5 +1,5 @@
 import { NAV_SECTIONS } from "@/lib/constants";
-
+import { joinOne } from "@/lib/supabase/join";
 import type { PerfilUsuario } from "@/types/database";
 
 
@@ -156,13 +156,16 @@ export function normalizeRolNombre(
 
 
 export function getRoleNameFromProfile(
-
   profile: PerfilUsuario | null,
-
 ): RolNombre | null {
-
-  return normalizeRolNombre(profile?.roles?.nombre);
-
+  const rol = joinOne(
+    profile?.roles as
+      | { nombre?: string | null }
+      | { nombre?: string | null }[]
+      | null
+      | undefined,
+  );
+  return normalizeRolNombre(rol?.nombre);
 }
 
 
@@ -233,6 +236,11 @@ export function getNavSectionsForRole(rol: RolNombre | null) {
 }
 
 export function canAccessHref(rol: RolNombre | null, href: string): boolean {
+  // Dejar entrar a /admin para mostrar aviso; la página exige rol admin.
+  if (href === "/admin" || href.startsWith("/admin/")) {
+    return true;
+  }
+
   if (href === "/radar" || href.startsWith("/radar/")) {
     return (
       rol === "despachador" ||

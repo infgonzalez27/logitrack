@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
-import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { getRoleNameFromProfile, labelRol } from "@/lib/auth/roles";
 import { listarEmpresasAction } from "@/lib/actions/empresas";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,32 @@ function truncateUrl(url: string, max = 42): string {
 export default async function AdminPage() {
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
+
   if (rol !== "admin") {
-    redirect("/");
+    return (
+      <div className="mx-auto max-w-lg space-y-4">
+        <PageHeader title="Superadmin" description="Empresas / tenants" />
+        <Card>
+          <p className="text-sm text-lt-text">
+            Esta sección es solo para rol <strong>admin</strong>. Tu sesión
+            actual es <strong>{labelRol(rol)}</strong>
+            {profile?.nombre_completo
+              ? ` (${profile.nombre_completo})`
+              : ""}
+            .
+          </p>
+          <p className="mt-3 text-sm text-lt-text-muted">
+            Cierra sesión e inicia con una cuenta administrador (por ejemplo{" "}
+            <code className="text-xs">inf.gonzalez27@gmail.com</code>).
+          </p>
+          <div className="mt-4">
+            <Button href="/login" variant="primary">
+              Ir a login
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   const result = await listarEmpresasAction();
@@ -54,7 +78,10 @@ export default async function AdminPage() {
               ),
               nombre: e.nombre_empresa,
               url: (
-                <span className="text-xs text-lt-text-muted" title={e.supabase_url}>
+                <span
+                  className="text-xs text-lt-text-muted"
+                  title={e.supabase_url}
+                >
                   {truncateUrl(e.supabase_url)}
                 </span>
               ),
@@ -66,9 +93,16 @@ export default async function AdminPage() {
       </Card>
 
       <p className="text-sm text-lt-text-muted">
-        Tras el alta, Cursor/ops completa el clon de esquema según{" "}
+        Tras el alta, completar el clon de esquema según{" "}
         <code className="text-xs">docs/procedimiento_duplicacion_tenant.md</code>
-        . El formulario solo pide código, nombre y gerente.
+        . Formulario:{" "}
+        <Link
+          href="/admin/nuevo"
+          className="font-medium text-lt-primary hover:underline"
+        >
+          /admin/nuevo
+        </Link>
+        .
       </p>
     </div>
   );
