@@ -6,6 +6,11 @@
 # Solo un registro 'CAM-001' [HECHO - Script modificado para incluir solo CAM-001]
 ## Tabla public.rutas
 # un solo registro 'Ruta01','' [HECHO - Script modificado para incluir solo Ruta01]
+## Tabla public.tipos_contenedores
+# un solo registro codigo='C0136','VACÍO','VACÍO DE 36 BOTELLAS' [HECHO - Script modificado para incluir solo C0136]
+
+## contenedores en productos, tal cual como está la tabla public.productos en el proyecto base
+# La tabla tiene un campo contenedor_id y solo algunos tienen el mismo contenedor_id, un solo contenedor por producto [HECHO - El script inserta todos los productos apuntando al mismo C0136 o a NULL si no llevaban envase]
 
 ---
 **Actualización por Antigravity (24-09-2026):**
@@ -13,3 +18,5 @@ Las instrucciones fueron analizadas y el archivo `seed_catalogos.sql` ha sido re
 - Se removieron los roles de `chofer` y `cobrador`, dejando únicamente `admin`, `gerente`, `despachador` y `vendedor`.
 - En camiones, se eliminaron el 2 y 3, dejando exclusivamente la placa `CAM-001`.
 - En rutas, se eliminaron los puntos cardinales y se dejó únicamente el registro `Ruta01` con descripción vacía.
+- En contenedores, se dejó un solo registro `C0136` (VACÍO DE 36 BOTELLAS).
+- En productos, se mapeó el `contenedor_id` de los productos que lo requerían para que apunten a este único contenedor `C0136`.

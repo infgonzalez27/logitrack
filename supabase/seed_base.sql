@@ -1,9 +1,9 @@
 ﻿-- ==============================================================================
--- SCRIPT DE INICIALIZACIÃ“N DE CATÃLOGOS BASE PARA NUEVA EMPRESA (TENANT)
+-- SCRIPT DE INICIALIZACIÓN DE CATÁLOGOS BASE PARA NUEVA EMPRESA (TENANT)
 -- Ejecutar en el SQL Editor del proyecto de la nueva empresa
 -- ==============================================================================
 
--- 1. Insertar Formas de Pago (con UUIDs estÃ¡ticos para mantener la compatibilidad)
+-- 1. Insertar Formas de Pago (con UUIDs estáticos para mantener la compatibilidad)
 INSERT INTO public.fpagos (fpago_id, fpago_concepto, fpago_info)
 VALUES 
     ('1a5b84c8-47bc-4ee0-880c-7833215be11b', 'Pago movil', true),
@@ -20,7 +20,7 @@ INSERT INTO public.roles (nombre, descripcion)
 VALUES 
     ('admin', 'Administrador del sistema'),
     ('gerente', 'Gerente general'),
-    ('despachador', 'Despachador de almacÃ©n'),
+    ('despachador', 'Despachador de almacén'),
     ('vendedor', 'Vendedor / preventa')
 ON CONFLICT (nombre) DO UPDATE SET descripcion = EXCLUDED.descripcion;
 
@@ -38,12 +38,12 @@ INSERT INTO public.rutas (nombre, descripcion)
 VALUES 
     ('Ruta01', '')
 ON CONFLICT (nombre) DO NOTHING;
+
+
 -- 1. Insertar contenedores base
 INSERT INTO public.tipos_contenedores (codigo, nombre, descripcion)
 VALUES 
-  ('huacal_plastico', 'Huacal PlÃ¡stico', 'Cesta plÃ¡stica estÃ¡ndar para botellas o productos varios'),
-  ('caja_carton_retornable', 'Caja de CartÃ³n Retornable', 'Caja de cartÃ³n reforzado para transporte y retorno'),
-  ('pallet_madera', 'Pallet de Madera', 'Plataforma de madera para transporte de carga pesada')
+  ('C0136', 'VACÍO', 'VACÍO DE 36 BOTELLAS')
 ON CONFLICT (codigo) DO NOTHING;
 
 -- 2. Cargar los productos usando el contenedor por defecto
@@ -51,7 +51,7 @@ DO $$
 DECLARE
     v_contenedor_id UUID;
 BEGIN
-    -- Obtener el ID del contenedor "huacal_plastico" (o el primero que encuentre)
+    -- Obtener el ID del contenedor C0136
     SELECT id INTO v_contenedor_id FROM public.tipos_contenedores ORDER BY created_at ASC LIMIT 1;
 
     INSERT INTO public.productos (codigo_producto, nombre, unidad_medida, peso_unitario_kg, cant_unidad_medida, contenedor_id)
@@ -264,3 +264,4 @@ BEGIN
     VALUES ('7972', 'AGUA MINERAL BIENESTAR 6X1.5L', 'UNID', 0.00, 1, NULL);
 END;
 $$;
+
