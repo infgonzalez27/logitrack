@@ -47,7 +47,8 @@ export async function resolveUserEmpresa(userId: string): Promise<Empresa | null
     .from("usuarios_empresas")
     .select("empresa_id, empresas(*)")
     .eq("user_id", userId)
-    .single();
+    .limit(1)
+    .maybeSingle();
 
   if (error || !data || !data.empresas) {
     return null;

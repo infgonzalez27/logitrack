@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { resolveUserEmpresa } from "@/lib/supabase/central";
 import {
   canAccessHref,
   getNavSectionsForRole,
@@ -25,10 +26,12 @@ export default async function DashboardLayout({
   if (pathname && rol && !canAccessHref(rol, pathname)) {
     redirect(homeHref);
   }
+  const empresa = profile ? await resolveUserEmpresa(profile.id) : null;
 
   return (
     <DashboardShell
       userName={profile?.nombre_completo ?? "Usuario"}
+      empresaNombre={empresa?.nombre_empresa ?? null}
       roleLabel={labelRol(rol)}
       navSections={navSections}
       homeHref={homeHref}

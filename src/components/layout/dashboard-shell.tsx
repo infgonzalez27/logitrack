@@ -9,12 +9,14 @@ import { UserMenu } from "@/components/layout/user-menu";
 
 export function DashboardShell({
   userName,
+  empresaNombre,
   roleLabel,
   navSections,
   homeHref = "/",
   children,
 }: {
   userName: string;
+  empresaNombre?: string | null;
   roleLabel?: string;
   navSections: NavSection[];
   homeHref?: string;
@@ -59,6 +61,15 @@ export function DashboardShell({
           </svg>
         </button>
         <Logo href={homeHref} size="sm" showWordmark className="lg:hidden" />
+        {empresaNombre ? (
+          <p
+            className="min-w-0 truncate font-display text-sm font-semibold text-lt-text lg:text-base"
+            title={empresaNombre}
+          >
+            <span className="hidden text-lt-text-muted sm:inline">Empresa: </span>
+            {empresaNombre}
+          </p>
+        ) : null}
         <div className="ml-auto">
           <UserMenu userName={userName} roleLabel={roleLabel} />
         </div>
@@ -79,6 +90,7 @@ export function DashboardShell({
             <SidebarNav
               navSections={navSections}
               homeHref={homeHref}
+              empresaNombre={empresaNombre}
               onNavigate={() => setMenuOpen(false)}
               showClose
               onClose={() => setMenuOpen(false)}
@@ -92,7 +104,11 @@ export function DashboardShell({
           className="lt-no-print sticky top-[3.75rem] hidden h-[calc(100dvh-3.75rem)] w-64 shrink-0 flex-col border-r border-lt-border-light bg-lt-surface lg:flex"
           style={{ boxShadow: "var(--lt-shadow-sidebar)" }}
         >
-          <SidebarNav navSections={navSections} homeHref={homeHref} />
+          <SidebarNav
+            navSections={navSections}
+            homeHref={homeHref}
+            empresaNombre={empresaNombre}
+          />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>

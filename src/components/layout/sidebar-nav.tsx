@@ -8,12 +8,14 @@ import type { NavSection } from "@/lib/constants";
 export function SidebarNav({
   navSections,
   homeHref = "/",
+  empresaNombre,
   onNavigate,
   showClose,
   onClose,
 }: {
   navSections: NavSection[];
   homeHref?: string;
+  empresaNombre?: string | null;
   onNavigate?: () => void;
   showClose?: boolean;
   onClose?: () => void;
@@ -27,7 +29,7 @@ export function SidebarNav({
           <Logo
             href={homeHref}
             size="md"
-            subtitle="Distribución"
+            subtitle={empresaNombre || "Distribución"}
             onNavigate={onNavigate}
           />
           {showClose ? (
