@@ -1810,3 +1810,26 @@ try {
   console.error('Error inyectando gerente en Tenant:', err);
 }
 ```
+
+
+## [2026-09-24] RediseÃ±o ArquitectÃ³nico del Registro de Usuarios Multi-Tenant (SoluciÃ³n a Usuarios Fantasmas)
+El flujo actual de crear usuarios (Vendedores, Despachadores) usando `registra_nuevo_usuario` contamina la base de datos Central y falla en inyectar al empleado en el Tenant correspondiente.
+
+**Acciones Requeridas (Frontend):**
+Para solucionar esto, se debe implementar una **Arquitectura HÃ­brida de 3 Fases**. Por favor, sigue estos pasos:
+
+**Paso 1: Guardar la credencial del Tenant (En `empresas.ts`)**
+Actualmente, tras crear la empresa y recuperar las API Keys con un `fetch` a la Management API, se devuelven al cliente pero no se guardan en la DB Central de forma segura.
+*ModificaciÃ³n:* En `submitCrearEmpresaAction`, debes guardar el `service_role_key` (obtenido de la Management API) en la tabla `empresas` de la BD Central al momento de registrar el nuevo Tenant. Esto permitirÃ¡ que el Backend pueda comunicarse con el Tenant mÃ¡s adelante.
+
+**Paso 2: Reescribir la AcciÃ³n de Registro (`registerUser` en `register-user.ts`)**
+Desecha por completo la llamada a `rpc('registra_nuevo_usuario')` cuando se trate de un usuario de Tenant. El nuevo flujo debe ser:
+1. **Fase Central (Auth):** Crea el usuario en el `auth.users` de la Central usando `supabaseCentral.auth.admin.createUser`. Esto te darÃ¡ el `UUID` maestro.
+2. **Fase Central (Enrutamiento):** Inserta un registro en la tabla `usuarios_empresas` (de la Central) relacionando el `UUID` reciÃ©n creado con el `empresa_id` del Gerente que estÃ¡ haciendo el registro.
+3. **Fase Tenant (InyecciÃ³n Local):**
+   - Recupera el `supabase_url` y el `service_role_key` de la empresa actual desde la BD Central.
+   - Crea un cliente Supabase secundario que apunte al Tenant usando esa Service Key.
+   - Usa ese cliente del Tenant para inyectar al usuario en su `auth.users` (`createUser` forzando de alguna forma, o mediante SQL directo).
+   - Inyecta directamente (vÃ­a el cliente Supabase o SQL) el registro en `public.perfiles_usuario` dentro del Tenant, usando exactamente el mismo `UUID` maestro y el rol correspondiente ('vendedor', 'despachador', etc).
+
+Esta arquitectura garantiza un 100% de aislamiento Multi-Tenant y mantiene la Base de Datos Central perfectamente limpia, actuando solo como enrutador y proveedor de autenticaciÃ³n.
