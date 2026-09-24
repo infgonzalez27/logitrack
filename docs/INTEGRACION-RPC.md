@@ -1,14 +1,14 @@
-# Guía de Integración de Stored Procedures (RPC) para Front & Backend
+# GuÃ­a de IntegraciÃ³n de Stored Procedures (RPC) para Front & Backend
 
 **Proyecto:** LogiTrack  
-**Propósito:** Proveer instrucciones de código y contratos para consumir las funciones de base de datos desde Next.js Server Actions o componentes del cliente.  
+**PropÃ³sito:** Proveer instrucciones de cÃ³digo y contratos para consumir las funciones de base de datos desde Next.js Server Actions o componentes del cliente.  
 **Desarrollado para:** Desarrollador Front/Backend del equipo de LogiTrack.
 
 ---
 
-## 1. Patrón General de Consumo en TypeScript
+## 1. PatrÃ³n General de Consumo en TypeScript
 
-Todas las llamadas a funciones de negocio en PostgreSQL deben realizarse utilizando el método `.rpc()` del cliente de Supabase.
+Todas las llamadas a funciones de negocio en PostgreSQL deben realizarse utilizando el mÃ©todo `.rpc()` del cliente de Supabase.
 
 ### 1.1. Manejo de la Respuesta Estandarizada
 Dado que las funciones devuelven una estructura JSON unificada (ver [docs/SUPABASE-SDD.md](file:///d:/ProyectosWeb/LogiTrack/docs/SUPABASE-SDD.md)), la llamada en Next.js debe deserializarse e interpretarse del siguiente modo:
@@ -32,7 +32,7 @@ export async function callDbProcedure<T>(procedureName: string, params: Record<s
   const { data, error } = await supabase.rpc(procedureName, params);
   
   if (error) {
-    // Error crítico de red o de comunicación de la API de Supabase
+    // Error crÃ­tico de red o de comunicaciÃ³n de la API de Supabase
     return {
       success: false,
       data: null,
@@ -50,13 +50,13 @@ export async function callDbProcedure<T>(procedureName: string, params: Record<s
 }
 ```
 
-### 1.2. Ejemplo de Integración en un Server Action de Next.js
-Aquí se muestra cómo el desarrollador de Back/Front debe invocar la función en un Server Action para cambiar la interfaz de usuario de acuerdo al resultado.
+### 1.2. Ejemplo de IntegraciÃ³n en un Server Action de Next.js
+AquÃ­ se muestra cÃ³mo el desarrollador de Back/Front debe invocar la funciÃ³n en un Server Action para cambiar la interfaz de usuario de acuerdo al resultado.
 
 ```typescript
 'use server';
 
-import { callDbProcedure } from '@/lib/actions/db-helper'; // Supuesta ubicación del helper
+import { callDbProcedure } from '@/lib/actions/db-helper'; // Supuesta ubicaciÃ³n del helper
 import { revalidatePath } from 'next/cache';
 
 interface CrearOrdenData {
@@ -72,13 +72,13 @@ export async function submitCrearOrdenAction(formData: any) {
     p_chofer_id: formData.choferId,
     p_factura_origen_numero: formData.facturaNumero,
     p_creado_por: formData.usuarioId,
-    p_detalles: JSON.stringify(formData.detalles) // Debe pasarse como string de JSON para ser leído como JSONB
+    p_detalles: JSON.stringify(formData.detalles) // Debe pasarse como string de JSON para ser leÃ­do como JSONB
   };
 
   const response = await callDbProcedure<CrearOrdenData>('crear_orden_distribucion', params);
 
   if (!response.success) {
-    // Controlar error lógico (ej: STOCK_INSUFICIENTE, CLIENTE_INEXISTENTE)
+    // Controlar error lÃ³gico (ej: STOCK_INSUFICIENTE, CLIENTE_INEXISTENTE)
     return {
       error: response.error?.message || 'Error desconocido al crear la orden.',
       code: response.error?.code
@@ -97,14 +97,14 @@ export async function submitCrearOrdenAction(formData: any) {
 
 ---
 
-## 2. Catálogo de Stored Procedures e Indicaciones de Parámetros
+## 2. CatÃ¡logo de Stored Procedures e Indicaciones de ParÃ¡metros
 
-A continuación se listan las firmas de los procedimientos almacenados que el equipo de base de datos implementará. Utiliza esta sección como referencia para preparar tus componentes de frontend.
+A continuaciÃ³n se listan las firmas de los procedimientos almacenados que el equipo de base de datos implementarÃ¡. Utiliza esta secciÃ³n como referencia para preparar tus componentes de frontend.
 
-### 2.1. Crear Orden de Distribución (`crear_orden_distribucion`)
+### 2.1. Crear Orden de DistribuciÃ³n (`crear_orden_distribucion`)
 - **Firma SQL:** `crear_orden_distribucion(p_vendedor_id UUID, p_cliente_id UUID, p_camion_id UUID, p_tasa_cambio NUMERIC DEFAULT NULL, p_productos_json JSONB DEFAULT '[]'::jsonb, p_despachador_id UUID DEFAULT NULL, p_id_ruta UUID DEFAULT NULL)`
-- **Campos multimoneda y relaciones asociadas automáticamente en DB:**
-  - `ordenes_distribucion`: `tasa_cambio`, `total_recaudar_bs`, `total_recaudar_usd`, `vendedor_id`, `despachador_id` e `id_ruta` (se obtienen del perfil del cliente si no se pasan explícitamente).
+- **Campos multimoneda y relaciones asociadas automÃ¡ticamente en DB:**
+  - `ordenes_distribucion`: `tasa_cambio`, `total_recaudar_bs`, `total_recaudar_usd`, `vendedor_id`, `despachador_id` e `id_ruta` (se obtienen del perfil del cliente si no se pasan explÃ­citamente).
   - `detalle_distribucion`: `valor_unitario_recaudar` (Bs), `subtotal_recaudar` (Bs), `valor_unitario_usd` (USD), `subtotal_recaudar_usd` (USD).
 - **Uso en Frontend (RPC) / Cursor Editor:**
   ```typescript
@@ -112,15 +112,15 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     p_vendedor_id: 'UUID_DEL_VENDEDOR',
     p_cliente_id: 'UUID_DEL_CLIENTE',
     p_camion_id: 'UUID_DEL_CAMION',
-    p_tasa_cambio: 50.25, // Opcional (si se omite/es null, toma la tasa oficial más reciente de la tabla tasa_cambio)
+    p_tasa_cambio: 50.25, // Opcional (si se omite/es null, toma la tasa oficial mÃ¡s reciente de la tabla tasa_cambio)
     p_despachador_id: 'UUID_OPCIONAL_DESPACHADOR', // Opcional
     p_id_ruta: 'UUID_OPCIONAL_RUTA', // Opcional
     p_productos_json: [
       {
         producto_id: 'UUID_PRODUCTO_1',
         cantidad: 5,
-        valor_unitario_recaudar: 500.00, // Precio unitario en Bolívares (Bs)
-        valor_unitario_usd: 9.95        // Precio unitario en Dólares (USD)
+        valor_unitario_recaudar: 500.00, // Precio unitario en BolÃ­vares (Bs)
+        valor_unitario_usd: 9.95        // Precio unitario en DÃ³lares (USD)
       },
       {
         producto_id: 'UUID_PRODUCTO_2',
@@ -135,7 +135,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   ```json
   {
     "success": true,
-    "message": "Orden de distribución creada exitosamente.",
+    "message": "Orden de distribuciÃ³n creada exitosamente.",
     "orden_id": "UUID_DE_LA_NUEVA_ORDEN",
     "data": {
       "orden_id": "UUID_DE_LA_NUEVA_ORDEN",
@@ -148,7 +148,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.2. Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)
+### 2.2. AprobaciÃ³n de Orden y Reserva de Stock (`aprobar_orden_distribucion`)
 - **Firma SQL:** `aprobar_orden_distribucion(p_orden_id UUID)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -168,7 +168,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.3. Carga a Inventario Móvil por Orden (`cargar_inventario_movil`)
+### 2.3. Carga a Inventario MÃ³vil por Orden (`cargar_inventario_movil`)
 - **Firma SQL:** `cargar_inventario_movil(p_orden_id UUID)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -188,7 +188,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.3.1. Carga Consolidada a Inventario Móvil desde Resumen de Radar (`solicita_cargar_inventario_movil_desde_almacen`)
+### 2.3.1. Carga Consolidada a Inventario MÃ³vil desde Resumen de Radar (`solicita_cargar_inventario_movil_desde_almacen`)
 - **Firma SQL:** `solicita_cargar_inventario_movil_desde_almacen(p_camion_id UUID, p_resumen_productos JSONB, p_radar_id UUID DEFAULT NULL)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -215,14 +215,14 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   ```
 - **Notas de Comportamiento:**
   - Toma `cantidad_solicitada` por cada producto para descontar del `inventario_almacen` e incrementar `cantidad_cargada` en `inventario_movil`.
-  - Actualiza automáticamente el estado del camión a `'en_ruta'`.
-  - Transiciona el estado de las órdenes asociadas a `'en_transito'` **manteniendo su `fecha_despacho` original**.
+  - Actualiza automÃ¡ticamente el estado del camiÃ³n a `'en_ruta'`.
+  - Transiciona el estado de las Ã³rdenes asociadas a `'en_transito'` **manteniendo su `fecha_despacho` original**.
   - Establece `carga_inventario_movil = TRUE` en la tabla `radars`.
 - **Respuesta esperada en `data`:**
   ```json
   {
     "success": true,
-    "message": "Carga a inventario móvil procesada exitosamente desde el almacén.",
+    "message": "Carga a inventario mÃ³vil procesada exitosamente desde el almacÃ©n.",
     "data": {
       "camion_id": "uuid-del-camion",
       "radar_id": "uuid-del-radar",
@@ -235,7 +235,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.3.2. Reverso de Carga de Inventario Móvil al Almacén (`solicita_reversar_carga_inventario_movil_a_almacen`)
+### 2.3.2. Reverso de Carga de Inventario MÃ³vil al AlmacÃ©n (`solicita_reversar_carga_inventario_movil_a_almacen`)
 - **Firma SQL:** `solicita_reversar_carga_inventario_movil_a_almacen(p_camion_id UUID, p_resumen_productos JSONB DEFAULT NULL, p_radar_id UUID DEFAULT NULL)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -245,16 +245,16 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   });
   ```
 - **Notas de Comportamiento:**
-  - Devuelve la mercancía del `inventario_movil` del camión al `inventario_almacen`.
-  - Transiciona las órdenes de la ruta de `'en_transito'` de vuelta a `'aprobada'` **manteniendo su `fecha_despacho` original**.
-  - Cambia el estado del camión a `'asignado'`.
+  - Devuelve la mercancÃ­a del `inventario_movil` del camiÃ³n al `inventario_almacen`.
+  - Transiciona las Ã³rdenes de la ruta de `'en_transito'` de vuelta a `'aprobada'` **manteniendo su `fecha_despacho` original**.
+  - Cambia el estado del camiÃ³n a `'asignado'`.
   - Restablece `carga_inventario_movil = FALSE` en la tabla `radars`.
   - Retorna error `REVERSO_BLOQUEADO_POR_ENTREGAS` si ya se registraron despachos a clientes en esa ruta.
 - **Respuesta esperada en `data`:**
   ```json
   {
     "success": true,
-    "message": "Reverso de inventario móvil al almacén procesado exitosamente.",
+    "message": "Reverso de inventario mÃ³vil al almacÃ©n procesado exitosamente.",
     "data": {
       "camion_id": "uuid-del-camion",
       "radar_id": "uuid-del-radar",
@@ -265,7 +265,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     },
     "error": null
   }
-  ### 2.3.3. Edición y Re-sincronización de Radar (`solicita_editar_o_sincronizar_radar`)
+  ### 2.3.3. EdiciÃ³n y Re-sincronizaciÃ³n de Radar (`solicita_editar_o_sincronizar_radar`)
 - **Firma SQL:** `solicita_editar_o_sincronizar_radar(p_radar_id UUID)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -274,10 +274,10 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   });
   ```
 - **Notas de Comportamiento:**
-  - **Fase 1 (Desvinculación):** Desvincula las órdenes actualmente asignadas al radar que estén en estado `'aprobada'`.
-  - **Fase 2 (Revinculación):** Re-vincula todas las órdenes aprobadas pertenecientes a clientes del despachador y con la misma `fecha_despacho::date` del radar.
+  - **Fase 1 (DesvinculaciÃ³n):** Desvincula las Ã³rdenes actualmente asignadas al radar que estÃ©n en estado `'aprobada'`.
+  - **Fase 2 (RevinculaciÃ³n):** Re-vincula todas las Ã³rdenes aprobadas pertenecientes a clientes del despachador y con la misma `fecha_despacho::date` del radar.
   - Recalcula acumulados de `total_cantidad_solicitada`, `total_cantidad_despachada` y `total_contenedores_retirados`.
-  - Retorna el error `RADAR_INVENTARIO_CARGADO` (`'Para modificar el Radar debe reversar el inventario movil al almacén'`) si `carga_inventario_movil = TRUE`.
+  - Retorna el error `RADAR_INVENTARIO_CARGADO` (`'Para modificar el Radar debe reversar el inventario movil al almacÃ©n'`) si `carga_inventario_movil = TRUE`.
   - Retorna el error `RADAR_APROBADO_BLOQUEADO` si `status_radar = TRUE`.
 - **Respuesta esperada en `data`:**
   ```json
@@ -306,8 +306,8 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   });
   ```
 - **Notas de Comportamiento:**
-  - Retorna únicamente los radares en estado **pendiente** (`status_radar = FALSE`).
-  - Mismos parámetros y estructura de retorno que `retorna_lista_radars_segun_rango_fechas`.
+  - Retorna Ãºnicamente los radares en estado **pendiente** (`status_radar = FALSE`).
+  - Mismos parÃ¡metros y estructura de retorno que `retorna_lista_radars_segun_rango_fechas`.
 
 ### 2.3.5. Consulta de Lista de Radares Aprobados por Rango de Fechas (`retorna_lista_radars_aprobado_segun_rango_fechas`)
 - **Firma SQL:** `retorna_lista_radars_aprobado_segun_rango_fechas(p_despachador_id UUID DEFAULT NULL, p_fecha_inicial DATE DEFAULT NULL, p_fecha_limite DATE DEFAULT NULL)`
@@ -320,8 +320,8 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   });
   ```
 - **Notas de Comportamiento:**
-  - Retorna únicamente los radares en estado **aprobado** (`status_radar = TRUE`).
-  - Mismos parámetros y estructura de retorno que `retorna_lista_radars_segun_rango_fechas`.
+  - Retorna Ãºnicamente los radares en estado **aprobado** (`status_radar = TRUE`).
+  - Mismos parÃ¡metros y estructura de retorno que `retorna_lista_radars_segun_rango_fechas`.
 
 ### 2.4. Registrar Despacho Cliente en Radar (`registrar_despacho_cliente_radar`)
 - **Firma SQL:** `registrar_despacho_cliente_radar(p_orden_id UUID, p_detalles_json JSONB)`
@@ -342,10 +342,10 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   });
   ```
 - **Notas de Comportamiento:**
-  - Asienta atómicamente en `movimientos_contenedores` e incrementa/decrementa `saldo_contenedores_clientes` al momento de la confirmación del despacho.
+  - Asienta atÃ³micamente en `movimientos_contenedores` e incrementa/decrementa `saldo_contenedores_clientes` al momento de la confirmaciÃ³n del despacho.
   - Para cada SKU despachado con `contenedor_id`, calcula contenedores entregados = `CEIL(cantidad_despachada / unidades_por_contenedor)`.
   - Es **idempotente**: si la orden es re-editada en el radar, revierte los movimientos previos de esa orden antes de asentar los nuevos.
-  - Retorna `contenedores_resumen` con el `saldo_anterior`, movimiento (`cantidad_entregada`, `cantidad_retirada`) y `saldo_actualizado` para ser presentado en la interfaz gráfica.
+  - Retorna `contenedores_resumen` con el `saldo_anterior`, movimiento (`cantidad_entregada`, `cantidad_retirada`) y `saldo_actualizado` para ser presentado en la interfaz grÃ¡fica.
 - **Respuesta esperada en `data`:**
   ```json
   {
@@ -375,9 +375,9 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   ```typescript
   const { data, error } = await supabase.rpc('registrar_entrega_detalle', {
     p_detalle_id: 'UUID_DEL_DETALLE_LINEA',
-    p_cantidad_despachada: 4, // Cantidad que realmente recibió el cliente
+    p_cantidad_despachada: 4, // Cantidad que realmente recibiÃ³ el cliente
     p_estado_entrega: 'entregado_parcial', // 'entregado', 'entregado_parcial', 'rechazado'
-    p_motivo_rechazo: '2 unidades dañadas en el trayecto' // Null si es 'entregado' completo
+    p_motivo_rechazo: '2 unidades daÃ±adas en el trayecto' // Null si es 'entregado' completo
   });
   ```
 - **Respuesta esperada en `data`:**
@@ -387,13 +387,13 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     "data": {
       "detalle_id": "UUID_DEL_DETALLE_LINEA",
       "estado_entrega": "entregado_parcial",
-      "orden_estado": "por_liquidar" // o "en_transito" si aún hay líneas pendientes
+      "orden_estado": "por_liquidar" // o "en_transito" si aÃºn hay lÃ­neas pendientes
     },
     "error": null
   }
   ```
 
-### 2.5. Liquidación de Despacho (`liquidar_orden_distribucion`)
+### 2.5. LiquidaciÃ³n de Despacho (`liquidar_orden_distribucion`)
 - **Firma SQL:** `liquidar_orden_distribucion(p_orden_id UUID)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -413,7 +413,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.6. Anulación de Orden (`anular_orden_distribucion`)
+### 2.6. AnulaciÃ³n de Orden (`anular_orden_distribucion`)
 - **Firma SQL:** `anular_orden_distribucion(p_orden_id UUID)`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -457,13 +457,13 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.8. Registrar Rendición de Cuentas (`registrar_rendicion_cuentas`)
+### 2.8. Registrar RendiciÃ³n de Cuentas (`registrar_rendicion_cuentas`)
 - **Firma SQL:** `registrar_rendicion_cuentas(p_cliente_id UUID, p_observaciones TEXT, p_creado_por UUID, p_ordenes JSONB, p_pagos JSONB)`
 - **Uso en Frontend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('registrar_rendicion_cuentas', {
     p_cliente_id: 'UUID_DEL_CLIENTE',
-    p_observaciones: 'Rendición de la cobranza de la tarde',
+    p_observaciones: 'RendiciÃ³n de la cobranza de la tarde',
     p_creado_por: 'UUID_DEL_VENDEDOR',
     p_ordenes: [
       { orden_id: 'UUID_DE_LA_ORDEN_1', monto_recaudado: 120.00 },
@@ -511,19 +511,19 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
-### 2.10. Módulo de Mantenimiento de Tasas de Cambio (`tasa_cambio`)
+### 2.10. MÃ³dulo de Mantenimiento de Tasas de Cambio (`tasa_cambio`)
 
-El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales utilizadas en la facturación y cobranza en multimoneda.
+El **MÃ³dulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales utilizadas en la facturaciÃ³n y cobranza en multimoneda.
 
-#### Comportamiento Esperado del Módulo en Frontend:
-1. **Carga Inicial por Defecto:** Al ingresar al módulo, debe invocar `retorna_ultima_tasa_cambio` para mostrar la tasa más reciente registrada con su fecha.
+#### Comportamiento Esperado del MÃ³dulo en Frontend:
+1. **Carga Inicial por Defecto:** Al ingresar al mÃ³dulo, debe invocar `retorna_ultima_tasa_cambio` para mostrar la tasa mÃ¡s reciente registrada con su fecha.
 2. **Registro de Nueva Tasa:** Permite ingresar una fecha y monto de tasa con `inserta_tasa_cambio`. (No permite fechas duplicadas).
-3. **Eliminación de Tasa:** Permite eliminar la tasa de una fecha con `elimina_tasa_cambio`. (Para actualizar una tasa, se debe eliminar la fecha y registrarla de nuevo).
-4. **Consulta Histórica por Rango:** Permite al usuario consultar el listado de tasas en un rango de fechas con `retorna_tasas_cambio_por_rango`.
+3. **EliminaciÃ³n de Tasa:** Permite eliminar la tasa de una fecha con `elimina_tasa_cambio`. (Para actualizar una tasa, se debe eliminar la fecha y registrarla de nuevo).
+4. **Consulta HistÃ³rica por Rango:** Permite al usuario consultar el listado de tasas en un rango de fechas con `retorna_tasas_cambio_por_rango`.
 
 ---
 
-#### 2.10.1. Consultar Última Tasa Registrada (`retorna_ultima_tasa_cambio`)
+#### 2.10.1. Consultar Ãltima Tasa Registrada (`retorna_ultima_tasa_cambio`)
 - **Firma SQL:** `retorna_ultima_tasa_cambio()`
 - **Uso en Frontend (RPC):**
   ```typescript
@@ -544,7 +544,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 #### 2.10.2. Registrar Nueva Tasa (`inserta_tasa_cambio`)
 - **Firma SQL:** `inserta_tasa_cambio(p_fecha_tasa DATE, p_tasa NUMERIC)`
-- **Regla:** No se permiten fechas duplicadas. Si la fecha ya existe, retorna error de restricción `FECHA_TASA_DUPLICADA`.
+- **Regla:** No se permiten fechas duplicadas. Si la fecha ya existe, retorna error de restricciÃ³n `FECHA_TASA_DUPLICADA`.
 - **Uso en Frontend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('inserta_tasa_cambio', {
@@ -617,8 +617,8 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   {
     "success": true,
     "data": [
-      { "id": "11111111-1111-1111-1111-111111111111", "nombre": "Caja Plástica 24 Unidades" },
-      { "id": "22222222-2222-2222-2222-222222222222", "nombre": "Cesta Térmica 50L" }
+      { "id": "11111111-1111-1111-1111-111111111111", "nombre": "Caja PlÃ¡stica 24 Unidades" },
+      { "id": "22222222-2222-2222-2222-222222222222", "nombre": "Cesta TÃ©rmica 50L" }
     ],
     "error": null
   }
@@ -639,7 +639,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
       {
         "id_ruta": "3a8f94c0-1122-4433-8899-aabbccdd1122",
         "nombre_ruta": "Ruta Centro - Comercial",
-        "descripcion_ruta": "Atención a clientes del casco central",
+        "descripcion_ruta": "AtenciÃ³n a clientes del casco central",
         "created_at": "2026-08-13T12:00:00+00:00"
       },
       {
@@ -666,12 +666,12 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "data": [
       {
         "id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
-        "nombre_completo": "Carlos Pérez (Despachador)",
+        "nombre_completo": "Carlos PÃ©rez (Despachador)",
         "telefono": "+584141112233"
       },
       {
         "id": "6d1b27f3-4455-7766-1122-ddeeff004455",
-        "nombre_completo": "José Rodríguez",
+        "nombre_completo": "JosÃ© RodrÃ­guez",
         "telefono": "+584129998877"
       }
     ],
@@ -686,10 +686,10 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   const { data, error } = await supabase.rpc('actualiza_registro_rutas_segun_uuid', {
     p_id_ruta: '3a8f94c0-1122-4433-8899-aabbccdd1122',
     p_nombre_ruta: 'Ruta Centro - Actualizada',
-    p_descripcion_ruta: 'Nueva descripción de la ruta comercial' // Opcional / Acepta null
+    p_descripcion_ruta: 'Nueva descripciÃ³n de la ruta comercial' // Opcional / Acepta null
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -697,7 +697,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "data": {
       "id_ruta": "3a8f94c0-1122-4433-8899-aabbccdd1122",
       "nombre_ruta": "Ruta Centro - Actualizada",
-      "descripcion_ruta": "Nueva descripción de la ruta comercial",
+      "descripcion_ruta": "Nueva descripciÃ³n de la ruta comercial",
       "created_at": "2026-08-13T12:00:00+00:00"
     }
   }
@@ -708,7 +708,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "success": false,
     "error": {
       "code": "RUTA_INEXISTENTE",
-      "message": "No se encontró ninguna ruta con el id_ruta especificado."
+      "message": "No se encontrÃ³ ninguna ruta con el id_ruta especificado."
     }
   }
   ```
@@ -733,7 +733,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_activo: true
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -764,7 +764,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "success": false,
     "error": {
       "code": "CLIENTE_INEXISTENTE",
-      "message": "No se encontró ningún cliente con el ID especificado."
+      "message": "No se encontrÃ³ ningÃºn cliente con el ID especificado."
     }
   }
   ```
@@ -775,7 +775,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   ```typescript
   const { data, error } = await supabase.rpc('retorna_radar_despachador');
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -819,7 +819,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
         "saldo_contenedores": [
           {
             "contenedor_id": "e5f6a7b8-c9d0-1234-ef01-567890abcdef",
-            "nombre_contenedor": "Cesta Plástica Estándar",
+            "nombre_contenedor": "Cesta PlÃ¡stica EstÃ¡ndar",
             "saldo_pendiente": 5
           }
         ]
@@ -839,14 +839,14 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
         detalle_id: 'c3d4e5f6-a7b8-9012-cdef-34567890abcd',
         cantidad_despachada: 8,
         estado_entrega: 'entregado_parcial',
-        motivo_rechazo: 'Cliente no requería las 2 unidades sobrantes',
+        motivo_rechazo: 'Cliente no requerÃ­a las 2 unidades sobrantes',
         contenedores_retirados: 5,
         contenedor_id: 'e5f6a7b8-c9d0-1234-ef01-567890abcdef'
       }
     ]
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -858,7 +858,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
-### 2.18. Aprobación de Despacho por Gerencia / Almacén (`aprobar_despacho_orden_distribucion`)
+### 2.18. AprobaciÃ³n de Despacho por Gerencia / AlmacÃ©n (`aprobar_despacho_orden_distribucion`)
 - **Firma SQL:** `aprobar_despacho_orden_distribucion(p_orden_id UUID)`
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
@@ -866,7 +866,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_orden_id: 'b2c3d4e5-f6a7-8901-bcde-234567890abc'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -887,7 +887,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_fecha_despacho: '2026-08-31' // Opcional (toma CURRENT_DATE si es null)
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -914,7 +914,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_radar_id: 'e1f2a3b4-c5d6-7890-ef01-234567890abc'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -931,7 +931,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
       },
       "despachador": {
         "id": "5c0a16e2-3344-6655-0011-ccddeeff3344",
-        "nombre_completo": "Carlos Pérez",
+        "nombre_completo": "Carlos PÃ©rez",
         "telefono": "+584141112233",
         "correo_e": "carlos.perez@logitrack.com"
       },
@@ -960,7 +960,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_nueva_fecha: '2026-09-01'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -998,7 +998,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     }
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1013,21 +1013,21 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
-### 2.23. Otorgar Excepción Gerencial de Despacho (`otorgar_excepcion_despacho_gerencia`)
+### 2.23. Otorgar ExcepciÃ³n Gerencial de Despacho (`otorgar_excepcion_despacho_gerencia`)
 - **Firma SQL:** `otorgar_excepcion_despacho_gerencia(p_cliente_id UUID)`
 - **Permisos:** Exclusivo para usuarios autenticados con rol `gerente` o `admin`.
-- **Descripción:** Permite a la Gerencia autorizar de manera extraordinaria un **único despacho** para un cliente que se encuentra bloqueado por política de crédito. Una vez completado el despacho en el Radar, el permiso se consume y desactiva automáticamente.
+- **DescripciÃ³n:** Permite a la Gerencia autorizar de manera extraordinaria un **Ãºnico despacho** para un cliente que se encuentra bloqueado por polÃ­tica de crÃ©dito. Una vez completado el despacho en el Radar, el permiso se consume y desactiva automÃ¡ticamente.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('otorgar_excepcion_despacho_gerencia', {
     p_cliente_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
-    "message": "Excepción de despacho otorgada exitosamente por gerencia (Válida por 1 despacho).",
+    "message": "ExcepciÃ³n de despacho otorgada exitosamente por gerencia (VÃ¡lida por 1 despacho).",
     "data": {
       "cliente_id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
       "excepcion_despacho_gerencia": true
@@ -1035,16 +1035,16 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
-### 2.24. Consulta de Abonos u Órdenes Pendientes del Cliente (`solicita_abonos_orden_distribucion`)
+### 2.24. Consulta de Abonos u Ãrdenes Pendientes del Cliente (`solicita_abonos_orden_distribucion`)
 - **Firma SQL:** `solicita_abonos_orden_distribucion(p_cliente_id UUID)`
-- **Descripción:** Obtiene el saldo a favor actual del cliente y la lista de sus órdenes en estado `por_liquidar` con el total de abonos acumulados aprobados a la fecha y el saldo pendiente.
+- **DescripciÃ³n:** Obtiene el saldo a favor actual del cliente y la lista de sus Ã³rdenes en estado `por_liquidar` con el total de abonos acumulados aprobados a la fecha y el saldo pendiente.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('solicita_abonos_orden_distribucion', {
     p_cliente_id: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1068,7 +1068,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.25. Reporte Gerencial de Recaudaciones (`reporte_recaudaciones_gerenciales`)
 - **Firma SQL:** `reporte_recaudaciones_gerenciales(p_fecha_desde DATE DEFAULT NULL, p_fecha_hasta DATE DEFAULT NULL)`
-- **Descripción:** Genera el reporte consolidado de rendiciones de cuentas procesadas en un rango de fechas con desglose por cliente, vendedor/auditor, método de pago y órdenes abonadas.
+- **DescripciÃ³n:** Genera el reporte consolidado de rendiciones de cuentas procesadas en un rango de fechas con desglose por cliente, vendedor/auditor, mÃ©todo de pago y Ã³rdenes abonadas.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('reporte_recaudaciones_gerenciales', {
@@ -1076,7 +1076,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_fecha_hasta: '2026-09-30'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1147,9 +1147,9 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   });
   ```
 
-### 2.30. Lista de Radares según Rango de Fechas (`retorna_lista_radars_segun_rango_fechas`)
+### 2.30. Lista de Radares segÃºn Rango de Fechas (`retorna_lista_radars_segun_rango_fechas`)
 - **Firma SQL:** `retorna_lista_radars_segun_rango_fechas(p_despachador_id UUID DEFAULT NULL, p_fecha_inicial DATE DEFAULT NULL, p_fecha_limite DATE DEFAULT NULL)`
-- **Descripción:** Retorna el listado de radares asignados a un despachador ordenados por fecha descendente en un rango de fechas especificado, incluyendo paradas (órdenes), unidades despachadas (items), tipos de productos (SKU) y estado del radar (`status_radar = true` indica cerrado, `status_radar = false` indica abierto).
+- **DescripciÃ³n:** Retorna el listado de radares asignados a un despachador ordenados por fecha descendente en un rango de fechas especificado, incluyendo paradas (Ã³rdenes), unidades despachadas (items), tipos de productos (SKU) y estado del radar (`status_radar = true` indica cerrado, `status_radar = false` indica abierto).
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('retorna_lista_radars_segun_rango_fechas', {
@@ -1158,7 +1158,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_fecha_limite: '2026-08-31'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1177,16 +1177,16 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
-### 2.31. Detalle Resumido de Órdenes por Radar ID (`retorna_ordenes_distribucion_segun_idradar`)
+### 2.31. Detalle Resumido de Ãrdenes por Radar ID (`retorna_ordenes_distribucion_segun_idradar`)
 - **Firma SQL:** `retorna_ordenes_distribucion_segun_idradar(p_radar_id UUID)`
-- **Descripción:** Retorna el detalle resumido de las órdenes contenidas dentro de un radar específico identificado por su `p_radar_id`.
+- **DescripciÃ³n:** Retorna el detalle resumido de las Ã³rdenes contenidas dentro de un radar especÃ­fico identificado por su `p_radar_id`.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('retorna_ordenes_distribucion_segun_idradar', {
     p_radar_id: 'f1e2d3c4-b5a6-7890-1234-567890abcdef'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1205,12 +1205,12 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.32. Cuentas por Liquidar agrupadas por Cliente (`retorna_ordenes_por_liquidar`)
 - **Firma SQL:** `retorna_ordenes_por_liquidar()`
-- **Descripción:** Retorna la lista de órdenes en estado `por_liquidar` agrupadas por cliente y ordenadas por la mayor cantidad de días vencidos desde su fecha de despacho (`dias_vencidos DESC`).
+- **DescripciÃ³n:** Retorna la lista de Ã³rdenes en estado `por_liquidar` agrupadas por cliente y ordenadas por la mayor cantidad de dÃ­as vencidos desde su fecha de despacho (`dias_vencidos DESC`).
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('retorna_ordenes_por_liquidar');
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1236,20 +1236,20 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
-### 2.33. Aprobación Gerencial de Radar (`solicita_aprobar_radar`)
+### 2.33. AprobaciÃ³n Gerencial de Radar (`solicita_aprobar_radar`)
 - **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
-- **Descripción:** Aprueba el radar (`status_radar = true`), liquida los envases entregados (`CEIL(cantidad_despachada * unidades_por_contenedor)`) y envases retirados acreditándolos al estado de cuenta del cliente (`saldo_contenedores_clientes`), evalúa las políticas de crédito deshabilitando `permiso_despacho_manual` si `ordenes_por_liquidar >= max_facturas_vencidas`, restituye la mercancía no entregada al almacén principal (`productos.stock_disponible`) y transiciona automáticamente todas las órdenes en estado `devuelta` a `anulada`.
+- **DescripciÃ³n:** Aprueba el radar (`status_radar = true`), liquida los envases entregados (`CEIL(cantidad_despachada * unidades_por_contenedor)`) y envases retirados acreditÃ¡ndolos al estado de cuenta del cliente (`saldo_contenedores_clientes`), evalÃºa las polÃ­ticas de crÃ©dito deshabilitando `permiso_despacho_manual` si `ordenes_por_liquidar >= max_facturas_vencidas`, restituye la mercancÃ­a no entregada al almacÃ©n principal (`productos.stock_disponible`) y transiciona automÃ¡ticamente todas las Ã³rdenes en estado `devuelta` a `anulada`.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('solicita_aprobar_radar', {
     p_radar_id: 'f1e2d3c4-b5a6-7890-1234-567890abcdef'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
-    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, políticas de crédito evaluadas, inventario restituido a almacén y órdenes devueltas anuladas.",
+    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, polÃ­ticas de crÃ©dito evaluadas, inventario restituido a almacÃ©n y Ã³rdenes devueltas anuladas.",
     "data": {
       "radar_id": "f1e2d3c4-b5a6-7890-1234-567890abcdef",
       "status_radar": true,
@@ -1266,24 +1266,24 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   ```
 
 
-### 2.35. Reglas de Cálculo y Conversión Multimoneda en Órdenes de Distribución
-- **Descripción:** Los precios base de lista de productos en LogiTrack están cotizados en **USD** (`precio_lista1` en `productos`). Al crear (`crear_orden_distribucion`) o actualizar (`actualiza_orden_distribucion_segun_correlativo`) una orden:
-  - Las órdenes de distribución siempre nacen en estado por liquidar (o aprobadas/pendientes). Debido a que la tasa de cambio puede variar al momento de la liquidación final, los montos en Bolívares (`valor_unitario_recaudar`, `subtotal_recaudar` y `total_recaudar_bs`) se registran como `NULL` para evitar confusiones.
-  - `valor_unitario_usd`: Es el precio unitario del producto en USD (tomado de `precio_lista1` o parámetro explícito).
-  - `subtotal_recaudar_usd`: Suma en USD por línea de producto (`cantidad * valor_unitario_usd`).
+### 2.35. Reglas de CÃ¡lculo y ConversiÃ³n Multimoneda en Ãrdenes de DistribuciÃ³n
+- **DescripciÃ³n:** Los precios base de lista de productos en LogiTrack estÃ¡n cotizados en **USD** (`precio_lista1` en `productos`). Al crear (`crear_orden_distribucion`) o actualizar (`actualiza_orden_distribucion_segun_correlativo`) una orden:
+  - Las Ã³rdenes de distribuciÃ³n siempre nacen en estado por liquidar (o aprobadas/pendientes). Debido a que la tasa de cambio puede variar al momento de la liquidaciÃ³n final, los montos en BolÃ­vares (`valor_unitario_recaudar`, `subtotal_recaudar` y `total_recaudar_bs`) se registran como `NULL` para evitar confusiones.
+  - `valor_unitario_usd`: Es el precio unitario del producto en USD (tomado de `precio_lista1` o parÃ¡metro explÃ­cito).
+  - `subtotal_recaudar_usd`: Suma en USD por lÃ­nea de producto (`cantidad * valor_unitario_usd`).
   - `total_recaudar_usd`: Suma total en USD de la cabecera de la orden (`SUM(subtotal_recaudar_usd)`).
-  - `valor_unitario_recaudar`, `subtotal_recaudar`, `total_recaudar_bs`: Se registran en `NULL` durante la creación/edición y se determinan al liquidar la orden.
+  - `valor_unitario_recaudar`, `subtotal_recaudar`, `total_recaudar_bs`: Se registran en `NULL` durante la creaciÃ³n/ediciÃ³n y se determinan al liquidar la orden.
 
 ### 2.36. Registro de Nuevo Producto (`registra_nuevo_producto_retorna_id`)
 - **Firma SQL:** `registra_nuevo_producto_retorna_id(p_codigo_producto TEXT, p_nombre TEXT, p_codigo_barras TEXT DEFAULT NULL, p_descripcion TEXT DEFAULT NULL, p_cant_unidad_medida NUMERIC DEFAULT NULL, p_precio_lista1 NUMERIC DEFAULT 0, p_precio_lista2 NUMERIC DEFAULT 0, p_precio_lista3 NUMERIC DEFAULT 0, p_contenedor_id UUID DEFAULT NULL, p_unidades_por_contenedor NUMERIC DEFAULT 1, p_imagen_path TEXT DEFAULT NULL)`
-- **Descripción:** Registra un nuevo producto en la tabla `public.productos` y devuelve el `UUID` generado. Si `p_codigo_barras` viene vacío o con espacios, se guarda automáticamente como `NULL` para evitar violaciones de la restricción de unicidad (`UNIQUE`).
+- **DescripciÃ³n:** Registra un nuevo producto en la tabla `public.productos` y devuelve el `UUID` generado. Si `p_codigo_barras` viene vacÃ­o o con espacios, se guarda automÃ¡ticamente como `NULL` para evitar violaciones de la restricciÃ³n de unicidad (`UNIQUE`).
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data: productoId, error } = await supabase.rpc('registra_nuevo_producto_retorna_id', {
     p_codigo_producto: 'HAR-001',
     p_nombre: 'Harina PAN 1kg',
     p_codigo_barras: '7591000123456', // opcional / null
-    p_descripcion: 'Harina de maíz blanco precozida', // opcional / null
+    p_descripcion: 'Harina de maÃ­z blanco precozida', // opcional / null
     p_cant_unidad_medida: 1, // opcional / null
     p_precio_lista1: 1.20, // opcional, default 0
     p_precio_lista2: 1.10, // opcional, default 0
@@ -1293,14 +1293,14 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_imagen_path: '/productos/harina.png' // opcional / null
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   "a1b2c3d4-e5f6-7890-abcd-1234567890ab"
   ```
 
-### 2.37. Actualización de Registro de Producto (`actualizar_registro_productos_segun_id`)
+### 2.37. ActualizaciÃ³n de Registro de Producto (`actualizar_registro_productos_segun_id`)
 - **Firma SQL:** `actualizar_registro_productos_segun_id(p_id UUID, p_codigo_producto TEXT, p_nombre TEXT, p_codigo_barras TEXT DEFAULT NULL, p_precio_lista1 NUMERIC DEFAULT 0, p_precio_lista2 NUMERIC DEFAULT 0, p_precio_lista3 NUMERIC DEFAULT 0, p_descripcion TEXT DEFAULT NULL, p_cant_unidad_medida NUMERIC DEFAULT NULL, p_contenedor_id UUID DEFAULT NULL, p_unidades_por_contenedor NUMERIC DEFAULT 1, p_imagen_path TEXT DEFAULT NULL)`
-- **Descripción:** Actualiza la información de un producto existente identificado por `p_id`. Si `p_codigo_barras` viene vacío o con espacios, se convierte a `NULL`.
+- **DescripciÃ³n:** Actualiza la informaciÃ³n de un producto existente identificado por `p_id`. Si `p_codigo_barras` viene vacÃ­o o con espacios, se convierte a `NULL`.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data: exito, error } = await supabase.rpc('actualizar_registro_productos_segun_id', {
@@ -1311,24 +1311,24 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_precio_lista1: 1.25,
     p_precio_lista2: 1.15,
     p_precio_lista3: 1.05,
-    p_descripcion: 'Harina de maíz blanco enriquecida',
+    p_descripcion: 'Harina de maÃ­z blanco enriquecida',
     p_cant_unidad_medida: 1,
     p_contenedor_id: 'uuid-del-contenedor',
     p_unidades_por_contenedor: 24,
     p_imagen_path: '/productos/harina_v2.png'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   true
   ```
 
-### 2.38. Solicitar Aprobación del Radar (`solicita_aprobar_radar`)
+### 2.38. Solicitar AprobaciÃ³n del Radar (`solicita_aprobar_radar`)
 - **Firma SQL:** `solicita_aprobar_radar(p_radar_id UUID)`
-- **Descripción:** Aprueba y cierra un radar de despacho (`status_radar = true`). Ejecuta de forma atómica:
+- **DescripciÃ³n:** Aprueba y cierra un radar de despacho (`status_radar = true`). Ejecuta de forma atÃ³mica:
   1. Registra movimientos de contenedores/envases entregados y retirados en `movimientos_contenedores` y actualiza `saldo_contenedores_clientes`.
-  2. **Movimiento Doble de Inventario:** Restituye la mercancía no despachada (órdenes devueltas), **descontándola del inventario móvil del camión (`inventario_movil`)** e **incrementando de vuelta el stock en el almacén principal (`inventario_almacen.stock_disponible`)**.
-  3. Transiciona las órdenes completamente devueltas a estado `anulada`.
+  2. **Movimiento Doble de Inventario:** Restituye la mercancÃ­a no despachada (Ã³rdenes devueltas), **descontÃ¡ndola del inventario mÃ³vil del camiÃ³n (`inventario_movil`)** e **incrementando de vuelta el stock en el almacÃ©n principal (`inventario_almacen.stock_disponible`)**.
+  3. Transiciona las Ã³rdenes completamente devueltas a estado `anulada`.
   4. Mantiene activos a todos los clientes involucrados sin aplicar bloqueos morosos temporales.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
@@ -1336,11 +1336,11 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_radar_id: 'e1f2a3b4-c5d6-7890-ef01-234567890abc'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
-    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, inventario restituido a almacén y órdenes devueltas anuladas.",
+    "message": "Radar aprobado exitosamente. Saldos de contenedores actualizados, inventario restituido a almacÃ©n y Ã³rdenes devueltas anuladas.",
     "data": {
       "radar_id": "e1f2a3b4-c5d6-7890-ef01-234567890abc",
       "status_radar": true,
@@ -1359,9 +1359,9 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     },
     "error": null
   }
-### 2.39. Actualizar / Editar Orden de Distribución por Correlativo (`actualiza_orden_distribucion_segun_correlativo`)
+### 2.39. Actualizar / Editar Orden de DistribuciÃ³n por Correlativo (`actualiza_orden_distribucion_segun_correlativo`)
 - **Firma SQL:** `actualiza_orden_distribucion_segun_correlativo(p_correlativo INT, p_header JSONB, p_detalle JSONB)`
-- **Descripción:** Permite la actualización y modificación de cabecera y detalles de órdenes de distribución que se encuentren en estado **`aprobada`** (o `borrador`). Permite ajustar cliente, camión, fecha de despacho, factura de origen y la lista de productos solicitados.
+- **DescripciÃ³n:** Permite la actualizaciÃ³n y modificaciÃ³n de cabecera y detalles de Ã³rdenes de distribuciÃ³n que se encuentren en estado **`aprobada`** (o `borrador`). Permite ajustar cliente, camiÃ³n, fecha de despacho, factura de origen y la lista de productos solicitados.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('actualiza_orden_distribucion_segun_correlativo', {
@@ -1381,7 +1381,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     ]
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1400,7 +1400,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.40. Registro de Venta en Ruta AutoVenta (`registrar_venta_en_ruta_autoventa`)
 - **Firma SQL:** `registrar_venta_en_ruta_autoventa(p_vendedor_id UUID, p_cliente_id UUID, p_camion_id UUID, p_productos_json JSONB, p_contenedores_json JSONB DEFAULT '[]'::jsonb, p_observaciones TEXT DEFAULT NULL, p_tasa_cambio NUMERIC DEFAULT NULL)`
-- **Descripción:** Registra una venta en caliente directamente desde el camión en ruta (AutoVenta sin radar). Genera la orden en estado `por_liquidar`, valida la existencia del stock en `inventario_movil` del camión, descuenta el stock entregado y asienta el movimiento de envases/contenedores prestados y retirados.
+- **DescripciÃ³n:** Registra una venta en caliente directamente desde el camiÃ³n en ruta (AutoVenta sin radar). Genera la orden en estado `por_liquidar`, valida la existencia del stock en `inventario_movil` del camiÃ³n, descuenta el stock entregado y asienta el movimiento de envases/contenedores prestados y retirados.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('registrar_venta_en_ruta_autoventa', {
@@ -1416,7 +1416,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_observaciones: 'Venta realizada en ruta'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1441,7 +1441,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.41. Resumen de Jornada AutoVentas (`retorna_resumen_autoventas_jornada`)
 - **Firma SQL:** `retorna_resumen_autoventas_jornada(p_camion_id UUID, p_fecha DATE DEFAULT CURRENT_DATE)`
-- **Descripción:** Devuelve el resumen consolidado de la jornada activa de AutoVentas para un camión: inventario cargado, vendido y disponible por producto, más el resumen financiero de facturas registradas en la ruta.
+- **DescripciÃ³n:** Devuelve el resumen consolidado de la jornada activa de AutoVentas para un camiÃ³n: inventario cargado, vendido y disponible por producto, mÃ¡s el resumen financiero de facturas registradas en la ruta.
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('retorna_resumen_autoventas_jornada', {
@@ -1449,7 +1449,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_fecha: '2026-09-17'
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1490,7 +1490,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.42. Reporte Gerencial de Formas de Pago por Rango de Fecha (`reporte_formas_pago_rendicion`)
 - **Firma SQL:** `reporte_formas_pago_rendicion(p_fecha_desde DATE DEFAULT NULL, p_fecha_hasta DATE DEFAULT NULL, p_solo_bancarios BOOLEAN DEFAULT FALSE)`
-- **Descripción:** Genera la consulta detallada e informe gerencial de las Formas de Pago recibidas en rendiciones de cuentas aprobadas durante un rango de fechas. Soporta filtrado exclusivo de transacciones bancarias/electrónicas (donde `es_bancario = TRUE`: Pago Móvil, Transferencia, Zelle, Binance).
+- **DescripciÃ³n:** Genera la consulta detallada e informe gerencial de las Formas de Pago recibidas en rendiciones de cuentas aprobadas durante un rango de fechas. Soporta filtrado exclusivo de transacciones bancarias/electrÃ³nicas (donde `es_bancario = TRUE`: Pago MÃ³vil, Transferencia, Zelle, Binance).
 - **Uso en Frontend / Backend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('reporte_formas_pago_rendicion', {
@@ -1499,7 +1499,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     p_solo_bancarios: true
   });
   ```
-- **Respuesta esperada en `data` (Éxito):**
+- **Respuesta esperada en `data` (Ãxito):**
   ```json
   {
     "success": true,
@@ -1535,23 +1535,23 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ---
 
-## 3. Códigos de Error Comunes para Control en Frontend
+## 3. CÃ³digos de Error Comunes para Control en Frontend
 
-Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar notificaciones o flujos condicionales específicos. Aquí tienes la lista de códigos de error planificados:
+Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar notificaciones o flujos condicionales especÃ­ficos. AquÃ­ tienes la lista de cÃ³digos de error planificados:
 
-| Código de Error | Descripción | Acción recomendada en Frontend |
+| CÃ³digo de Error | DescripciÃ³n | AcciÃ³n recomendada en Frontend |
 |-----------------|-------------|--------------------------------|
-| `PARAMETRO_INVALIDO` | Algún parámetro requerido viene vacío o nulo. | Mostrar alerta de validación local. |
-| `CLIENTE_INEXISTENTE` | El cliente ingresado no existe o está inactivo. | Bloquear la creación de la orden o indicar error. |
+| `PARAMETRO_INVALIDO` | AlgÃºn parÃ¡metro requerido viene vacÃ­o o nulo. | Mostrar alerta de validaciÃ³n local. |
+| `CLIENTE_INEXISTENTE` | El cliente ingresado no existe o estÃ¡ inactivo. | Bloquear la creaciÃ³n de la orden o indicar error. |
 | `RIF_DUPLICADO` | El RIF/NIT especificado ya pertenece a otro cliente registrado. | Notificar al usuario para corregir el RIF/NIT. |
-| `DESPACHO_BLOQUEADO_CREDITO` | El cliente está bloqueado por morosidad/política de crédito y no posee excepción gerencial. | Deshabilitar botón de edición en Radar o solicitar excepción a Gerencia. |
-| `ACCESO_DENEGADO` | El usuario no cuenta con el rol requerido (ej. gerente/admin) para ejecutar la acción. | Mostrar mensaje de permisos insuficientes. |
+| `DESPACHO_BLOQUEADO_CREDITO` | El cliente estÃ¡ bloqueado por morosidad/polÃ­tica de crÃ©dito y no posee excepciÃ³n gerencial. | Deshabilitar botÃ³n de ediciÃ³n en Radar o solicitar excepciÃ³n a Gerencia. |
+| `ACCESO_DENEGADO` | El usuario no cuenta con el rol requerido (ej. gerente/admin) para ejecutar la acciÃ³n. | Mostrar mensaje de permisos insuficientes. |
 | `RUTA_INEXISTENTE` | La ruta ingresada no existe en el sistema. | Notificar al usuario que la ruta no fue encontrada. |
-| `STOCK_INSUFICIENTE` | Uno o más productos no disponen de stock en almacén. | Mostrar cuáles productos fallaron y sus cantidades. |
-| `EXCEPCION_TASA_NO_ENCONTRADA` | No existe tasa de cambio registrada para la fecha. | Redirigir o solicitar registro en el Módulo de Mantenimiento de Tasas. |
-| `FECHA_TASA_DUPLICADA` | Se intentó registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
-| `ESTADO_INVALIDO` | La orden no está en el estado requerido para la acción. | Bloquear el botón o refrescar la pantalla. |
-| `SQL_ERROR` | Error interno inesperado en PostgreSQL. | Mostrar error genérico de base de datos e informar al administrador. |
+| `STOCK_INSUFICIENTE` | Uno o mÃ¡s productos no disponen de stock en almacÃ©n. | Mostrar cuÃ¡les productos fallaron y sus cantidades. |
+| `EXCEPCION_TASA_NO_ENCONTRADA` | No existe tasa de cambio registrada para la fecha. | Redirigir o solicitar registro en el MÃ³dulo de Mantenimiento de Tasas. |
+| `FECHA_TASA_DUPLICADA` | Se intentÃ³ registrar una tasa para una fecha que ya existe. | Indicar que debe eliminar la fecha previa antes de modificar. |
+| `ESTADO_INVALIDO` | La orden no estÃ¡ en el estado requerido para la acciÃ³n. | Bloquear el botÃ³n o refrescar la pantalla. |
+| `SQL_ERROR` | Error interno inesperado en PostgreSQL. | Mostrar error genÃ©rico de base de datos e informar al administrador. |
 
 
 
@@ -1561,18 +1561,18 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 
 ### 1. retorna_saldo_contenedores_segun_clientes
 
-- **Descripción:** Consulta el saldo corriente de contenedores/envases prestados a clientes. Si p_cliente_id es NULL, devuelve la lista de clientes con saldo_pendiente > 0. Si se pasa p_cliente_id, retorna el saldo de ese cliente (o saldo 0 con sus datos si no posee registros previos).
-- **Parámetros:**
+- **DescripciÃ³n:** Consulta el saldo corriente de contenedores/envases prestados a clientes. Si p_cliente_id es NULL, devuelve la lista de clientes con saldo_pendiente > 0. Si se pasa p_cliente_id, retorna el saldo de ese cliente (o saldo 0 con sus datos si no posee registros previos).
+- **ParÃ¡metros:**
   - p_cliente_id (UUID, Opcional, por defecto NULL).
 
 ---
 
 ### 2. retorna_movimientos_contenedores_segun_cliente_id_rango_fechas
 
-- **Descripción:** Consulta el historial detallado de entregas y retiros de envases por cliente en un rango de fechas especificado, calculando el saldo acumulado anterior a la fecha inicial.
-- **Parámetros:**
+- **DescripciÃ³n:** Consulta el historial detallado de entregas y retiros de envases por cliente en un rango de fechas especificado, calculando el saldo acumulado anterior a la fecha inicial.
+- **ParÃ¡metros:**
   - p_cliente_id (UUID, Requerido).
-  - p_fecha_inicial (DATE, Opcional, por defecto hace 30 días).
+  - p_fecha_inicial (DATE, Opcional, por defecto hace 30 dÃ­as).
   - p_fecha_limite (DATE, Opcional, por defecto fecha actual).
 
 ---
@@ -1581,9 +1581,9 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 
 ### 1. `retorna_lista_productos_segun_parametros`
 
-- **Descripción:** Consulta el catálogo de productos por búsqueda de texto o `.F.`. Si se suministra `p_cliente_id`, calcula de forma dinámica los precios netos finales considerando los descuentos configurados en la tabla `descuentos_cliente_producto`.
+- **DescripciÃ³n:** Consulta el catÃ¡logo de productos por bÃºsqueda de texto o `.F.`. Si se suministra `p_cliente_id`, calcula de forma dinÃ¡mica los precios netos finales considerando los descuentos configurados en la tabla `descuentos_cliente_producto`.
 - **Firma SQL:** `retorna_lista_productos_segun_parametros(p_parametro TEXT, p_cliente_id UUID DEFAULT NULL)`
-- **Parámetros:**
+- **ParÃ¡metros:**
   - `p_parametro` (`TEXT`): Cadena de texto a buscar o `.F.` para retornar todos los productos.
   - `p_cliente_id` (`UUID`, Opcional, defecto `NULL`): ID del cliente para consultar y aplicar reglas de descuento.
 - **Campos Retornados:**
@@ -1601,7 +1601,7 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
   ```typescript
   import { listarProductosAction } from "@/lib/actions/productos";
 
-  // Obtenemos catálogo personalizado para un cliente específico
+  // Obtenemos catÃ¡logo personalizado para un cliente especÃ­fico
   const { ok, productos } = await listarProductosAction("", clienteId);
   ```
 
@@ -1610,17 +1610,17 @@ Cuando `success` sea `false`, el frontend puede leer `error.code` para disparar 
 ### 2. Comportamiento en `crear_orden_distribucion` con Descuentos de Cliente
 
 - Al ejecutar `crear_orden_distribucion`:
-  - Para cada ítem del `p_productos_json`, la RPC verifica si el cliente posee un descuento activo en `descuentos_cliente_producto`.
-  - Si existe un porcentaje de descuento o precio pactado, ajusta de manera automática el `valor_unitario_usd` y calcula los subtotales/totales netos de la orden.
+  - Para cada Ã­tem del `p_productos_json`, la RPC verifica si el cliente posee un descuento activo en `descuentos_cliente_producto`.
+  - Si existe un porcentaje de descuento o precio pactado, ajusta de manera automÃ¡tica el `valor_unitario_usd` y calcula los subtotales/totales netos de la orden.
   - Registra en `detalle_distribucion` los campos de trazabilidad: `precio_lista_usd`, `porcentaje_descuento`, `monto_descuento_usd` y `valor_unitario_usd`.
 
 ---
 
-### 3. Server Actions para Gestión de Descuentos (`src/lib/actions/descuentos.ts`)
+### 3. Server Actions para GestiÃ³n de Descuentos (`src/lib/actions/descuentos.ts`)
 
 Para interactuar con la tabla `descuentos_cliente_producto` desde los componentes de Next.js (ej. modal en la lista de clientes):
 
-- `obtenerDescuentosClienteAction(clienteId: string)`: Obtiene los descuentos del cliente con información del producto.
+- `obtenerDescuentosClienteAction(clienteId: string)`: Obtiene los descuentos del cliente con informaciÃ³n del producto.
 - `guardarDescuentoClienteAction(input: { cliente_id, producto_id, porcentaje_descuento, precio_pactado_usd })`: Guarda o actualiza la regla de descuento de un cliente.
 - `eliminarDescuentoClienteAction(id: string, clienteId: string)`: Elimina la regla de descuento.
 
@@ -1629,11 +1629,11 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
 ### 4. `retorna_radar_despachador` (Metadatos de Descuentos en Detalle)
 
 - **Firma SQL:** `retorna_radar_despachador()`
-- **Actualización:** En el array `detalles` de cada orden de distribución, se incluyen los siguientes campos adicionales de auditoría de descuento:
+- **ActualizaciÃ³n:** En el array `detalles` de cada orden de distribuciÃ³n, se incluyen los siguientes campos adicionales de auditorÃ­a de descuento:
   - `precio_lista_usd` (`NUMERIC`): Precio de lista base del producto en USD.
   - `porcentaje_descuento` (`NUMERIC`): Porcentaje de descuento % aplicado al producto.
-  - `monto_descuento_usd` (`NUMERIC`): Monto total descontado en USD en la línea.
-- **Estructura JSON de cada ítem en `detalles`:**
+  - `monto_descuento_usd` (`NUMERIC`): Monto total descontado en USD en la lÃ­nea.
+- **Estructura JSON de cada Ã­tem en `detalles`:**
   ```json
   {
     "detalle_id": "UUID_DETALLE",
@@ -1653,9 +1653,9 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
 
 ---
 
-### 2.17. Gestión Multi-Tenant (Base de Datos Central)
+### 2.17. GestiÃ³n Multi-Tenant (Base de Datos Central)
 
-Esta sección define las funciones para gestionar el aprovisionamiento central de tenants, es decir, el registro de nuevas bases de datos clónicas en el esquema de enrutamiento y la asignación de operadores.
+Esta secciÃ³n define las funciones para gestionar el aprovisionamiento central de tenants, es decir, el registro de nuevas bases de datos clÃ³nicas en el esquema de enrutamiento y la asignaciÃ³n de operadores.
 
 #### 2.17.1. Crear Nueva Empresa (`crea_nueva_empresa`)
 - **Firma SQL:** `crea_nueva_empresa(p_codigo_empresa VARCHAR, p_nombre_empresa VARCHAR, p_supabase_url TEXT, p_supabase_anon_key TEXT)`
@@ -1708,13 +1708,11 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
   ```
 
 ### 2.17. Crear Empresa y Gerente (Server Action: `submitCrearEmpresaAction`)
-- **Descripci�n:** Este m�todo no es un RPC directo desde el cliente, sino un Server Action que orquesta la creaci�n de la empresa en el enrutador central y simult�neamente crea al usuario "Gerente" en la base de datos de Auth, asign�ndole su rol.
-- **Ubicaci�n:** `src/lib/actions/empresas.ts`
+- **Descripción:** Este método no es un RPC directo desde el cliente, sino un Server Action que orquesta la creación de la empresa en el enrutador central y simultáneamente crea al usuario "Gerente" en la base de datos de Auth, asignándole su rol.
+- **Ubicación:** `src/lib/actions/empresas.ts`
 - **Campos del FormData requeridos:**
   - `codigoEmpresa` (string)
   - `nombreEmpresa` (string)
-  - `supabaseUrl` (string)
-  - `supabaseAnonKey` (string)
   - `gerenteEmail` (string)
   - `gerentePassword` (string)
 - **Uso en Frontend (Componente de Cliente):**
@@ -1726,7 +1724,7 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
   const response = await submitCrearEmpresaAction(formData);
 
   if (response.success) {
-    alert(response.data.mensaje); // Muestra: "�Empresa X y su Gerente creados exitosamente!"
+    alert(response.data.mensaje); // Muestra: "¡Empresa X y su Gerente creados exitosamente!"
   } else {
     alert("Error: " + response.error);
   }
@@ -1741,7 +1739,7 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
       "nombre_empresa": "Nombre Empresa",
       "gerente_id": "UUID_GERENTE_AUTH",
       "gerente_email": "gerente@ejemplo.com",
-      "mensaje": "�Empresa Nombre Empresa y su Gerente creados exitosamente!"
+      "mensaje": "¡Empresa Nombre Empresa y su Gerente creados exitosamente!"
     }
   }
   ```
