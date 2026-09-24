@@ -32,13 +32,6 @@ interface CrearEmpresaData {
   nombre_empresa: string;
 }
 
-interface AsignarUsuarioEmpresaData {
-  asignacion_id: string;
-  user_id: string;
-  empresa_id: string;
-  rol: string;
-}
-
 async function requireAdmin(): Promise<
   { ok: true } | { ok: false; error: string }
 > {
@@ -105,8 +98,8 @@ export type CrearEmpresaConGerenteInput = {
  * 1) Aprovisiona proyecto Supabase `lt_[codigo]` (Management API)
  *    — o usa URL/anon key si vienen en el input (flujo manual / agente BD)
  * 2) `crea_nueva_empresa` en BD Central
- * 3) `registra_nuevo_usuario` (gerente + perfil)
- * 4) `asignar_usuario_empresa`
+ * 3) Gerente con `registerUser` en modo tenant: cuenta en Central,
+ *    `usuarios_empresas` y perfil solo en el tenant
  */
 export async function crearEmpresaConGerenteAction(
   input: CrearEmpresaConGerenteInput & {
@@ -202,13 +195,35 @@ export async function crearEmpresaConGerenteAction(
 
   const empresaId = crearResponse.data.empresa_id;
 
-  const registerResult = await registerUser({
-    email,
-    password,
-    nombre_completo: nombreCompleto,
-    telefono,
-    rol_nombre: "gerente",
-  });
+  const projectRef = projectRefFromUrl(supabaseUrl);
+
+  if (urlManual) {
+    try {
+      await bootstrapTenant(projectRef);
+    } catch (err) {
+      revalidatePath("/admin");
+      return {
+        ok: false,
+        error: `Empresa creada, pero falló la preparación del tenant (usa "Sincronizar" en /admin): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        code: "TENANT_SYNC_FALLIDA",
+        empresaCreada: true,
+        empresaId,
+      };
+    }
+  }
+
+  const registerResult = await registerUser(
+    {
+      email,
+      password,
+      nombre_completo: nombreCompleto,
+      telefono,
+      rol_nombre: "gerente",
+    },
+    { tenant: { empresaId, projectRef } },
+  );
 
   if (!registerResult.ok) {
     revalidatePath("/admin");
@@ -216,57 +231,6 @@ export async function crearEmpresaConGerenteAction(
       ok: false,
       error: `Proyecto ${projectName} y empresa en catálogo OK, pero falló el gerente: ${registerResult.error}`,
       code: "GERENTE_NO_CREADO",
-      empresaCreada: true,
-      empresaId,
-    };
-  }
-
-  const { data: asignarData, error: asignarError } = await central.rpc(
-    "asignar_usuario_empresa",
-    {
-      p_user_id: registerResult.userId,
-      p_empresa_id: empresaId,
-      p_rol: "gerente",
-    },
-  );
-
-  if (asignarError) {
-    revalidatePath("/admin");
-    return {
-      ok: false,
-      error: `Empresa y gerente creados, pero falló la asignación: ${asignarError.message}`,
-      code: "ASIGNACION_FALLIDA",
-      empresaCreada: true,
-      empresaId,
-    };
-  }
-
-  const asignarResponse = asignarData as RPCResponse<AsignarUsuarioEmpresaData>;
-  if (!asignarResponse.success) {
-    revalidatePath("/admin");
-    return {
-      ok: false,
-      error: `Empresa y gerente creados, pero falló la asignación: ${asignarResponse.error?.message ?? "error desconocido"}`,
-      code: asignarResponse.error?.code ?? "ASIGNACION_FALLIDA",
-      empresaCreada: true,
-      empresaId,
-    };
-  }
-
-  try {
-    const projectRef = projectRefFromUrl(supabaseUrl);
-    if (urlManual) {
-      await bootstrapTenant(projectRef);
-    }
-    await mirrorCentralUserToTenant(projectRef, registerResult.userId);
-  } catch (err) {
-    revalidatePath("/admin");
-    return {
-      ok: false,
-      error: `Empresa y gerente creados, pero falló la preparación del tenant (usa "Sincronizar" en /admin): ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-      code: "TENANT_SYNC_FALLIDA",
       empresaCreada: true,
       empresaId,
     };
@@ -290,7 +254,8 @@ export async function crearEmpresaConGerenteAction(
 
 /**
  * Re-aplica la preparación del tenant (confianza JWT, catálogos, buckets) y
- * copia al tenant todos los usuarios asignados a la empresa en Central.
+ * copia al tenant los usuarios asignados a la empresa que aún no tengan perfil
+ * allí (rol de usuarios_empresas); borra sus perfiles sobrantes en Central.
  */
 export async function sincronizarEmpresaAction(
   empresaId: string,
@@ -310,7 +275,7 @@ export async function sincronizarEmpresaAction(
 
   const { data: asignaciones, error: asignacionesError } = await central
     .from("usuarios_empresas")
-    .select("user_id")
+    .select("user_id, rol")
     .eq("empresa_id", empresaId);
   if (asignacionesError) {
     return { ok: false, error: asignacionesError.message };
@@ -319,8 +284,8 @@ export async function sincronizarEmpresaAction(
   try {
     const projectRef = projectRefFromUrl(empresa.supabase_url);
     await bootstrapTenant(projectRef);
-    for (const { user_id } of asignaciones ?? []) {
-      await mirrorCentralUserToTenant(projectRef, user_id);
+    for (const { user_id, rol } of asignaciones ?? []) {
+      await mirrorCentralUserToTenant(projectRef, user_id, rol);
     }
   } catch (err) {
     return {

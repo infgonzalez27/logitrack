@@ -11,7 +11,6 @@
 import fs from "fs";
 import path from "path";
 import { createCentralAdminClient } from "@/lib/supabase/admin";
-import { joinOne } from "@/lib/supabase/join";
 import { managementFetch, runProjectSql } from "@/lib/tenants/management";
 
 function centralUrl(): string {
@@ -85,9 +84,15 @@ function sqlLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/**
+ * Crea/actualiza la cuenta espejo (sin contraseña) y el perfil en el tenant.
+ * `sobrescribirPerfil: false` solo crea el perfil si falta, para no pisar
+ * cambios de rol o nombre hechos dentro del tenant.
+ */
 export async function syncUserToTenant(
   projectRef: string,
   user: TenantUserMirror,
+  options: { sobrescribirPerfil?: boolean } = {},
 ): Promise<void> {
   const roles = (await runProjectSql(
     projectRef,
@@ -110,6 +115,15 @@ export async function syncUserToTenant(
     }),
   );
 
+  const onConflictPerfil =
+    options.sobrescribirPerfil === false
+      ? "ON CONFLICT (id) DO NOTHING"
+      : `ON CONFLICT (id) DO UPDATE SET
+  rol_id = EXCLUDED.rol_id,
+  nombre_completo = EXCLUDED.nombre_completo,
+  telefono = EXCLUDED.telefono,
+  activo = EXCLUDED.activo`;
+
   await runProjectSql(
     projectRef,
     `
@@ -123,45 +137,83 @@ WITH u AS (SELECT * FROM json_to_record(${payload}::json)
   AS x(id uuid, email text, rol_id uuid, nombre_completo text, telefono text, activo boolean))
 INSERT INTO public.perfiles_usuario (id, rol_id, nombre_completo, telefono, activo)
 SELECT id, rol_id, nombre_completo, telefono, activo FROM u
-ON CONFLICT (id) DO UPDATE SET
-  rol_id = EXCLUDED.rol_id,
-  nombre_completo = EXCLUDED.nombre_completo,
-  telefono = EXCLUDED.telefono,
-  activo = EXCLUDED.activo;
+${onConflictPerfil};
 `,
   );
 }
 
-/** Copia al tenant la cuenta (sin contraseña) y el perfil que el usuario tiene en Central. */
+type CentralAdminClient = ReturnType<typeof createCentralAdminClient>;
+
+/** Borra el perfil que el usuario tenga en Central si ningún dato de Central lo usa. */
+async function eliminarPerfilCentralHuerfano(
+  central: CentralAdminClient,
+  userId: string,
+): Promise<void> {
+  const referencias = await Promise.all([
+    central.from("choferes").select("perfil_id", { count: "exact", head: true }).eq("perfil_id", userId),
+    central
+      .from("clientes")
+      .select("id", { count: "exact", head: true })
+      .or(`vendedor_id.eq.${userId},despachador_id.eq.${userId}`),
+    central
+      .from("ordenes_distribucion")
+      .select("id", { count: "exact", head: true })
+      .or(`vendedor_id.eq.${userId},despachador_id.eq.${userId}`),
+    central.from("radars").select("id", { count: "exact", head: true }).eq("despachador_id", userId),
+  ]);
+  if (referencias.some((r) => r.error || (r.count ?? 0) > 0)) return;
+
+  await central.from("perfiles_usuario").delete().eq("id", userId);
+}
+
+/**
+ * Asegura que un usuario asignado a la empresa exista en el tenant.
+ * El rol sale de usuarios_empresas; el nombre, del perfil antiguo en Central
+ * (si existe) o de los metadatos de la cuenta. Luego limpia ese perfil antiguo.
+ */
 export async function mirrorCentralUserToTenant(
   projectRef: string,
   userId: string,
+  rolAsignado: string,
 ): Promise<void> {
   const central = createCentralAdminClient();
 
   const { data: authData, error: authError } =
     await central.auth.admin.getUserById(userId);
-  if (authError || !authData.user?.email) {
+  const authUser = authData?.user;
+  if (authError || !authUser?.email) {
     throw new Error(`No se encontró la cuenta ${userId} en la BD Central.`);
   }
 
-  const { data: perfil, error: perfilError } = await central
+  const { data: perfilCentral } = await central
     .from("perfiles_usuario")
-    .select("nombre_completo, telefono, activo, roles(nombre)")
+    .select("nombre_completo, telefono, activo")
     .eq("id", userId)
     .maybeSingle();
-  const rolNombre = joinOne(perfil?.roles)?.nombre;
-  if (perfilError || !perfil || !rolNombre) {
-    throw new Error(`El usuario ${authData.user.email} no tiene perfil con rol en Central.`);
-  }
 
-  await syncUserToTenant(projectRef, {
-    id: userId,
-    email: authData.user.email,
-    rol_nombre: rolNombre,
-    nombre_completo: perfil.nombre_completo,
-    telefono: perfil.telefono,
-    activo: perfil.activo,
-  });
+  const metadata = (authUser.user_metadata ?? {}) as {
+    nombre_completo?: string;
+    telefono?: string;
+  };
+
+  await syncUserToTenant(
+    projectRef,
+    {
+      id: userId,
+      email: authUser.email,
+      rol_nombre: rolAsignado,
+      nombre_completo:
+        perfilCentral?.nombre_completo ||
+        metadata.nombre_completo ||
+        authUser.email.split("@")[0],
+      telefono: perfilCentral?.telefono ?? metadata.telefono ?? "",
+      activo: perfilCentral?.activo ?? true,
+    },
+    { sobrescribirPerfil: false },
+  );
+
+  if (perfilCentral) {
+    await eliminarPerfilCentralHuerfano(central, userId);
+  }
 }
 

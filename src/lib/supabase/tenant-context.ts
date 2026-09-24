@@ -1,6 +1,8 @@
 import { cache } from "react";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createCentralClient, resolveUserEmpresa } from "@/lib/supabase/central";
 import { projectRefFromUrl } from "@/lib/tenants/management";
+import type { Empresa } from "@/types/database";
 
 export type CurrentTenant = {
   empresaId: string;
@@ -8,6 +10,13 @@ export type CurrentTenant = {
   url: string;
   anonKey: string;
 };
+
+function centralUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_CENTRAL_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL!
+  );
+}
 
 function sameSupabaseHost(a: string, b: string): boolean {
   try {
@@ -17,40 +26,50 @@ function sameSupabaseHost(a: string, b: string): boolean {
   }
 }
 
+/** null = la empresa no tiene proyecto propio y sus datos viven en Central. */
+export function tenantFromEmpresa(
+  empresa: Pick<Empresa, "id" | "activo" | "supabase_url" | "supabase_anon_key"> | null | undefined,
+): CurrentTenant | null {
+  if (
+    !empresa?.activo ||
+    !empresa.supabase_url ||
+    !empresa.supabase_anon_key ||
+    sameSupabaseHost(empresa.supabase_url, centralUrl())
+  ) {
+    return null;
+  }
+
+  return {
+    empresaId: empresa.id,
+    projectRef: projectRefFromUrl(empresa.supabase_url),
+    url: empresa.supabase_url,
+    anonKey: empresa.supabase_anon_key,
+  };
+}
+
 /**
  * Tenant lt_* del usuario en sesión según usuarios_empresas (BD Central).
  * null = el usuario trabaja sobre la BD Central (superadmin o sin empresa).
  */
 export const getTenantForCurrentUser = cache(
   async (): Promise<CurrentTenant | null> => {
-    const centralUrl =
-      process.env.NEXT_PUBLIC_CENTRAL_SUPABASE_URL ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL!;
-
     const central = await createCentralClient();
     const {
       data: { user },
     } = await central.auth.getUser();
     if (!user) return null;
 
-    const empresa = await resolveUserEmpresa(user.id);
-    if (
-      !empresa?.activo ||
-      !empresa.supabase_url ||
-      !empresa.supabase_anon_key ||
-      sameSupabaseHost(empresa.supabase_url, centralUrl)
-    ) {
-      return null;
-    }
-
-    return {
-      empresaId: empresa.id,
-      projectRef: projectRefFromUrl(empresa.supabase_url),
-      url: empresa.supabase_url,
-      anonKey: empresa.supabase_anon_key,
-    };
+    return tenantFromEmpresa(await resolveUserEmpresa(user.id));
   },
 );
+
+/** Cliente de datos del tenant autenticado con el JWT de Central (Third-Party Auth). */
+export function createTenantDataClient(
+  tenant: CurrentTenant,
+  accessToken: () => Promise<string | null>,
+) {
+  return createSupabaseClient(tenant.url, tenant.anonKey, { accessToken });
+}
 
 /**
  * Cliente cuyos datos (from/rpc/storage) van al tenant y cuyo `auth`

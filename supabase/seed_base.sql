@@ -42,22 +42,39 @@ INSERT INTO public.rutas (nombre_ruta, descripcion_ruta)
 SELECT 'Ruta01', ''
 WHERE NOT EXISTS (SELECT 1 FROM public.rutas WHERE nombre_ruta = 'Ruta01');
 
--- 1. Insertar contenedores base
+-- 1. Contenedor base (un solo registro)
 INSERT INTO public.tipos_contenedores (codigo, nombre, descripcion)
 VALUES 
-  ('huacal_plastico', 'Huacal Plástico', 'Cesta plástica estándar para botellas o productos varios'),
-  ('caja_carton_retornable', 'Caja de Cartón Retornable', 'Caja de cartón reforzado para transporte y retorno'),
-  ('pallet_madera', 'Pallet de Madera', 'Plataforma de madera para transporte de carga pesada')
+  ('C0136', 'VACÍO', 'VACÍO DE 36 BOTELLAS')
 ON CONFLICT (codigo) DO NOTHING;
 
--- 2. Cargar los productos usando el contenedor por defecto
+-- Tenants creados con el seed anterior: pasar todo a C0136 y borrar los
+-- contenedores viejos que no tengan movimientos ni saldos (FK RESTRICT).
+DO $$
+DECLARE
+    v_c0136 UUID;
+    v_viejos UUID[];
+BEGIN
+    SELECT id INTO v_c0136 FROM public.tipos_contenedores WHERE codigo = 'C0136';
+    SELECT array_agg(id) INTO v_viejos FROM public.tipos_contenedores
+    WHERE codigo IN ('huacal_plastico', 'caja_carton_retornable', 'pallet_madera');
+
+    IF v_viejos IS NOT NULL THEN
+        UPDATE public.productos SET contenedor_id = v_c0136 WHERE contenedor_id = ANY (v_viejos);
+        UPDATE public.detalle_distribucion SET contenedor_id = v_c0136 WHERE contenedor_id = ANY (v_viejos);
+        DELETE FROM public.tipos_contenedores tc
+        WHERE tc.id = ANY (v_viejos)
+          AND NOT EXISTS (SELECT 1 FROM public.movimientos_contenedores m WHERE m.contenedor_id = tc.id)
+          AND NOT EXISTS (SELECT 1 FROM public.saldo_contenedores_clientes s WHERE s.contenedor_id = tc.id);
+    END IF;
+END $$;
+
+-- 2. Cargar los productos usando el contenedor C0136
 DO $$
 DECLARE
     v_contenedor_id UUID;
 BEGIN
-    -- Obtener el ID del contenedor "huacal_plastico" (o el primero que encuentre)
-    SELECT id INTO v_contenedor_id FROM public.tipos_contenedores
-    ORDER BY (codigo = 'huacal_plastico') DESC, created_at ASC LIMIT 1;
+    SELECT id INTO v_contenedor_id FROM public.tipos_contenedores WHERE codigo = 'C0136';
 
     INSERT INTO public.productos (codigo_producto, nombre, unidad_medida, peso_unitario_kg, cant_unidad_medida, contenedor_id)
     VALUES ('1045', 'REG. PILSEN 222ML BOT RT/ETQ-TF', 'UNID', 0.00, 1, v_contenedor_id) ON CONFLICT (codigo_producto) DO NOTHING;

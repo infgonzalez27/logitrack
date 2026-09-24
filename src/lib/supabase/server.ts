@@ -1,6 +1,6 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createCentralClient } from "@/lib/supabase/central";
 import {
+  createTenantDataClient,
   getTenantForCurrentUser,
   withCentralAuth,
 } from "@/lib/supabase/tenant-context";
@@ -16,11 +16,9 @@ export async function createClient() {
   const tenant = await getTenantForCurrentUser();
   if (!tenant) return central;
 
-  const data = createSupabaseClient(tenant.url, tenant.anonKey, {
-    accessToken: async () => {
-      const { data: sessionData } = await central.auth.getSession();
-      return sessionData.session?.access_token ?? null;
-    },
+  const data = createTenantDataClient(tenant, async () => {
+    const { data: sessionData } = await central.auth.getSession();
+    return sessionData.session?.access_token ?? null;
   });
 
   return withCentralAuth(data, central.auth) as unknown as typeof central;

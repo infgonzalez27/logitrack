@@ -1443,14 +1443,21 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
 - **Datos:** `createClient()` y `createAdminClient()` envían `from`/`rpc`/`storage` al tenant; `auth` sigue en Central. El tenant acepta el JWT de Central vía **Third-Party Auth** (`oidc_issuer_url = https://<central>.supabase.co/auth/v1`), así que `auth.uid()` y el RLS del esquema funcionan igual.
 - **Preparación del tenant** (`src/lib/tenants/bootstrap.ts`, se ejecuta al aprovisionar y con el botón «Sincronizar» en `/admin`):
   1. Third-Party Auth apuntando a Central.
-  2. `supabase/seed_base.sql` (agente BD): roles (admin, gerente, despachador, vendedor), `fpagos` (incluye «Saldo a favor», que las RPC de rendición buscan por concepto), camión `CAM-001`, ruta `Ruta01`, contenedores y catálogo de productos. Debe ser idempotente (`ON CONFLICT` / `WHERE NOT EXISTS`) porque «Sincronizar» lo re-ejecuta.
+  2. `supabase/seed_base.sql` (agente BD): roles (admin, gerente, despachador, vendedor), `fpagos` (incluye «Saldo a favor», que las RPC de rendición buscan por concepto), camión `CAM-001`, ruta `Ruta01`, un solo contenedor `C0136` («VACÍO DE 36 BOTELLAS») y catálogo de productos. Debe ser idempotente (`ON CONFLICT` / `WHERE NOT EXISTS`) porque «Sincronizar» lo re-ejecuta. En tenants creados con el seed anterior pasa productos y detalles a `C0136` y borra `huacal_plastico` / `caja_carton_retornable` / `pallet_madera` si no tienen movimientos ni saldos.
   3. `supabase/tenant_bootstrap.sql`: buckets `productos`, `usuarios`, `rendiciones-captures` y sus políticas.
-  4. Espejo de usuarios: fila en `auth.users` del tenant (sin contraseña, solo para las FK) + `perfiles_usuario` con el mismo UUID que en Central. El rol se busca **por nombre** en el tenant (los UUID de `roles` no coinciden con Central).
-- **Alta de usuarios de una empresa:** `registra_nuevo_usuario` se ejecuta en Central; luego `asignar_usuario_empresa` y el espejo en el tenant.
+  4. Usuarios asignados sin perfil en el tenant: fila en `auth.users` del tenant (sin contraseña, solo para las FK) + `perfiles_usuario` con el mismo UUID que en Central y el rol de `usuarios_empresas.rol`. El rol se busca **por nombre** (los UUID de `roles` no coinciden con Central). Si el perfil ya existe no se toca. Si el usuario tenía perfil en Central y ningún dato de Central lo referencia, se borra.
+- **Alta de usuarios de una empresa (`registerUser` en `src/lib/auth/register-user.ts`, 3 fases):**
+  1. Central Auth: `auth.admin.createUser` (email confirmado, `user_metadata.nombre_completo`/`telefono`). El trigger `trigger_crear_perfil_nuevo` de Central crea un perfil «chofer»; el servidor lo borra de inmediato.
+  2. Central enrutamiento: `asignar_usuario_empresa` (empresa del usuario que registra, o la nueva empresa en el alta del gerente).
+  3. Tenant: `auth.users` + `perfiles_usuario` con el mismo UUID y el rol elegido.
+  Si falla una fase se borra la cuenta de Central (cascade a `usuarios_empresas`). `registra_nuevo_usuario` queda solo para usuarios de plataforma sin empresa.
+  - *Sugerencia agente BD:* que `crear_perfil_usuario_nuevo` no cree perfil cuando la cuenta es de un tenant (p. ej. `raw_app_meta_data->>'tenant'`), para no depender del borrado.
+- **Login:** `/api/auth/login` resuelve el tenant tras iniciar sesión y lee el rol en `perfiles_usuario` del tenant (ya no hay perfil en Central).
+- **No se guarda `service_role_key` en `empresas` (Paso 1 de la propuesta del 24-09 descartado):** la política RLS «Allow users to read assigned empresa details» deja leer todas las columnas de su empresa a cualquier usuario asignado, así que un vendedor podría obtener la llave maestra de su tenant. El servidor obtiene la service key con la Management API (`/v1/projects/{ref}/api-keys?reveal=true`, en memoria) y escribe en el tenant por `/database/query`.
 - **No usar cookies `lt_tenant_url` / `lt_tenant_key` en el navegador:** el cliente del navegador solo se usa para cambiar la contraseña y debe apuntar a Central.
 
 #### 2.43.3. Crear Empresa y Gerente (Server Action: `submitCrearEmpresaAction`)
-- **Descripción:** Orquesta aprovisionamiento `lt_*` (si no hay URL/key), `crea_nueva_empresa`, `registra_nuevo_usuario` (rol gerente) y `asignar_usuario_empresa`.
+- **Descripción:** Orquesta aprovisionamiento `lt_*` (si no hay URL/key), `crea_nueva_empresa` y el alta del gerente con `registerUser` en modo tenant (ver 2.43.4: cuenta en Central, `usuarios_empresas`, perfil solo en el tenant).
 - **Ubicación:** `src/lib/actions/empresas.ts`
 - **Campos FormData:**
   - `codigoEmpresa` (string) — sin prefijo `lt_`

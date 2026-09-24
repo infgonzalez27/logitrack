@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { joinOne } from "@/lib/supabase/join";
+import {
+  createTenantDataClient,
+  tenantFromEmpresa,
+} from "@/lib/supabase/tenant-context";
 import { serializeErrorForLog } from "@/lib/debug";
 import { mapAuthTokenError } from "@/lib/errors";
 
@@ -95,7 +100,18 @@ export async function POST(request: Request) {
     let redirectTo = "/";
     const userId = data.user?.id;
     if (userId) {
-      const { data: profile } = await supabase
+      const { data: asignacion } = await supabase
+        .from("usuarios_empresas")
+        .select("empresas(id, activo, supabase_url, supabase_anon_key)")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+      const tenant = tenantFromEmpresa(joinOne(asignacion?.empresas));
+      const dataClient = tenant
+        ? createTenantDataClient(tenant, async () => tokenJson.access_token ?? null)
+        : supabase;
+
+      const { data: profile } = await dataClient
         .from("perfiles_usuario")
         .select("roles(nombre)")
         .eq("id", userId)
