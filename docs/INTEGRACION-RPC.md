@@ -1761,3 +1761,8 @@ Se modificó el archivo `src/lib/supabase/middleware.ts` para que, al iniciar ses
 ## [2026-09-24] Inyección de Datos Semilla Automatizada
 Se creó un nuevo archivo maestro en `supabase/seed_base.sql` que contiene los datos base unificados (roles depurados, formas de pago, camión base, ruta base y el catálogo completo de 66 productos).
 **Acción Requerida (Frontend):** Al momento de aprovisionar un nuevo Tenant, justo después de ejecutar satisfactoriamente la inyección del esquema (`schema_base.sql`) vía la Management API, debes agregar la lógica para leer y ejecutar también el contenido de `supabase/seed_base.sql` contra esa misma base de datos recién creada. Así, cada nueva empresa nacerá con su estructura y sus datos operacionales listos desde el primer segundo.
+
+
+## [2026-09-24] Nombre de Empresa en Cookies
+Se actualizó `src/lib/supabase/middleware.ts` para que, junto a las credenciales, también consulte el campo `nombre_empresa` desde la base de datos central al momento del login. Este nombre ahora se inyecta directamente al navegador del usuario a través de la cookie `lt_tenant_name`. 
+**Acción Requerida (Frontend):** Si necesitas mostrar el nombre de la empresa en la que está logueado el usuario (por ejemplo, en el Navbar o el Sidebar), ahora puedes simplemente leer el valor de la cookie `lt_tenant_name` de manera estática desde el cliente, sin necesidad de hacer fetch o consultas adicionales a la BD Central.

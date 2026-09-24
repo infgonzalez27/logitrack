@@ -69,7 +69,7 @@ export async function updateSession(request: NextRequest) {
     if (!tenantUrl || !tenantKey) {
       const { data } = await supabase
         .from("usuarios_empresas")
-        .select("empresas(supabase_url, supabase_anon_key)")
+        .select("empresas(supabase_url, supabase_anon_key, nombre_empresa)")
         .eq("user_id", user.id)
         .single();
         
@@ -78,10 +78,15 @@ export async function updateSession(request: NextRequest) {
         tenantUrl = data.empresas.supabase_url;
         // @ts-ignore
         tenantKey = data.empresas.supabase_anon_key;
+        // @ts-ignore
+        const tenantName = data.empresas.nombre_empresa;
         
         if (tenantUrl && tenantKey) {
           supabaseResponse.cookies.set("lt_tenant_url", tenantUrl, { path: "/" });
           supabaseResponse.cookies.set("lt_tenant_key", tenantKey, { path: "/" });
+          if (tenantName) {
+            supabaseResponse.cookies.set("lt_tenant_name", tenantName, { path: "/" });
+          }
         }
       }
     }
