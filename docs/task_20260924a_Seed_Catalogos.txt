@@ -1,0 +1,15 @@
+### Seed Catalogos
+## Tabla public.roles
+# Eliminar Chofer [HECHO - Eliminado del script semilla]
+# Eliminar cobrador [HECHO - Eliminado del script semilla]
+## Tabla public.camiones
+# Solo un registro 'CAM-001' [HECHO - Script modificado para incluir solo CAM-001]
+## Tabla public.rutas
+# un solo registro 'Ruta01','' [HECHO - Script modificado para incluir solo Ruta01]
+
+---
+**Actualización por Antigravity (24-09-2026):**
+Las instrucciones fueron analizadas y el archivo `seed_catalogos.sql` ha sido regenerado.
+- Se removieron los roles de `chofer` y `cobrador`, dejando únicamente `admin`, `gerente`, `despachador` y `vendedor`.
+- En camiones, se eliminaron el 2 y 3, dejando exclusivamente la placa `CAM-001`.
+- En rutas, se eliminaron los puntos cardinales y se dejó únicamente el registro `Ruta01` con descripción vacía.
