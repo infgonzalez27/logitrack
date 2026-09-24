@@ -1443,7 +1443,7 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
 - **Datos:** `createClient()` y `createAdminClient()` envían `from`/`rpc`/`storage` al tenant; `auth` sigue en Central. El tenant acepta el JWT de Central vía **Third-Party Auth** (`oidc_issuer_url = https://<central>.supabase.co/auth/v1`), así que `auth.uid()` y el RLS del esquema funcionan igual.
 - **Preparación del tenant** (`src/lib/tenants/bootstrap.ts`, se ejecuta al aprovisionar y con el botón «Sincronizar» en `/admin`):
   1. Third-Party Auth apuntando a Central.
-  2. `supabase/tenant_bootstrap.sql`: `roles`, `fpagos`, `tipos_contenedores` (mismos UUID que Central), buckets `productos`, `usuarios`, `rendiciones-captures` y sus políticas.
+  2. `supabase/tenant_bootstrap.sql`: `roles` (admin, gerente, vendedor, despachador), `fpagos`, `tipos_contenedores` (mismos UUID que Central), camión `CAM-001`, ruta `Ruta01`, buckets `productos`, `usuarios`, `rendiciones-captures` y sus políticas.
   3. Espejo de usuarios: fila en `auth.users` del tenant (sin contraseña, solo para las FK) + `perfiles_usuario` con el mismo UUID y `rol_id` que en Central.
 - **Alta de usuarios de una empresa:** `registra_nuevo_usuario` se ejecuta en Central; luego `asignar_usuario_empresa` y el espejo en el tenant.
 - **No usar cookies `lt_tenant_url` / `lt_tenant_key` en el navegador:** el cliente del navegador solo se usa para cambiar la contraseña y debe apuntar a Central.

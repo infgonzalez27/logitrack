@@ -1,4 +1,5 @@
 -- Datos base de un tenant lt_* (idempotente). Se aplica después de schema_base.sql.
+-- Catálogos según docs/task_20260924a_Seed_Catalogos.txt (sin roles chofer/cobrador).
 -- Los IDs de catálogos coinciden con la BD Central: rol_id de perfiles_usuario
 -- se copia tal cual al espejar usuarios.
 
@@ -6,9 +7,16 @@ INSERT INTO public.roles (id, nombre, descripcion) VALUES
   ('46d3145e-e1e0-45b6-a120-84299f0ac9c6', 'admin', 'Administrador con acceso total al sistema'),
   ('fd75454e-ebe0-4c92-bdaa-1f80d3242e0f', 'gerente', 'Acceso a reportes, estadísticas y auditorías'),
   ('44d1e9a8-0d96-4151-8e99-5c82ab0c8748', 'vendedor', 'Encargado de tomar pedidos de los clientes y crear órdenes de distribución'),
-  ('be60dbec-a4e0-4d8a-ae9b-4cd50ff12d10', 'despachador', 'personal logístico en ruta que entrega mercancía'),
-  ('aa926777-add1-4d03-98ff-b783816d5304', 'cobrador', 'Encargado de rendición de cuentas por órdenes de distribución')
+  ('be60dbec-a4e0-4d8a-ae9b-4cd50ff12d10', 'despachador', 'personal logístico en ruta que entrega mercancía')
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.camiones (placa, modelo, capacidad_kg) VALUES
+  ('CAM-001', 'Sin especificar', 0)
+ON CONFLICT (placa) DO NOTHING;
+
+INSERT INTO public.rutas (id_ruta, nombre_ruta, descripcion_ruta) VALUES
+  ('00000000-0000-4000-8000-000000000001', 'Ruta01', '')
+ON CONFLICT (id_ruta) DO NOTHING;
 
 INSERT INTO public.fpagos (fpago_id, fpago_concepto, fpago_info, es_bancario) VALUES
   ('3c7da6ea-69de-4002-aa2e-9a55437d033d', 'Efectivo Bs', false, false),
