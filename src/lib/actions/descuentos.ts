@@ -84,7 +84,7 @@ export async function guardarDescuentoClienteAction(input: {
     return { ok: false, error: "El porcentaje debe estar entre 0% y 100%." };
   }
 
-  const admin = createAdminClient();
+  const admin = await createAdminClient();
   const { data, error } = await admin
     .from("descuentos_cliente_producto")
     .upsert(
@@ -118,7 +118,7 @@ export async function eliminarDescuentoClienteAction(
     return { ok: false, error: "ID de descuento no proporcionado." };
   }
 
-  const admin = createAdminClient();
+  const admin = await createAdminClient();
   const { error } = await admin
     .from("descuentos_cliente_producto")
     .delete()

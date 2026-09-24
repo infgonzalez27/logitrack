@@ -6,6 +6,11 @@ import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { registerUser } from "@/lib/auth/register-user";
 import { createCentralAdminClient } from "@/lib/supabase/admin";
 import {
+  bootstrapTenant,
+  mirrorCentralUserToTenant,
+} from "@/lib/tenants/bootstrap";
+import { projectRefFromUrl } from "@/lib/tenants/management";
+import {
   provisionTenantProject,
   tenantProjectName,
 } from "@/lib/tenants/provision";
@@ -248,6 +253,25 @@ export async function crearEmpresaConGerenteAction(
     };
   }
 
+  try {
+    const projectRef = projectRefFromUrl(supabaseUrl);
+    if (urlManual) {
+      await bootstrapTenant(projectRef);
+    }
+    await mirrorCentralUserToTenant(projectRef, registerResult.userId);
+  } catch (err) {
+    revalidatePath("/admin");
+    return {
+      ok: false,
+      error: `Empresa y gerente creados, pero falló la preparación del tenant (usa "Sincronizar" en /admin): ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      code: "TENANT_SYNC_FALLIDA",
+      empresaCreada: true,
+      empresaId,
+    };
+  }
+
   revalidatePath("/admin");
 
   const mensaje = `¡Empresa ${nombreEmpresa} y su Gerente creados exitosamente!`;
@@ -262,6 +286,51 @@ export async function crearEmpresaConGerenteAction(
     gerenteEmail: email,
     mensaje,
   };
+}
+
+/**
+ * Re-aplica la preparación del tenant (confianza JWT, catálogos, buckets) y
+ * copia al tenant todos los usuarios asignados a la empresa en Central.
+ */
+export async function sincronizarEmpresaAction(
+  empresaId: string,
+): Promise<{ ok: true; usuarios: number } | { ok: false; error: string }> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+
+  const central = createCentralAdminClient();
+  const { data: empresa, error: empresaError } = await central
+    .from("empresas")
+    .select("id, supabase_url")
+    .eq("id", empresaId)
+    .maybeSingle();
+  if (empresaError || !empresa?.supabase_url) {
+    return { ok: false, error: "Empresa no encontrada o sin proyecto asignado." };
+  }
+
+  const { data: asignaciones, error: asignacionesError } = await central
+    .from("usuarios_empresas")
+    .select("user_id")
+    .eq("empresa_id", empresaId);
+  if (asignacionesError) {
+    return { ok: false, error: asignacionesError.message };
+  }
+
+  try {
+    const projectRef = projectRefFromUrl(empresa.supabase_url);
+    await bootstrapTenant(projectRef);
+    for (const { user_id } of asignaciones ?? []) {
+      await mirrorCentralUserToTenant(projectRef, user_id);
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "No se pudo sincronizar el tenant.",
+    };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true, usuarios: asignaciones?.length ?? 0 };
 }
 
 /**

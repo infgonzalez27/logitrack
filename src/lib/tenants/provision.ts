@@ -2,7 +2,8 @@
  * Aprovisionamiento de tenant lt_* (panel Superadmin):
  * 1) Crea proyecto Supabase vía Management API
  * 2) Inyecta supabase/schema_base.sql en la DB nueva
- * 3) Devuelve URL + anon key para el catálogo Central
+ * 3) bootstrapTenant: confianza en JWT de Central + catálogos/buckets
+ * 4) Devuelve URL + anon key para el catálogo Central
  *
  * Env:
  * - SUPABASE_ACCESS_TOKEN
@@ -12,6 +13,12 @@
 
 import fs from "fs";
 import path from "path";
+import { bootstrapTenant } from "@/lib/tenants/bootstrap";
+import {
+  getProjectApiKeys,
+  managementFetch,
+  runProjectSql,
+} from "@/lib/tenants/management";
 
 export type ProvisionTenantResult = {
   projectRef: string;
@@ -31,27 +38,6 @@ function normalizeCodigo(codigo: string): string {
 
 export function tenantProjectName(codigo: string): string {
   return `lt_${normalizeCodigo(codigo)}`;
-}
-
-async function managementFetch(
-  pathName: string,
-  init?: RequestInit,
-): Promise<Response> {
-  const token = process.env.SUPABASE_ACCESS_TOKEN;
-  if (!token) {
-    throw new Error(
-      "Falta SUPABASE_ACCESS_TOKEN. El aprovisionamiento de tenants lo configura el admin/Cursor (Management API).",
-    );
-  }
-
-  return fetch(`https://api.supabase.com/v1${pathName}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
 }
 
 async function waitUntilActive(projectRef: string, attempts = 40): Promise<void> {
@@ -84,16 +70,11 @@ export async function applySchemaBase(projectRef: string): Promise<void> {
     );
   }
 
-  const query = fs.readFileSync(sqlScriptPath, "utf8");
-  const res = await managementFetch(`/projects/${projectRef}/database/query`, {
-    method: "POST",
-    body: JSON.stringify({ query }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
+  try {
+    await runProjectSql(projectRef, fs.readFileSync(sqlScriptPath, "utf8"));
+  } catch (err) {
     throw new Error(
-      `Error clonando tablas en ${projectRef}: ${res.status} ${text}`,
+      `Error clonando tablas en ${projectRef}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -146,17 +127,7 @@ export async function provisionTenantProject(
 
   await waitUntilActive(projectRef);
 
-  const keysRes = await managementFetch(`/projects/${projectRef}/api-keys`);
-  if (!keysRes.ok) {
-    throw new Error(
-      `Proyecto ${projectName} creado, pero no se pudieron leer las API keys.`,
-    );
-  }
-
-  const keys = (await keysRes.json()) as Array<{
-    name?: string;
-    api_key?: string;
-  }>;
+  const keys = await getProjectApiKeys(projectRef);
   const anon =
     keys.find((k) => k.name === "anon")?.api_key ||
     keys.find((k) => (k.name ?? "").includes("anon"))?.api_key;
@@ -168,6 +139,7 @@ export async function provisionTenantProject(
   }
 
   await applySchemaBase(projectRef);
+  await bootstrapTenant(projectRef);
 
   return {
     projectRef,

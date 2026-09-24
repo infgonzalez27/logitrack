@@ -54,7 +54,7 @@ async function cargarStockPorProducto(
 ): Promise<Map<string, number>> {
   if (!ids.length) return new Map();
 
-  const { data } = await createAdminClient()
+  const { data } = await (await createAdminClient())
     .from("inventario_almacen")
     .select("producto_id, stock_disponible")
     .in("producto_id", ids);
@@ -76,7 +76,7 @@ async function buscarProductosEnTabla(
   }
 
   const pattern = `%${q}%`;
-  const { data: rows, error } = await createAdminClient()
+  const { data: rows, error } = await (await createAdminClient())
     .from("productos")
     .select(
       "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor, imagen_path",
@@ -133,7 +133,7 @@ async function enriquecerProductosLista(
     return { ok: true, productos: [] };
   }
 
-  const { data, error } = await createAdminClient()
+  const { data, error } = await (await createAdminClient())
     .from("productos")
     .select(
       "id, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor, imagen_path",
@@ -232,7 +232,7 @@ export async function obtenerProductoParaEditarAction(
     return { ok: false, error: "ID de producto inválido." };
   }
 
-  const admin = createAdminClient();
+  const admin = await createAdminClient();
   const { data, error } = await admin
     .from("productos")
     .select(

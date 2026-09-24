@@ -11,7 +11,7 @@ export async function POST() {
   }
 
   try {
-    const admin = createAdminClient();
+    const admin = await createAdminClient();
     const result = await seedDemoDashboard(admin);
 
     if (!result.ok) {

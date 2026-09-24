@@ -47,7 +47,7 @@ export async function listarUsuariosAction(params?: {
     return { ok: true, usuarios: [] };
   }
 
-  const { data: perfiles, error: perfilesError } = await createAdminClient()
+  const { data: perfiles, error: perfilesError } = await (await createAdminClient())
     .from("perfiles_usuario")
     .select("id, roles(nombre)")
     .in("id", ids);
@@ -84,7 +84,7 @@ export async function listarChoferesParaOrdenAction(): Promise<
     return usuariosResult;
   }
 
-  const { data, error } = await createAdminClient()
+  const { data, error } = await (await createAdminClient())
     .from("choferes")
     .select("perfil_id")
     .neq("estado", "suspendido");
@@ -119,7 +119,7 @@ export async function obtenerPerfilUsuarioAction(
     return { ok: false, error: "ID de perfil inválido." };
   }
 
-  const supabase = createAdminClient();
+  const supabase = await createAdminClient();
   const { data, error } = await supabase
     .from("perfiles_usuario")
     .select("id, nombre_completo, telefono, activo, rol_id, roles(nombre)")
@@ -257,7 +257,7 @@ export async function cambiarContrasenaUsuarioAction(input: {
     };
   }
 
-  const admin = createAdminClient();
+  const admin = await createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(userId, {
     password: input.password,
   });
@@ -282,7 +282,7 @@ export async function solicitarRecuperacionClaveAction(
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
     "http://localhost:3000";
 
-  const admin = createAdminClient();
+  const admin = await createAdminClient();
   const { error } = await admin.auth.resetPasswordForEmail(correo, {
     redirectTo: `${siteUrl}/actualizar-clave`,
   });

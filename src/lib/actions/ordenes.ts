@@ -512,7 +512,7 @@ export async function listarTiposContenedoresAction(): Promise<
       };
     }
 
-    const { data, error } = await createAdminClient()
+    const { data, error } = await (await createAdminClient())
       .from("tipos_contenedores")
       .select("id, codigo, nombre")
       .order("nombre");

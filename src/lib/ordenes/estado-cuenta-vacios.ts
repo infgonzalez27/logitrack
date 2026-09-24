@@ -96,7 +96,7 @@ function agregarEntregadosPorContenedor(
 
 async function dbClient(): Promise<SupabaseClient> {
   try {
-    return createAdminClient();
+    return await createAdminClient();
   } catch {
     return createClient();
   }

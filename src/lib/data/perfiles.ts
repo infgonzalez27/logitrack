@@ -8,7 +8,7 @@ export async function getNombresPerfilByIds(
   if (!unique.length) return {};
 
   try {
-    const { data } = await createAdminClient()
+    const { data } = await (await createAdminClient())
       .from("perfiles_usuario")
       .select("id, nombre_completo")
       .in("id", unique);

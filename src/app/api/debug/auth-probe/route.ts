@@ -105,7 +105,7 @@ export async function GET(request: Request) {
 
   // 4. Admin listUsers (service role)
   try {
-    const admin = createAdminClient();
+    const admin = await createAdminClient();
     const { data, error } = await admin.auth.admin.listUsers({
       page: 1,
       perPage: 1,

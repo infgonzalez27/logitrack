@@ -10,7 +10,7 @@ export async function GET() {
   }
 
   try {
-    const admin = createAdminClient();
+    const admin = await createAdminClient();
     const { data, error } = await admin
       .from("roles")
       .select("id, nombre, descripcion, created_at")

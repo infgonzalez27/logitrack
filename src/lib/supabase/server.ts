@@ -1,11 +1,27 @@
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createCentralClient } from "@/lib/supabase/central";
+import {
+  getTenantForCurrentUser,
+  withCentralAuth,
+} from "@/lib/supabase/tenant-context";
 
 /**
  * Cliente Supabase para Server Components / Server Actions.
- * Auth y sesion viven en la BD Central (NEXT_PUBLIC_* / CENTRAL_*).
- * No enruta al tenant lt_* aqui: un JWT de Central no es valido en otro
- * proyecto Supabase y provoca ERR_TOO_MANY_REDIRECTS.
+ * Auth y sesión viven en la BD Central. Si el usuario pertenece a una empresa
+ * lt_* (usuarios_empresas), los datos van a ese proyecto con el JWT de Central,
+ * que el tenant acepta vía Third-Party Auth (ver lib/tenants/bootstrap.ts).
  */
 export async function createClient() {
-  return createCentralClient();
+  const central = await createCentralClient();
+  const tenant = await getTenantForCurrentUser();
+  if (!tenant) return central;
+
+  const data = createSupabaseClient(tenant.url, tenant.anonKey, {
+    accessToken: async () => {
+      const { data: sessionData } = await central.auth.getSession();
+      return sessionData.session?.access_token ?? null;
+    },
+  });
+
+  return withCentralAuth(data, central.auth) as unknown as typeof central;
 }

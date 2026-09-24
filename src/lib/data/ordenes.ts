@@ -112,7 +112,7 @@ async function listarOrdenesLegacy(opts: {
   }
 
   // Sin join a choferes: la FK se eliminó y PostgREST falla si el embed sigue activo.
-  let adminQuery = createAdminClient()
+  let adminQuery = (await createAdminClient())
     .from("ordenes_distribucion")
     .select(listaSelect)
     .order("correlativo", { ascending: false });
@@ -184,7 +184,7 @@ export async function getOrdenDistribucionDetalle(
     return puedeVerOrdenDetalle(orden, opts.userId, opts.rol) ? orden : null;
   }
 
-  const { data: adminData, error: adminError } = await createAdminClient()
+  const { data: adminData, error: adminError } = await (await createAdminClient())
     .from("ordenes_distribucion")
     .select(ORDEN_DETALLE_SELECT)
     .eq("id", ordenId)

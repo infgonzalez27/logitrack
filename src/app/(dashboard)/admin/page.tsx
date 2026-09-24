@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
+import { SincronizarEmpresaButton } from "./sincronizar-empresa-button";
 
 function truncateUrl(url: string, max = 42): string {
   if (url.length <= max) return url;
@@ -69,6 +70,7 @@ export default async function AdminPage() {
             { key: "nombre", label: "Nombre" },
             { key: "url", label: "Supabase URL" },
             { key: "activo", label: "Estado" },
+            { key: "tenant", label: "Tenant" },
           ]}
           rows={empresas.map((e) => ({
             id: e.id,
@@ -86,6 +88,7 @@ export default async function AdminPage() {
                 </span>
               ),
               activo: e.activo ? "Activa" : "Inactiva",
+              tenant: <SincronizarEmpresaButton empresaId={e.id} />,
             },
           }))}
           emptyMessage="No hay empresas registradas. Crea la primera con «Nueva empresa»."
@@ -93,9 +96,9 @@ export default async function AdminPage() {
       </Card>
 
       <p className="text-sm text-lt-text-muted">
-        Tras el alta, completar el clon de esquema según{" "}
-        <code className="text-xs">docs/procedimiento_duplicacion_tenant.md</code>
-        . Formulario:{" "}
+        El alta clona el esquema, prepara el tenant y copia al gerente.
+        «Sincronizar» repite la preparación y copia a todos los usuarios de la
+        empresa (útil para empresas creadas antes de este flujo). Formulario:{" "}
         <Link
           href="/admin/nuevo"
           className="font-medium text-lt-primary hover:underline"

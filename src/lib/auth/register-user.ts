@@ -1,4 +1,6 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createCentralAdminClient } from "@/lib/supabase/admin";
+import { getTenantForCurrentUser } from "@/lib/supabase/tenant-context";
+import { mirrorCentralUserToTenant } from "@/lib/tenants/bootstrap";
 import { serializeErrorForLog } from "@/lib/debug";
 import { toDisplayError } from "@/lib/errors";
 
@@ -40,7 +42,7 @@ export async function registerUser(
   }
 
   try {
-    const supabaseAdmin = createAdminClient();
+    const supabaseAdmin = createCentralAdminClient();
 
     const { data, error } = await supabaseAdmin.rpc("registra_nuevo_usuario", {
       p_email: email,
@@ -83,6 +85,30 @@ export async function registerUser(
         error: result.message ?? "El registro no devolvió el ID del usuario.",
         debug: options?.includeDebug ? { step: "rpc_result", data: result } : undefined,
       };
+    }
+
+    const tenant = await getTenantForCurrentUser();
+    if (tenant) {
+      const { data: asignarData, error: asignarError } = await supabaseAdmin.rpc(
+        "asignar_usuario_empresa",
+        {
+          p_user_id: result.user_id,
+          p_empresa_id: tenant.empresaId,
+          p_rol: rol,
+        },
+      );
+      const asignar = asignarData as
+        | { success?: boolean; error?: { message?: string } | null }
+        | null;
+      if (asignarError || !asignar?.success) {
+        return {
+          ok: false,
+          error: `Usuario creado, pero no se pudo asignar a la empresa: ${
+            asignarError?.message ?? asignar?.error?.message ?? "error desconocido"
+          }`,
+        };
+      }
+      await mirrorCentralUserToTenant(tenant.projectRef, result.user_id);
     }
 
     return { ok: true, userId: result.user_id };

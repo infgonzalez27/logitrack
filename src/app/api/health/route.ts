@@ -7,7 +7,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const email = searchParams.get("email")?.trim().toLowerCase();
 
-    const admin = createAdminClient();
+    const admin = await createAdminClient();
 
     const [roles, perfiles, authList] = await Promise.all([
       admin.from("roles").select("nombre", { count: "exact" }),

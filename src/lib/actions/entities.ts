@@ -37,7 +37,7 @@ export async function listarCamionesParaOrdenAction(): Promise<
   }
 
   // Fallback: vendedor no tiene SELECT en `camiones`; el listado de emisión sí debe verlos.
-  const { data: rows, error: adminError } = await createAdminClient()
+  const { data: rows, error: adminError } = await (await createAdminClient())
     .from("camiones")
     .select("id, placa, estado")
     .neq("estado", "inactivo")

@@ -1437,6 +1437,17 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
 - **Panel Superadmin:** `/admin` (solo rol `admin`). El formulario pide código, nombre y gerente; el Server Action aprovisiona `lt_[codigo]` (Management API) y luego llama `crea_nueva_empresa` + registro de gerente + `asignar_usuario_empresa`. El usuario **no** pega URL ni anon key.
 - **Docs operativas:** `docs/logitrack-multi-tenant.md`, `docs/procedimiento_duplicacion_tenant.md`.
 
+#### 2.43.4. Enrutamiento de datos al tenant (sesión en Central)
+- **Login y cuentas:** siempre en la BD Central (`auth.users`). El usuario no tiene contraseña en el tenant.
+- **Resolución:** en cada request el servidor lee `usuarios_empresas` → `empresas.supabase_url` / `supabase_anon_key` del usuario (`src/lib/supabase/tenant-context.ts`).
+- **Datos:** `createClient()` y `createAdminClient()` envían `from`/`rpc`/`storage` al tenant; `auth` sigue en Central. El tenant acepta el JWT de Central vía **Third-Party Auth** (`oidc_issuer_url = https://<central>.supabase.co/auth/v1`), así que `auth.uid()` y el RLS del esquema funcionan igual.
+- **Preparación del tenant** (`src/lib/tenants/bootstrap.ts`, se ejecuta al aprovisionar y con el botón «Sincronizar» en `/admin`):
+  1. Third-Party Auth apuntando a Central.
+  2. `supabase/tenant_bootstrap.sql`: `roles`, `fpagos`, `tipos_contenedores` (mismos UUID que Central), buckets `productos`, `usuarios`, `rendiciones-captures` y sus políticas.
+  3. Espejo de usuarios: fila en `auth.users` del tenant (sin contraseña, solo para las FK) + `perfiles_usuario` con el mismo UUID y `rol_id` que en Central.
+- **Alta de usuarios de una empresa:** `registra_nuevo_usuario` se ejecuta en Central; luego `asignar_usuario_empresa` y el espejo en el tenant.
+- **No usar cookies `lt_tenant_url` / `lt_tenant_key` en el navegador:** el cliente del navegador solo se usa para cambiar la contraseña y debe apuntar a Central.
+
 #### 2.43.3. Crear Empresa y Gerente (Server Action: `submitCrearEmpresaAction`)
 - **Descripción:** Orquesta aprovisionamiento `lt_*` (si no hay URL/key), `crea_nueva_empresa`, `registra_nuevo_usuario` (rol gerente) y `asignar_usuario_empresa`.
 - **Ubicación:** `src/lib/actions/empresas.ts`
