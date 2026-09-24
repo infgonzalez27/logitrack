@@ -61,6 +61,32 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (user) {
+    // Inject Tenant routing cookies if missing
+    let tenantUrl = request.cookies.get("lt_tenant_url")?.value;
+    let tenantKey = request.cookies.get("lt_tenant_key")?.value;
+    
+    if (!tenantUrl || !tenantKey) {
+      const { data } = await supabase
+        .from("usuarios_empresas")
+        .select("empresas(supabase_url, supabase_anon_key)")
+        .eq("user_id", user.id)
+        .single();
+        
+      if (data && data.empresas) {
+        // @ts-ignore
+        tenantUrl = data.empresas.supabase_url;
+        // @ts-ignore
+        tenantKey = data.empresas.supabase_anon_key;
+        
+        if (tenantUrl && tenantKey) {
+          supabaseResponse.cookies.set("lt_tenant_url", tenantUrl, { path: "/" });
+          supabaseResponse.cookies.set("lt_tenant_key", tenantKey, { path: "/" });
+        }
+      }
+    }
+  }
+
   if (user && GUEST_ONLY_ROUTES.some((route) => pathname.startsWith(route))) {
     const url = request.nextUrl.clone();
     url.pathname = "/ordenes";
