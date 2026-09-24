@@ -12,7 +12,6 @@
 
 import fs from "fs";
 import path from "path";
-import postgres from "postgres";
 
 export type ProvisionTenantResult = {
   projectRef: string;
@@ -72,12 +71,12 @@ async function waitUntilActive(projectRef: string, attempts = 40): Promise<void>
   );
 }
 
-/** Aplica el molde public schema al proyecto tenant recién creado. */
-export async function applySchemaBase(
-  projectRef: string,
-  dbPass: string,
-  region = process.env.SUPABASE_TENANT_REGION || "us-east-1",
-): Promise<void> {
+/**
+ * Aplica el molde public schema al proyecto tenant recién creado.
+ * Usa la Management API: el host del pooler (aws-0/aws-1) varía por proyecto
+ * y el pooler puede tardar en reconocer un proyecto recién creado.
+ */
+export async function applySchemaBase(projectRef: string): Promise<void> {
   const sqlScriptPath = path.join(process.cwd(), "supabase", "schema_base.sql");
   if (!fs.existsSync(sqlScriptPath)) {
     throw new Error(
@@ -85,21 +84,17 @@ export async function applySchemaBase(
     );
   }
 
-  const dbUrl = `postgres://postgres.${projectRef}:${encodeURIComponent(dbPass)}@aws-0-${region}.pooler.supabase.com:5432/postgres`;
-  const sql = postgres(dbUrl, {
-    max: 1,
-    idle_timeout: 20,
-    connect_timeout: 60,
+  const query = fs.readFileSync(sqlScriptPath, "utf8");
+  const res = await managementFetch(`/projects/${projectRef}/database/query`, {
+    method: "POST",
+    body: JSON.stringify({ query }),
   });
 
-  try {
-    await sql.file(sqlScriptPath);
-  } catch (err) {
+  if (!res.ok) {
+    const text = await res.text();
     throw new Error(
-      `Error clonando tablas en ${projectRef}: ${err instanceof Error ? err.message : String(err)}`,
+      `Error clonando tablas en ${projectRef}: ${res.status} ${text}`,
     );
-  } finally {
-    await sql.end({ timeout: 5 });
   }
 }
 
@@ -172,7 +167,7 @@ export async function provisionTenantProject(
     );
   }
 
-  await applySchemaBase(projectRef, dbPass, region);
+  await applySchemaBase(projectRef);
 
   return {
     projectRef,
