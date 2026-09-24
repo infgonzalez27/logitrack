@@ -1,14 +1,17 @@
 /**
  * Deja un tenant lt_* listo para usarse con la sesión de la BD Central:
  * - Third-Party Auth: el tenant acepta los JWT firmados por Central (JWKS).
- * - supabase/tenant_bootstrap.sql: catálogos, buckets y políticas de Storage.
+ * - supabase/seed_base.sql: catálogos y productos base (agente BD).
+ * - supabase/tenant_bootstrap.sql: buckets y políticas de Storage.
  * - Espejo de usuarios: fila en auth.users (sin contraseña, solo para FKs)
- *   y perfil en perfiles_usuario con el mismo UUID que en Central.
+ *   y perfil en perfiles_usuario con el mismo UUID que en Central; el rol se
+ *   resuelve por nombre porque los UUID de roles difieren entre proyectos.
  */
 
 import fs from "fs";
 import path from "path";
 import { createCentralAdminClient } from "@/lib/supabase/admin";
+import { joinOne } from "@/lib/supabase/join";
 import { managementFetch, runProjectSql } from "@/lib/tenants/management";
 
 function centralUrl(): string {
@@ -55,20 +58,24 @@ export async function configureTenantTrust(projectRef: string): Promise<void> {
   }
 }
 
-export async function bootstrapTenant(projectRef: string): Promise<void> {
-  await configureTenantTrust(projectRef);
-
-  const sqlPath = path.join(process.cwd(), "supabase", "tenant_bootstrap.sql");
+async function runSqlFile(projectRef: string, fileName: string): Promise<void> {
+  const sqlPath = path.join(process.cwd(), "supabase", fileName);
   if (!fs.existsSync(sqlPath)) {
-    throw new Error("Falta supabase/tenant_bootstrap.sql en el deploy.");
+    throw new Error(`Falta supabase/${fileName} en el deploy.`);
   }
   await runProjectSql(projectRef, fs.readFileSync(sqlPath, "utf8"));
+}
+
+export async function bootstrapTenant(projectRef: string): Promise<void> {
+  await configureTenantTrust(projectRef);
+  await runSqlFile(projectRef, "seed_base.sql");
+  await runSqlFile(projectRef, "tenant_bootstrap.sql");
 }
 
 export type TenantUserMirror = {
   id: string;
   email: string;
-  rol_id: string;
+  rol_nombre: string;
   nombre_completo: string;
   telefono?: string | null;
   activo?: boolean;
@@ -82,11 +89,21 @@ export async function syncUserToTenant(
   projectRef: string,
   user: TenantUserMirror,
 ): Promise<void> {
+  const roles = (await runProjectSql(
+    projectRef,
+    `SELECT id FROM public.roles WHERE nombre = ${sqlLiteral(user.rol_nombre)};`,
+  )) as Array<{ id: string }>;
+  if (!roles.length) {
+    throw new Error(
+      `El rol "${user.rol_nombre}" no existe en el tenant ${projectRef} (ver supabase/seed_base.sql).`,
+    );
+  }
+
   const payload = sqlLiteral(
     JSON.stringify({
       id: user.id,
       email: user.email,
-      rol_id: user.rol_id,
+      rol_id: roles[0].id,
       nombre_completo: user.nombre_completo,
       telefono: user.telefono ?? "",
       activo: user.activo ?? true,
@@ -130,19 +147,21 @@ export async function mirrorCentralUserToTenant(
 
   const { data: perfil, error: perfilError } = await central
     .from("perfiles_usuario")
-    .select("rol_id, nombre_completo, telefono, activo")
+    .select("nombre_completo, telefono, activo, roles(nombre)")
     .eq("id", userId)
     .maybeSingle();
-  if (perfilError || !perfil?.rol_id) {
+  const rolNombre = joinOne(perfil?.roles)?.nombre;
+  if (perfilError || !perfil || !rolNombre) {
     throw new Error(`El usuario ${authData.user.email} no tiene perfil con rol en Central.`);
   }
 
   await syncUserToTenant(projectRef, {
     id: userId,
     email: authData.user.email,
-    rol_id: perfil.rol_id,
+    rol_nombre: rolNombre,
     nombre_completo: perfil.nombre_completo,
     telefono: perfil.telefono,
     activo: perfil.activo,
   });
 }
+
