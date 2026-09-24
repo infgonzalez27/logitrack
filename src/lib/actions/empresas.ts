@@ -127,16 +127,16 @@ export async function submitCrearEmpresaAction(formData: FormData) {
   }
   
   // 3. Inyección del Molde (Clonar tablas a través de SQL directo)
-  // Utilizamos el URI de conexión directa de postgresql provisto por Supabase Pooler
-  const dbUrl = `postgres://postgres.${projectRef}:${dbPass}@aws-0-${REGION}.pooler.supabase.com:6543/postgres`;
+  // Utilizamos el puerto 5432 directo (no pooler 6543) para migraciones largas
+  const dbUrl = `postgres://postgres.${projectRef}:${dbPass}@aws-0-${REGION}.pooler.supabase.com:5432/postgres`;
   try {
     const sqlScriptPath = path.join(process.cwd(), 'supabase', 'schema_base.sql');
-    const sqlContent = fs.readFileSync(sqlScriptPath, 'utf8');
     
     // Conectarse a la nueva DB
-    const sql = postgres(dbUrl, { max: 1 });
-    // Inyectar todo el schema de una sola vez
-    await sql.unsafe(sqlContent);
+    const sql = postgres(dbUrl, { max: 1, idle_timeout: 10 });
+    
+    // Inyectar el archivo SQL completo, esto arrojará error si hay fallos en las tablas
+    await sql.file(sqlScriptPath);
     await sql.end();
   } catch (err: any) {
     return { success: false, error: `Error clonando tablas en el nuevo servidor: ${err.message}`, code: 'DB_INIT_ERROR' };
