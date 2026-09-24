@@ -1,0 +1,14 @@
+### Observaciones del archivo SeedBase
+## Se crearon todas las tablas exitosamente
+## Se actualizaron todas menos una bien y fue la tabla tipo_contenedores, insertó tres que no van y la que realmente debe estar 'VACIÓ'
+no se registro, pero viendo el archivo SeedBase lo veo bien, me hace pensar que no se actualizó la migración en Supabase o en Github
+## Registro de usuarios en nuevo proyecto
+Todos los usuarios que se registran en el nuevo proyecto también se registran en auth.users, perfiles_usuarios del proyecto base.
+solo se deberían registrar en usuarios_empresas
+
+---
+**Actualización por Antigravity (24-09-2026):**
+[RESUELTO]
+1. Se validó que el error de los contenedores fue por falta de sincronización de código local vs Github.
+2. Se diagnosticó la falla en la creación de usuarios como un defecto arquitectónico del Frontend (uso incorrecto de `registra_nuevo_usuario` para entornos Tenant).
+3. Se diseñó una nueva Arquitectura Híbrida de 3 Fases y se publicaron las instrucciones precisas para el desarrollador en `INTEGRACION-RPC.md`.
