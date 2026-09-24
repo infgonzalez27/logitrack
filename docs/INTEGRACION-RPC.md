@@ -1437,6 +1437,46 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
 - **Panel Superadmin:** `/admin` (solo rol `admin`). El formulario pide código, nombre y gerente; el Server Action aprovisiona `lt_[codigo]` (Management API) y luego llama `crea_nueva_empresa` + registro de gerente + `asignar_usuario_empresa`. El usuario **no** pega URL ni anon key.
 - **Docs operativas:** `docs/logitrack-multi-tenant.md`, `docs/procedimiento_duplicacion_tenant.md`.
 
+#### 2.43.3. Crear Empresa y Gerente (Server Action: `submitCrearEmpresaAction`)
+- **Descripción:** Orquesta aprovisionamiento `lt_*` (si no hay URL/key), `crea_nueva_empresa`, `registra_nuevo_usuario` (rol gerente) y `asignar_usuario_empresa`.
+- **Ubicación:** `src/lib/actions/empresas.ts`
+- **Campos FormData:**
+  - `codigoEmpresa` (string) — sin prefijo `lt_`
+  - `nombreEmpresa` (string)
+  - `gerenteNombre` (string)
+  - `gerenteEmail` (string)
+  - `gerentePassword` (string)
+  - `gerenteTelefono` (string, opcional)
+  - `supabaseUrl` / `supabaseAnonKey` (opcionales; si faltan se crea el proyecto vía Management API)
+- **Uso en Frontend:**
+  ```typescript
+  import { submitCrearEmpresaAction } from "@/lib/actions/empresas";
+
+  const formData = new FormData(event.currentTarget);
+  const response = await submitCrearEmpresaAction(formData);
+
+  if (response.success) {
+    // response.data.mensaje → "¡Empresa X y su Gerente creados exitosamente!"
+  } else {
+    // response.error / response.code
+  }
+  ```
+- **Respuesta éxito:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "empresa_id": "UUID_EMPRESA",
+      "codigo_empresa": "adonis",
+      "nombre_empresa": "Nombre Empresa",
+      "gerente_id": "UUID_GERENTE_AUTH",
+      "gerente_email": "gerente@ejemplo.com",
+      "proyecto_supabase": "lt_adonis",
+      "mensaje": "¡Empresa Nombre Empresa y su Gerente creados exitosamente!"
+    }
+  }
+  ```
+
 ---
 
 ## 3. Códigos de Error Comunes para Control en Frontend

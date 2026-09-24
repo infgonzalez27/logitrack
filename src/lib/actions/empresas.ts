@@ -98,14 +98,16 @@ export type CrearEmpresaConGerenteInput = {
 /**
  * Flujo Superadmin (opción 1: Server Action + RPCs):
  * 1) Aprovisiona proyecto Supabase `lt_[codigo]` (Management API)
- * 2) `crea_nueva_empresa` en BD Central con URL/anon key obtenidos
- * 3) `registra_nuevo_usuario` (gerente)
+ *    — o usa URL/anon key si vienen en el input (flujo manual / agente BD)
+ * 2) `crea_nueva_empresa` en BD Central
+ * 3) `registra_nuevo_usuario` (gerente + perfil)
  * 4) `asignar_usuario_empresa`
- *
- * El usuario del panel NO carga URL ni anon key.
  */
 export async function crearEmpresaConGerenteAction(
-  input: CrearEmpresaConGerenteInput,
+  input: CrearEmpresaConGerenteInput & {
+    supabaseUrl?: string;
+    supabaseAnonKey?: string;
+  },
 ): Promise<
   | {
       ok: true;
@@ -113,6 +115,9 @@ export async function crearEmpresaConGerenteAction(
       userId: string;
       codigoEmpresa: string;
       projectName: string;
+      nombreEmpresa: string;
+      gerenteEmail: string;
+      mensaje: string;
     }
   | {
       ok: false;
@@ -133,6 +138,8 @@ export async function crearEmpresaConGerenteAction(
   const password = input.gerente.password;
   const nombreCompleto = input.gerente.nombreCompleto.trim();
   const telefono = (input.gerente.telefono ?? "").trim();
+  const urlManual = (input.supabaseUrl ?? "").trim();
+  const keyManual = (input.supabaseAnonKey ?? "").trim();
 
   if (!codigoEmpresa || !nombreEmpresa || !email || !password || !nombreCompleto) {
     return {
@@ -142,15 +149,24 @@ export async function crearEmpresaConGerenteAction(
     };
   }
 
-  let provisioned: Awaited<ReturnType<typeof provisionTenantProject>>;
-  try {
-    provisioned = await provisionTenantProject(codigoEmpresa);
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Error al aprovisionar el tenant.",
-      code: "PROVISION_FALLIDA",
-    };
+  let supabaseUrl = urlManual;
+  let supabaseAnonKey = keyManual;
+  let projectName = tenantProjectName(codigoEmpresa);
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    try {
+      const provisioned = await provisionTenantProject(codigoEmpresa);
+      supabaseUrl = provisioned.supabaseUrl;
+      supabaseAnonKey = provisioned.supabaseAnonKey;
+      projectName = provisioned.projectName;
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          err instanceof Error ? err.message : "Error al aprovisionar el tenant.",
+        code: "PROVISION_FALLIDA",
+      };
+    }
   }
 
   const central = createCentralAdminClient();
@@ -159,8 +175,8 @@ export async function crearEmpresaConGerenteAction(
     {
       p_codigo_empresa: codigoEmpresa,
       p_nombre_empresa: nombreEmpresa,
-      p_supabase_url: provisioned.supabaseUrl,
-      p_supabase_anon_key: provisioned.supabaseAnonKey,
+      p_supabase_url: supabaseUrl,
+      p_supabase_anon_key: supabaseAnonKey,
     },
   );
 
@@ -172,7 +188,9 @@ export async function crearEmpresaConGerenteAction(
   if (!crearResponse.success || !crearResponse.data?.empresa_id) {
     return {
       ok: false,
-      error: crearResponse.error?.message || "Error al registrar la empresa en Central.",
+      error:
+        crearResponse.error?.message ||
+        "Error al registrar la empresa en Central.",
       code: crearResponse.error?.code,
     };
   }
@@ -191,7 +209,7 @@ export async function crearEmpresaConGerenteAction(
     revalidatePath("/admin");
     return {
       ok: false,
-      error: `Proyecto ${tenantProjectName(codigoEmpresa)} y empresa en catálogo OK, pero falló el gerente: ${registerResult.error}`,
+      error: `Proyecto ${projectName} y empresa en catálogo OK, pero falló el gerente: ${registerResult.error}`,
       code: "GERENTE_NO_CREADO",
       empresaCreada: true,
       empresaId,
@@ -232,11 +250,67 @@ export async function crearEmpresaConGerenteAction(
 
   revalidatePath("/admin");
 
+  const mensaje = `¡Empresa ${nombreEmpresa} y su Gerente creados exitosamente!`;
+
   return {
     ok: true,
     empresaId,
     userId: registerResult.userId,
     codigoEmpresa,
-    projectName: provisioned.projectName,
+    projectName,
+    nombreEmpresa,
+    gerenteEmail: email,
+    mensaje,
   };
 }
+
+/**
+ * Server Action orquestado (contrato Frontend / agente BD).
+ * FormData: codigoEmpresa, nombreEmpresa, gerenteEmail, gerentePassword,
+ * gerenteNombre (recomendado), gerenteTelefono (opcional).
+ * supabaseUrl / supabaseAnonKey son opcionales (si faltan, se aprovisiona lt_*).
+ */
+export async function submitCrearEmpresaAction(formData: FormData) {
+  const result = await crearEmpresaConGerenteAction({
+    codigoEmpresa: String(formData.get("codigoEmpresa") ?? ""),
+    nombreEmpresa: String(formData.get("nombreEmpresa") ?? ""),
+    supabaseUrl: String(formData.get("supabaseUrl") ?? ""),
+    supabaseAnonKey: String(formData.get("supabaseAnonKey") ?? ""),
+    gerente: {
+      email: String(formData.get("gerenteEmail") ?? ""),
+      password: String(formData.get("gerentePassword") ?? ""),
+      nombreCompleto:
+        String(formData.get("gerenteNombre") ?? "").trim() ||
+        String(formData.get("gerenteEmail") ?? "")
+          .split("@")[0]
+          .trim(),
+      telefono: String(formData.get("gerenteTelefono") ?? ""),
+    },
+  });
+
+  if (!result.ok) {
+    return {
+      success: false as const,
+      error: result.error,
+      code: result.code,
+      empresaCreada: result.empresaCreada,
+      data: result.empresaId
+        ? { empresa_id: result.empresaId }
+        : null,
+    };
+  }
+
+  return {
+    success: true as const,
+    data: {
+      empresa_id: result.empresaId,
+      codigo_empresa: result.codigoEmpresa,
+      nombre_empresa: result.nombreEmpresa,
+      gerente_id: result.userId,
+      gerente_email: result.gerenteEmail,
+      proyecto_supabase: result.projectName,
+      mensaje: result.mensaje,
+    },
+  };
+}
+
