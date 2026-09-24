@@ -1,0 +1,19 @@
+## Usuarios de la nueva empresa, del nuevo proyecto
+Cuando el nuevo gerente hace login en la nueva empresa, este llega sin rol, entonces la interface no sabe que rol tiene, y lo identifica como 'Sin rol'
+esto se debe a que el no existe en auth.users del nuevo proyecto ni en perfiles_usuarios.
+Analiza que se debe hacer allí. Pienso que al actualizar las tablas, el se debe agregar en las tablas correspondientes
+
+## Observacion
+El nuevo usuario con rol de gerente no debería existir en la base de datos central, solo en auth.users es decir no debería existir en las tablas
+perfiles_usuarios, pero si tomar el id del rol gerente para inyectarlo en las tablas correspondiente del nuevo proyecto.
+Analiza esta observacion, pro y contras.
+Lo importante es que si va a existir en las tablas correspondientes del nuevo proyecto.
+otra observación, en auth.users el id es automático, no va a dar problemas si le estás asignando un id que no es automatizado dentro del nuevo
+proyecto?
+
+---
+**Actualización por Antigravity (24-09-2026):**
+[RESUELTO] Se diseñó un bloque de inyección SQL seguro que será ejecutado por el Backend (vía la Action de creación) sobre la BD del Tenant.
+- Inyecta al usuario explícitamente en `auth.users` utilizando el UUID maestro para preservar la compatibilidad del token de login (JWT).
+- Inyecta el registro en `perfiles_usuario` relacionándolo con el rol de `gerente`.
+- Las instrucciones fueron puestas a disposición del equipo de Frontend en `INTEGRACION-RPC.md`.
