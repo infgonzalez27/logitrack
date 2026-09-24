@@ -1744,3 +1744,10 @@ Esta secciÃƒÂ³n define las funciones para gestionar el aprovisionamiento central
   }
   ```
 
+
+- **?? REQUISITOS DE ENTORNO (IMPORTANTE PARA VERCEL Y LOCAL):**
+  - Se ha añadido la librería `postgres` al proyecto para inyectar automáticamente el esquema en los nuevos tenants. Debes hacer **`npm install`** localmente.
+  - El backend ahora se comunica con la Management API de Supabase de manera invisible. Para que esto funcione en la nube, debes agregar las siguientes variables de entorno en el **Panel de Vercel (Environment Variables)** y en tu `.env.local`:
+    - `SUPABASE_ORG_ID` = `ozotmtdltfhmtihtsals`
+    - `SUPABASE_ACCESS_TOKEN` = (Solicita este token al administrador del backend)
+
