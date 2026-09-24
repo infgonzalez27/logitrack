@@ -1766,3 +1766,47 @@ Se cre� un nuevo archivo maestro en `supabase/seed_base.sql` que contiene los da
 ## [2026-09-24] Nombre de Empresa en Cookies
 Se actualiz� `src/lib/supabase/middleware.ts` para que, junto a las credenciales, tambi�n consulte el campo `nombre_empresa` desde la base de datos central al momento del login. Este nombre ahora se inyecta directamente al navegador del usuario a trav�s de la cookie `lt_tenant_name`. 
 **Acci�n Requerida (Frontend):** Si necesitas mostrar el nombre de la empresa en la que est� logueado el usuario (por ejemplo, en el Navbar o el Sidebar), ahora puedes simplemente leer el valor de la cookie `lt_tenant_name` de manera est�tica desde el cliente, sin necesidad de hacer fetch o consultas adicionales a la BD Central.
+
+
+## [2026-09-24] InyecciÃ³n de Gerente en Nuevo Tenant (SoluciÃ³n 'Sin Rol')
+Tras la creaciÃ³n de una empresa, el usuario gerente debe existir tanto en la BD Central como en la BD Tenant para que el enrutamiento y las polÃ­ticas de seguridad (RLS) funcionen correctamente en el sistema local.
+**AcciÃ³n Requerida (Frontend):** En el archivo `src/lib/actions/empresas.ts`, dentro de `submitCrearEmpresaAction`, despuÃ©s de ejecutar el esquema (`schema_base.sql`) y la semilla (`seed_base.sql`), DEBES conectarte a la base de datos Tenant e inyectar al gerente manualmente preservando el UUID de la Central. Agrega el siguiente bloque de cÃ³digo:
+```typescript
+// InyecciÃ³n del gerente en la base de datos Tenant
+try {
+  const sql = postgres(dbUrl, { max: 1, idle_timeout: 10 });
+  const gerenteId = authData.user.id;
+  const gerenteEmail = authData.user.email;
+
+  await sql`
+    INSERT INTO auth.users (id, instance_id, email, aud, role, email_confirmed_at, encrypted_password)
+    VALUES (
+      ${gerenteId}, 
+      '00000000-0000-0000-0000-000000000000', 
+      ${gerenteEmail}, 
+      'authenticated', 
+      'authenticated', 
+      NOW(), 
+      crypt('DUMMY_TENANT_PASS_NOT_USED', gen_salt('bf'))
+    );
+    
+    INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
+    VALUES (
+      gen_random_uuid(), 
+      ${gerenteId}, 
+      jsonb_build_object('sub', ${gerenteId}::text, 'email', ${gerenteEmail}, 'email_verified', true), 
+      'email', 
+      ${gerenteId}::text, 
+      NOW(), 
+      NOW()
+    );
+
+    INSERT INTO public.perfiles_usuario (id, rol_id, nombre_completo, activo)
+    SELECT ${gerenteId}, id, 'Gerente Principal', true
+    FROM public.roles WHERE nombre = 'gerente';
+  `;
+  await sql.end();
+} catch (err) {
+  console.error('Error inyectando gerente en Tenant:', err);
+}
+```
