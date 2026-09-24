@@ -1,18 +1,25 @@
 /**
- * Aprovisionamiento de tenant lt_* (lo que el panel Superadmin dispara;
- * URL y anon key no las escribe el usuario — salen del proyecto creado).
+ * Aprovisionamiento de tenant lt_* (panel Superadmin):
+ * 1) Crea proyecto Supabase vía Management API
+ * 2) Inyecta supabase/schema_base.sql en la DB nueva
+ * 3) Devuelve URL + anon key para el catálogo Central
  *
- * Requiere en el servidor:
- * - SUPABASE_ACCESS_TOKEN (Management API)
+ * Env:
+ * - SUPABASE_ACCESS_TOKEN
  * - SUPABASE_ORG_ID
- * Región opcional: SUPABASE_TENANT_REGION (default us-east-1)
+ * - SUPABASE_TENANT_REGION (default us-east-1)
  */
+
+import fs from "fs";
+import path from "path";
+import postgres from "postgres";
 
 export type ProvisionTenantResult = {
   projectRef: string;
   projectName: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
+  dbPass: string;
 };
 
 function normalizeCodigo(codigo: string): string {
@@ -28,7 +35,7 @@ export function tenantProjectName(codigo: string): string {
 }
 
 async function managementFetch(
-  path: string,
+  pathName: string,
   init?: RequestInit,
 ): Promise<Response> {
   const token = process.env.SUPABASE_ACCESS_TOKEN;
@@ -38,7 +45,7 @@ async function managementFetch(
     );
   }
 
-  return fetch(`https://api.supabase.com/v1${path}`, {
+  return fetch(`https://api.supabase.com/v1${pathName}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -65,10 +72,40 @@ async function waitUntilActive(projectRef: string, attempts = 40): Promise<void>
   );
 }
 
+/** Aplica el molde public schema al proyecto tenant recién creado. */
+export async function applySchemaBase(
+  projectRef: string,
+  dbPass: string,
+  region = process.env.SUPABASE_TENANT_REGION || "us-east-1",
+): Promise<void> {
+  const sqlScriptPath = path.join(process.cwd(), "supabase", "schema_base.sql");
+  if (!fs.existsSync(sqlScriptPath)) {
+    throw new Error(
+      "Falta supabase/schema_base.sql en el deploy. Genera el dump y súbelo al repo.",
+    );
+  }
+
+  const dbUrl = `postgres://postgres.${projectRef}:${encodeURIComponent(dbPass)}@aws-0-${region}.pooler.supabase.com:5432/postgres`;
+  const sql = postgres(dbUrl, {
+    max: 1,
+    idle_timeout: 20,
+    connect_timeout: 60,
+  });
+
+  try {
+    await sql.file(sqlScriptPath);
+  } catch (err) {
+    throw new Error(
+      `Error clonando tablas en ${projectRef}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
 /**
- * Crea el proyecto Supabase `lt_[codigo]` y devuelve URL + anon key.
- * El clon de esquema (dump/restore o db push) sigue el procedimiento
- * docs/procedimiento_duplicacion_tenant.md — puede ejecutarlo Cursor tras el alta.
+ * Crea el proyecto Supabase `lt_[codigo]`, inyecta schema_base.sql y
+ * devuelve URL + anon key (+ dbPass por si hace falta reintentar el SQL).
  */
 export async function provisionTenantProject(
   codigoEmpresa: string,
@@ -87,6 +124,7 @@ export async function provisionTenantProject(
 
   const region = process.env.SUPABASE_TENANT_REGION || "us-east-1";
   const projectName = tenantProjectName(codigo);
+  const dbPass = crypto.randomUUID().replace(/-/g, "") + "Aa1!";
 
   const createRes = await managementFetch("/projects", {
     method: "POST",
@@ -94,7 +132,7 @@ export async function provisionTenantProject(
       name: projectName,
       organization_id: orgId,
       region,
-      db_pass: crypto.randomUUID().replace(/-/g, "") + "Aa1!",
+      db_pass: dbPass,
     }),
   });
 
@@ -134,10 +172,13 @@ export async function provisionTenantProject(
     );
   }
 
+  await applySchemaBase(projectRef, dbPass, region);
+
   return {
     projectRef,
     projectName,
     supabaseUrl: `https://${projectRef}.supabase.co`,
     supabaseAnonKey: anon,
+    dbPass,
   };
 }

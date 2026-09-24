@@ -1,3 +1,5 @@
+export const maxDuration = 300;
+
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile, labelRol } from "@/lib/auth/roles";
