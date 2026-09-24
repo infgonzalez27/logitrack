@@ -1706,3 +1706,43 @@ Esta secciÃ³n define las funciones para gestionar el aprovisionamiento central d
     "error": null
   }
   ```
+
+### 2.17. Crear Empresa y Gerente (Server Action: `submitCrearEmpresaAction`)
+- **Descripción:** Este método no es un RPC directo desde el cliente, sino un Server Action que orquesta la creación de la empresa en el enrutador central y simultáneamente crea al usuario "Gerente" en la base de datos de Auth, asignándole su rol.
+- **Ubicación:** `src/lib/actions/empresas.ts`
+- **Campos del FormData requeridos:**
+  - `codigoEmpresa` (string)
+  - `nombreEmpresa` (string)
+  - `supabaseUrl` (string)
+  - `supabaseAnonKey` (string)
+  - `gerenteEmail` (string)
+  - `gerentePassword` (string)
+- **Uso en Frontend (Componente de Cliente):**
+  ```typescript
+  import { submitCrearEmpresaAction } from "@/lib/actions/empresas";
+
+  // En el onSubmit del form:
+  const formData = new FormData(event.currentTarget);
+  const response = await submitCrearEmpresaAction(formData);
+
+  if (response.success) {
+    alert(response.data.mensaje); // Muestra: "¡Empresa X y su Gerente creados exitosamente!"
+  } else {
+    alert("Error: " + response.error);
+  }
+  ```
+- **Respuesta esperada en `response`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "empresa_id": "UUID_EMPRESA",
+      "codigo_empresa": "CODIGO",
+      "nombre_empresa": "Nombre Empresa",
+      "gerente_id": "UUID_GERENTE_AUTH",
+      "gerente_email": "gerente@ejemplo.com",
+      "mensaje": "¡Empresa Nombre Empresa y su Gerente creados exitosamente!"
+    }
+  }
+  ```
+
