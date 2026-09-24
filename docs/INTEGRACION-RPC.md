@@ -1756,3 +1756,8 @@ Esta secciÃƒÂ³n define las funciones para gestionar el aprovisionamiento central
 ## [2026-09-24] Fix Enrutamiento Multi-Tenant Cliente
 Se modificó el archivo `src/lib/supabase/middleware.ts` para que, al iniciar sesión, el middleware obtenga automáticamente la URL y Key del Tenant desde la base de datos central y los inyecte como cookies (`lt_tenant_url` y `lt_tenant_key`). Además, se modificó `src/lib/supabase/client.ts` para que priorice estas cookies al inicializar el cliente del navegador. Esto soluciona el problema de que los usuarios quedaban viendo los datos del proyecto base en lugar de su tenant privado. 
 **Acción Requerida (Frontend):** Haz un \git pull\ o mezcla estos cambios en tu rama principal y realiza un nuevo despliegue en Vercel (\ercel --prod\). Pide al usuario de prueba que cierre sesión y vuelva a entrar para que el middleware genere las cookies de enrutamiento.
+
+
+## [2026-09-24] Inyección de Datos Semilla Automatizada
+Se creó un nuevo archivo maestro en `supabase/seed_base.sql` que contiene los datos base unificados (roles depurados, formas de pago, camión base, ruta base y el catálogo completo de 66 productos).
+**Acción Requerida (Frontend):** Al momento de aprovisionar un nuevo Tenant, justo después de ejecutar satisfactoriamente la inyección del esquema (`schema_base.sql`) vía la Management API, debes agregar la lógica para leer y ejecutar también el contenido de `supabase/seed_base.sql` contra esa misma base de datos recién creada. Así, cada nueva empresa nacerá con su estructura y sus datos operacionales listos desde el primer segundo.
