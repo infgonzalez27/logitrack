@@ -10,8 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { signIn, fetchProfile, isAppRole } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { signIn, signOut, fetchProfile, isAppRole } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-context";
 
 export default function LoginScreen() {
@@ -39,13 +38,13 @@ export default function LoginScreen() {
     const profile = await fetchProfile(userId);
     if (!profile.ok) {
       setError(profile.error);
-      await supabase.auth.signOut();
+      await signOut();
       setPending(false);
       return;
     }
     if (!isAppRole(profile.profile.rol)) {
       setError("Rol no autorizado para esta app.");
-      await supabase.auth.signOut();
+      await signOut();
       setPending(false);
       return;
     }

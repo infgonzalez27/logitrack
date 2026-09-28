@@ -1,7 +1,7 @@
 import { normalizeRolNombre, type RolNombre } from "@/lib/auth/roles";
 
-/** Quién puede asignar una contraseña nueva a otro usuario desde la UI. */
-export function canResetUserPassword(
+/** admin gestiona a cualquiera; gerente a cualquiera salvo admin. */
+function canManageUser(
   actorRol: RolNombre | null,
   targetRolNombre: string | null,
 ): boolean {
@@ -16,4 +16,20 @@ export function canResetUserPassword(
   }
 
   return false;
+}
+
+/** Quién puede asignar una contraseña nueva a otro usuario desde la UI. */
+export function canResetUserPassword(
+  actorRol: RolNombre | null,
+  targetRolNombre: string | null,
+): boolean {
+  return canManageUser(actorRol, targetRolNombre);
+}
+
+/** Quién puede registrar un usuario nuevo con el rol indicado. */
+export function canRegisterUser(
+  actorRol: RolNombre | null,
+  nuevoRolNombre: string | null,
+): boolean {
+  return canManageUser(actorRol, nuevoRolNombre);
 }

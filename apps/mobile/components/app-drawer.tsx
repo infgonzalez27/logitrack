@@ -308,7 +308,11 @@ export function AppDrawerContent({
             style={[styles.footerMeta, { color: theme.colors.textSecondary }]}
             numberOfLines={1}
           >
-            {profile ? roleLabel(profile.rol) : "—"}
+            {profile
+              ? [roleLabel(profile.rol), profile.empresa_nombre]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "—"}
           </Text>
         </View>
         <Pressable

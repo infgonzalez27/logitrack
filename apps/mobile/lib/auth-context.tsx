@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { supabase } from "./supabase";
+import { clearEmpresa, supabase } from "./supabase";
 import {
   fetchProfile,
   type AppProfile,
@@ -37,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userId = data.session?.user?.id ?? null;
     setSessionUserId(userId);
     if (!userId) {
+      clearEmpresa();
       setProfile(null);
       setLoading(false);
       return;

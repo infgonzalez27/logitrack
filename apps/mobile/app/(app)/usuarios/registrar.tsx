@@ -10,7 +10,7 @@ import {
 import { useRouter, type Href } from "expo-router";
 import {
   listRoles,
-  registrarUsuarioViaEdge,
+  registrarUsuario,
   type RolOption,
 } from "@/lib/usuarios";
 import {
@@ -51,7 +51,7 @@ export default function RegistrarUsuarioScreen() {
   const submit = async () => {
     setSaving(true);
     setError(null);
-    const res = await registrarUsuarioViaEdge({
+    const res = await registrarUsuario({
       email,
       password,
       nombre_completo: nombre,

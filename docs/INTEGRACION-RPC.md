@@ -1454,6 +1454,13 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
   - *Sugerencia agente BD:* que `crear_perfil_usuario_nuevo` no cree perfil cuando la cuenta es de un tenant (p. ej. `raw_app_meta_data->>'tenant'`), para no depender del borrado.
 - **Login:** `/api/auth/login` resuelve el tenant tras iniciar sesión y lee el rol en `perfiles_usuario` del tenant (ya no hay perfil en Central).
 - **No se guarda `service_role_key` en `empresas` (Paso 1 de la propuesta del 24-09 descartado):** la política RLS «Allow users to read assigned empresa details» deja leer todas las columnas de su empresa a cualquier usuario asignado, así que un vendedor podría obtener la llave maestra de su tenant. El servidor obtiene la service key con la Management API (`/v1/projects/{ref}/api-keys?reveal=true`, en memoria) y escribe en el tenant por `/database/query`.
+- **Permisos de alta y contraseña:** `canRegisterUser` / `canResetUserPassword` (`src/lib/auth/usuario-permissions.ts`): admin gestiona a cualquiera; gerente a cualquiera salvo admin; el resto, a nadie. `/api/auth/register` y `registerUserAction` exigen sesión con ese permiso (antes eran públicos).
+- **App móvil (`apps/mobile`):**
+  - `lib/supabase.ts` exporta `supabase` como Proxy: `auth` → Central; `from`/`rpc`/`storage` → BD de la empresa. `resolveEmpresa(userId)` lee `usuarios_empresas → empresas` en Central (RLS del propio usuario) y crea el cliente del tenant con `accessToken` = JWT de Central. Se llama en `fetchProfile`; `signOut` → `clearEmpresa()`.
+  - Alta de usuarios y cambio de contraseña van al servidor web con `Authorization: Bearer <JWT de Central>` (`EXPO_PUBLIC_API_URL`, por defecto `https://logitrack.informaticagonzalez.com`):
+    - `POST /api/mobile/usuarios` `{ email, password, nombre_completo, telefono?, rol_nombre }` → `{ ok, userId }` (usa `registerUser` en la empresa del actor).
+    - `POST /api/mobile/usuarios/contrasena` `{ userId, password }` → `{ ok }`. El usuario destino debe existir en la BD de la empresa del actor.
+  - Edge functions `registrar-usuario` y `reset-password` **retiradas** (responden 410): no validaban el rol de quien llamaba.
 - **No usar cookies `lt_tenant_url` / `lt_tenant_key` en el navegador:** el cliente del navegador solo se usa para cambiar la contraseña y debe apuntar a Central.
 
 #### 2.43.3. Crear Empresa y Gerente (Server Action: `submitCrearEmpresaAction`)

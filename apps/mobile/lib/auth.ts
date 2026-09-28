@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { clearEmpresa, resolveEmpresa, supabase } from "./supabase";
 import { NAV_SECTIONS, type NavSection } from "./nav";
 
 export const APP_ROLES = [
@@ -16,6 +16,7 @@ export type AppProfile = {
   id: string;
   nombre_completo: string;
   rol: AppRole | string;
+  empresa_nombre: string | null;
 };
 
 const LEGACY_ROL_ALIASES: Record<string, AppRole> = {
@@ -329,6 +330,7 @@ export async function signIn(email: string, password: string) {
 
 export async function signOut() {
   await supabase.auth.signOut();
+  clearEmpresa();
 }
 
 export async function getSessionUserId(): Promise<string | null> {
@@ -339,6 +341,9 @@ export async function getSessionUserId(): Promise<string | null> {
 export async function fetchProfile(
   userId: string,
 ): Promise<{ ok: true; profile: AppProfile } | { ok: false; error: string }> {
+  const empresa = await resolveEmpresa(userId);
+  if (!empresa.ok) return empresa;
+
   const { data, error } = await supabase
     .from("perfiles_usuario")
     .select("id, nombre_completo, roles(nombre)")
@@ -369,6 +374,7 @@ export async function fetchProfile(
       id: data.id,
       nombre_completo: data.nombre_completo ?? "Usuario",
       rol: normalized,
+      empresa_nombre: empresa.empresa?.nombre || null,
     },
   };
 }

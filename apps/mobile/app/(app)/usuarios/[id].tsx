@@ -13,16 +13,17 @@ import {
   actualizarPerfilUsuario,
   getPerfilUsuario,
   listRoles,
-  resetPasswordViaEdge,
+  cambiarContrasenaUsuario,
   type PerfilUsuarioEditar,
   type RolOption,
 } from "@/lib/usuarios";
+import { normalizeRolNombre } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 import {
   ErrorText,
   FormField,
   LoadingBlock,
   PrimaryButton,
-  SecondaryButton,
   SectionTitle,
 } from "@/components/ui";
 
@@ -39,6 +40,11 @@ export default function EditarUsuarioScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const { profile } = useAuth();
+  const [password, setPassword] = useState("");
+  const [passwordConfirmacion, setPasswordConfirmacion] = useState("");
+  const [pwdSaving, setPwdSaving] = useState(false);
+  const [pwdError, setPwdError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -88,30 +94,30 @@ export default function EditarUsuarioScreen() {
     router.back();
   };
 
-  const resetPwd = async () => {
+  const cambiarPwd = async () => {
     if (!perfil) return;
-    Alert.alert(
-      "Resetear contraseña",
-      "Se enviará un correo de recuperación al email de Auth del usuario. ¿Continuar?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Enviar",
-          onPress: () => {
-            void (async () => {
-              setError(null);
-              const res = await resetPasswordViaEdge({ userId: perfil.id });
-              if (!res.ok) {
-                setError(res.error);
-                return;
-              }
-              Alert.alert("Listo", "Solicitud de reset enviada.");
-            })();
-          },
-        },
-      ],
-    );
+    setPwdError(null);
+    if (password !== passwordConfirmacion) {
+      setPwdError("Las contraseñas no coinciden.");
+      return;
+    }
+    setPwdSaving(true);
+    const res = await cambiarContrasenaUsuario({ userId: perfil.id, password });
+    setPwdSaving(false);
+    if (!res.ok) {
+      setPwdError(res.error);
+      return;
+    }
+    setPassword("");
+    setPasswordConfirmacion("");
+    Alert.alert("Listo", "Contraseña actualizada. El usuario ya puede iniciar sesión con ella.");
   };
+
+  const actorRol = normalizeRolNombre(profile?.rol);
+  const destinoRol = normalizeRolNombre(perfil?.rol_nombre);
+  const puedeCambiarPwd =
+    actorRol === "admin" ||
+    (actorRol === "gerente" && destinoRol !== null && destinoRol !== "admin");
 
   if (loading) return <LoadingBlock />;
   if (!perfil) {
@@ -175,10 +181,34 @@ export default function EditarUsuarioScreen() {
         onPress={() => void submit()}
         loading={saving}
       />
-      <SecondaryButton
-        label="Solicitar reset de contraseña"
-        onPress={() => void resetPwd()}
-      />
+
+      {puedeCambiarPwd ? (
+        <>
+          <SectionTitle>Contraseña de acceso</SectionTitle>
+          <FormField
+            label="Nueva contraseña"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+          />
+          <FormField
+            label="Confirmar contraseña"
+            value={passwordConfirmacion}
+            onChangeText={setPasswordConfirmacion}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+          />
+          <ErrorText message={pwdError} />
+          <PrimaryButton
+            label="Asignar nueva contraseña"
+            onPress={() => void cambiarPwd()}
+            loading={pwdSaving}
+          />
+        </>
+      ) : null}
     </ScrollView>
   );
 }

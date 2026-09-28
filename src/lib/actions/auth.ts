@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getCurrentProfile } from "@/lib/auth";
+import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { registerUser } from "@/lib/auth/register-user";
+import { canRegisterUser } from "@/lib/auth/usuario-permissions";
 import { createClient } from "@/lib/supabase/server";
 import { toDisplayError } from "@/lib/errors";
 
@@ -45,12 +48,18 @@ export async function registerUserAction(
   _prev: AuthFormState,
   formData: FormData,
 ): Promise<AuthFormState> {
+  const rolNombre = String(formData.get("rol_nombre") ?? "");
+  const actorRol = getRoleNameFromProfile(await getCurrentProfile());
+  if (!canRegisterUser(actorRol, rolNombre)) {
+    return { error: "No tienes permiso para registrar usuarios con ese rol." };
+  }
+
   const result = await registerUser({
     email: String(formData.get("email") ?? ""),
     password: String(formData.get("password") ?? ""),
     nombre_completo: String(formData.get("nombre_completo") ?? ""),
     telefono: String(formData.get("telefono") ?? ""),
-    rol_nombre: String(formData.get("rol_nombre") ?? ""),
+    rol_nombre: rolNombre,
   });
 
   if (!result.ok) {
