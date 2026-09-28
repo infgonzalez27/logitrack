@@ -198,8 +198,11 @@ export function AppDrawerContent({
           <Text style={[styles.brand, { color: theme.colors.text }]}>
             LogiTrack
           </Text>
-          <Text style={[styles.brandSub, { color: theme.colors.textSecondary }]}>
-            Operaciones en campo
+          <Text
+            style={[styles.brandSub, { color: theme.colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {profile?.empresa_nombre ?? "Operaciones en campo"}
           </Text>
         </View>
         <Pressable
