@@ -3,6 +3,8 @@
  * - Third-Party Auth: el tenant acepta los JWT firmados por Central (JWKS).
  * - supabase/seed_base.sql: catálogos y productos base (agente BD).
  * - supabase/tenant_bootstrap.sql: buckets y políticas de Storage.
+ * - supabase/tenant_patches/*.sql: correcciones posteriores al dump de
+ *   schema_base.sql, en orden de nombre.
  * - Espejo de usuarios: fila en auth.users (sin contraseña, solo para FKs)
  *   y perfil en perfiles_usuario con el mismo UUID que en Central; el rol se
  *   resuelve por nombre porque los UUID de roles difieren entre proyectos.
@@ -65,10 +67,32 @@ async function runSqlFile(projectRef: string, fileName: string): Promise<void> {
   await runProjectSql(projectRef, fs.readFileSync(sqlPath, "utf8"));
 }
 
+/** Cada parche debe ser idempotente: se re-aplican todos en cada sincronización. */
+async function runTenantPatches(projectRef: string): Promise<void> {
+  const dir = path.join(process.cwd(), "supabase", "tenant_patches");
+  if (!fs.existsSync(dir)) {
+    throw new Error("Falta supabase/tenant_patches en el deploy.");
+  }
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  for (const file of files) {
+    try {
+      await runProjectSql(projectRef, fs.readFileSync(path.join(dir, file), "utf8"));
+    } catch (err) {
+      throw new Error(
+        `Falló el parche ${file} en ${projectRef}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+}
+
 export async function bootstrapTenant(projectRef: string): Promise<void> {
   await configureTenantTrust(projectRef);
   await runSqlFile(projectRef, "seed_base.sql");
   await runSqlFile(projectRef, "tenant_bootstrap.sql");
+  await runTenantPatches(projectRef);
 }
 
 export type TenantUserMirror = {

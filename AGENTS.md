@@ -12,4 +12,7 @@ Siempre que modifiques lógica, base de datos o arquitectura que afecte el desar
 El usuario principal (Jorge) realiza sus pruebas desde un dispositivo móvil apuntando a la nube (entorno de producción/staging), no en local. Esto significa que cuando el agente (tú) hace un `git push` a Github, esos cambios solo se reflejarán en las pruebas del usuario UNA VEZ que el servicio de hosting en la nube (Vercel, etc.) haya terminado de desplegar (build) la nueva versión. Ten esto en cuenta si el usuario reporta que "los cambios no aparecen" a pesar de que el código en el repositorio ya está correcto.
 
 Vercel NO está conectado a GitHub: cada cambio del frontend se publica a mano con `npx vercel --prod --yes` (https://logitrack.informaticagonzalez.com).
+
+# REGLA DE CAMBIOS DE BD PARA EMPRESAS (TENANTS lt_*)
+Cada empresa tiene su propio proyecto Supabase. Todo cambio de esquema, RPC, trigger o política RLS que deba existir en las empresas va como archivo **idempotente** en `supabase/tenant_patches/AAAAMMDDHHMMSS_descripcion.sql` (`CREATE OR REPLACE`, `DROP ... IF EXISTS` antes de `CREATE`, `IF NOT EXISTS`). `bootstrapTenant` los aplica todos, en orden de nombre, al crear una empresa y al pulsar «Sincronizar» en `/admin`. Los archivos se leen del deploy de Vercel: tras agregar un parche hay que publicar (`npx vercel --prod --yes`) y luego sincronizar cada empresa existente.
 <!-- END:logitrack-agent-rules -->

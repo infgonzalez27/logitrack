@@ -699,7 +699,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.14.1. Alta de clientes por vendedor (RLS, 2026-09-28)
 - **Problema:** `clientes_write_staff` usa `lt_is_staff()` (admin, gerente, despachador); el vendedor recibía `new row violates row-level security policy for table "clientes"` al registrar un cliente.
-- **Cambio** (`supabase/migrations/20260928170000_clientes_vendedor.sql`, aplicado en Central, `lt_ramirez` y Berraco (`fhcorxffeojptwvhtvqc`), incluido al final de `schema_base.sql`):
+- **Cambio** (`supabase/tenant_patches/20260928170000_clientes_vendedor.sql`, aplicado en Central, `lt_ramirez` y Berraco (`fhcorxffeojptwvhtvqc`); las empresas nuevas lo reciben solas vía `tenant_patches`):
   - Trigger `trg_clientes_asignar_vendedor` (BEFORE INSERT): si el rol es vendedor, fuerza `vendedor_id = auth.uid()`.
   - Políticas `clientes_insert_vendedor` y `clientes_update_vendedor`: el vendedor inserta y edita solo clientes con `vendedor_id = auth.uid()`.
 - **Frontend:** no requiere cambios; el `insert` directo en `clientes` ya funciona para vendedor (web y móvil).
@@ -1453,7 +1453,8 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
   1. Third-Party Auth apuntando a Central.
   2. `supabase/seed_base.sql` (agente BD): roles (admin, gerente, despachador, vendedor), `fpagos` (incluye «Saldo a favor», que las RPC de rendición buscan por concepto), camión `CAM-001`, ruta `Ruta01`, un solo contenedor `C0136` («VACÍO DE 36 BOTELLAS») y catálogo de productos. Debe ser idempotente (`ON CONFLICT` / `WHERE NOT EXISTS`) porque «Sincronizar» lo re-ejecuta. En tenants creados con el seed anterior pasa productos y detalles a `C0136` y borra `huacal_plastico` / `caja_carton_retornable` / `pallet_madera` si no tienen movimientos ni saldos.
   3. `supabase/tenant_bootstrap.sql`: buckets `productos`, `usuarios`, `rendiciones-captures` y sus políticas.
-  4. Usuarios asignados sin perfil en el tenant: fila en `auth.users` del tenant (sin contraseña, solo para las FK) + `perfiles_usuario` con el mismo UUID que en Central y el rol de `usuarios_empresas.rol`. El rol se busca **por nombre** (los UUID de `roles` no coinciden con Central). Si el perfil ya existe no se toca. Si el usuario tenía perfil en Central y ningún dato de Central lo referencia, se borra.
+  4. `supabase/tenant_patches/*.sql`, en orden de nombre: correcciones de esquema/RPC/RLS posteriores al dump de `schema_base.sql`. **Agente BD:** todo cambio que deba llegar a las empresas va aquí como archivo idempotente (`CREATE OR REPLACE`, `DROP ... IF EXISTS`). Se lee del deploy: publicar en Vercel y luego «Sincronizar» cada empresa existente; las nuevas lo reciben al crearse.
+  5. Usuarios asignados sin perfil en el tenant: fila en `auth.users` del tenant (sin contraseña, solo para las FK) + `perfiles_usuario` con el mismo UUID que en Central y el rol de `usuarios_empresas.rol`. El rol se busca **por nombre** (los UUID de `roles` no coinciden con Central). Si el perfil ya existe no se toca. Si el usuario tenía perfil en Central y ningún dato de Central lo referencia, se borra.
 - **Alta de usuarios de una empresa (`registerUser` en `src/lib/auth/register-user.ts`, 3 fases):**
   1. Central Auth: `auth.admin.createUser` (email confirmado, `user_metadata.nombre_completo`/`telefono`). El trigger `trigger_crear_perfil_nuevo` de Central crea un perfil «chofer»; el servidor lo borra de inmediato.
   2. Central enrutamiento: `asignar_usuario_empresa` (empresa del usuario que registra, o la nueva empresa en el alta del gerente).
