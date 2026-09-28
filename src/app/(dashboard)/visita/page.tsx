@@ -43,7 +43,8 @@ export default async function VisitaPage() {
       <VisitaClientePicker
         clientes={(clientes ?? []).map((c) => ({
           value: c.id,
-          label: `${c.razon_social}${c.rif_nit ? ` · ${c.rif_nit}` : ""}`,
+          label: c.razon_social,
+          hint: c.rif_nit,
         }))}
       />
     </div>

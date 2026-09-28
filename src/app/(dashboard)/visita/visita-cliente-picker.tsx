@@ -4,11 +4,16 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
+import {
+  ClienteCombobox,
+  type ClienteComboboxOption,
+} from "@/components/clientes/cliente-combobox";
 
-type Option = { value: string; label: string };
-
-export function VisitaClientePicker({ clientes }: { clientes: Option[] }) {
+export function VisitaClientePicker({
+  clientes,
+}: {
+  clientes: ClienteComboboxOption[];
+}) {
   const router = useRouter();
   const [clienteId, setClienteId] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -29,14 +34,12 @@ export function VisitaClientePicker({ clientes }: { clientes: Option[] }) {
   return (
     <Card title="Seleccionar cliente">
       <form onSubmit={onContinue} className="space-y-4">
-        <Select
-          label="Cliente"
-          name="cliente_id"
+        <ClienteCombobox
           required
-          placeholder="Busca o selecciona el cliente"
           options={clientes}
           value={clienteId}
-          onChange={(e) => setClienteId(e.target.value)}
+          onChange={setClienteId}
+          disabled={!clientes.length}
         />
         {error ? <p className="lt-alert-error text-sm">{error}</p> : null}
         <Button type="submit" disabled={pending || !clientes.length}>
