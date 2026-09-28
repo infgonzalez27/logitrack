@@ -53,7 +53,7 @@ export default async function EditarOrdenPage({
   ] = await Promise.all([
     supabase
       .from("clientes")
-      .select("id, razon_social, despachador_id")
+      .select("id, razon_social, rif_nit, despachador_id")
       .eq("activo", true)
       .order("razon_social"),
     listarCamionesParaOrdenAction(),
@@ -95,6 +95,7 @@ export default async function EditarOrdenPage({
         clientes={(clientes ?? []).map((c) => ({
           value: c.id,
           label: c.razon_social,
+          hint: c.rif_nit ?? null,
           despachador_id: c.despachador_id ?? null,
           despachador_nombre: c.despachador_id
             ? (despachadorNombrePorId.get(c.despachador_id) ?? null)

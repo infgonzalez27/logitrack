@@ -36,7 +36,7 @@ export default async function NuevaOrdenPage({
 
   let clientesQuery = supabase
     .from("clientes")
-    .select("id, razon_social, vendedor_id, despachador_id")
+    .select("id, razon_social, rif_nit, vendedor_id, despachador_id")
     .eq("activo", true)
     .order("razon_social");
 
@@ -69,6 +69,7 @@ export default async function NuevaOrdenPage({
   const clienteOptions = (clientes ?? []).map((c) => ({
     value: c.id,
     label: c.razon_social,
+    hint: c.rif_nit ?? null,
     despachador_id: c.despachador_id ?? null,
     despachador_nombre: c.despachador_id
       ? (despachadorNombrePorId.get(c.despachador_id) ?? null)

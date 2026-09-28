@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProductoCatalogo } from "@/components/productos/producto-catalogo";
+import { ClienteCombobox } from "@/components/clientes/cliente-combobox";
 import { FechaDespachoField } from "@/components/ui/fecha-despacho-field";
 import { LogiImage } from "@/components/media/logi-image";
 import { resolveProductoImage } from "@/lib/product-images";
@@ -20,6 +21,7 @@ import type { ProductoListaRpc, TasaCambio } from "@/types/database";
 type Option = { value: string; label: string };
 
 export type ClienteOrdenOption = Option & {
+  hint?: string | null;
   despachador_id: string | null;
   despachador_nombre: string | null;
 };
@@ -224,17 +226,11 @@ export function NuevaOrdenForm({
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card title="Cabecera">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Select
-              label="Cliente"
-              name="cliente_id"
+            <ClienteCombobox
               required
-              placeholder="Selecciona cliente"
-              options={clientes.map((c) => ({
-                value: c.value,
-                label: c.label,
-              }))}
+              options={clientes}
               value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
+              onChange={setClienteId}
               disabled={lockCliente && Boolean(clienteId)}
             />
             <Select

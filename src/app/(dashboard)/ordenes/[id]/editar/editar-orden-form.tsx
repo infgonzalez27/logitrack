@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProductoCatalogo } from "@/components/productos/producto-catalogo";
+import { ClienteCombobox } from "@/components/clientes/cliente-combobox";
 import type { ClienteOrdenOption } from "../../nuevo/nueva-orden-form";
 import { FechaDespachoField } from "@/components/ui/fecha-despacho-field";
 import { LogiImage } from "@/components/media/logi-image";
@@ -152,15 +153,11 @@ export function EditarOrdenForm({
           </p>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
-          <Select
-            label="Cliente"
+          <ClienteCombobox
             required
-            options={clientes.map((c) => ({
-              value: c.value,
-              label: c.label,
-            }))}
+            options={clientes}
             value={clienteId}
-            onChange={(e) => setClienteId(e.target.value)}
+            onChange={setClienteId}
           />
           <Input
             label="Factura origen"

@@ -54,6 +54,19 @@ export default function NuevaOrdenScreen() {
   const [picker, setPicker] = useState<"cliente" | "camion" | "productos" | null>(
     null,
   );
+  const [busquedaCliente, setBusquedaCliente] = useState("");
+
+  const clientesFiltrados = useMemo(() => {
+    const normalizar = (t: string) =>
+      t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    const q = normalizar(busquedaCliente);
+    if (!q) return clientes;
+    return clientes.filter(
+      (c) =>
+        normalizar(c.razon_social ?? "").includes(q) ||
+        normalizar(c.rif_nit ?? "").includes(q),
+    );
+  }, [clientes, busquedaCliente]);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,10 +220,26 @@ export default function NuevaOrdenScreen() {
         <Pressable style={styles.back} onPress={() => setPicker(null)}>
           <Text style={styles.backText}>← Volver al formulario</Text>
         </Pressable>
+        <View style={styles.searchRow}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Buscar cliente por nombre o RIF…"
+            value={busquedaCliente}
+            onChangeText={setBusquedaCliente}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            clearButtonMode="while-editing"
+          />
+        </View>
         <FlatList
-          data={clientes}
+          data={clientesFiltrados}
           keyExtractor={(c) => c.id}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, paddingTop: 0 }}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <Text style={styles.meta}>Sin clientes que coincidan.</Text>
+          }
           renderItem={({ item }) => (
             <Pressable
               style={styles.row}
@@ -219,6 +248,7 @@ export default function NuevaOrdenScreen() {
                 setClienteLabel(item.razon_social);
                 setLineas([]);
                 setProductos([]);
+                setBusquedaCliente("");
                 setPicker(null);
               }}
             >
