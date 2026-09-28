@@ -3,9 +3,9 @@ import { createInventarioAlmacenAction } from "@/lib/actions/entities";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ActionForm } from "@/components/forms/action-form";
+import { ProductoPicker } from "./producto-picker";
 
 export default async function NuevoInventarioAlmacenPage() {
   const supabase = await createClient();
@@ -22,12 +22,8 @@ export default async function NuevoInventarioAlmacenPage() {
       />
       <Card>
         <ActionForm action={createInventarioAlmacenAction} redirectTo="/inventario-almacen">
-          <Select
-            label="Producto"
-            name="producto_id"
-            required
-            placeholder="Selecciona producto"
-            options={(productos ?? []).map((p) => ({
+          <ProductoPicker
+            productos={(productos ?? []).map((p) => ({
               value: p.id,
               label: p.nombre,
             }))}

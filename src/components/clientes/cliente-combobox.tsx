@@ -26,8 +26,12 @@ export function ClienteCombobox({
   required = false,
   disabled = false,
   placeholder = "Buscar por nombre o RIF…",
+  name,
+  emptyMessage = "Sin clientes que coincidan.",
 }: {
   label?: string;
+  name?: string;
+  emptyMessage?: string;
   options: ClienteComboboxOption[];
   value: string;
   onChange: (value: string) => void;
@@ -124,6 +128,7 @@ export function ClienteCombobox({
       <input
         tabIndex={-1}
         aria-hidden
+        name={name}
         required={required}
         value={value}
         onChange={() => {}}
@@ -138,7 +143,7 @@ export function ClienteCombobox({
         >
           {resultados.length === 0 ? (
             <li className="px-3.5 py-2.5 text-sm text-lt-text-muted">
-              Sin clientes que coincidan.
+              {emptyMessage}
             </li>
           ) : (
             resultados.map((o, i) => (
