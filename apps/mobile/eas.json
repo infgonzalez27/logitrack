@@ -15,12 +15,22 @@
     "preview": {
       "distribution": "internal",
       "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://egwryptydgxdnjvwtrfq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnd3J5cHR5ZGd4ZG5qdnd0cmZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3Mzg3NDQsImV4cCI6MjA5ODMxNDc0NH0.fTPvtapUAyg9CV3L4aLkPMsylhoySkIWqLM-FzRrlhs",
+        "EXPO_PUBLIC_API_URL": "https://logitrack.informaticagonzalez.com"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
       "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://egwryptydgxdnjvwtrfq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnd3J5cHR5ZGd4ZG5qdnd0cmZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3Mzg3NDQsImV4cCI6MjA5ODMxNDc0NH0.fTPvtapUAyg9CV3L4aLkPMsylhoySkIWqLM-FzRrlhs",
+        "EXPO_PUBLIC_API_URL": "https://logitrack.informaticagonzalez.com"
+      },
       "android": {
         "buildType": "apk"
       }
