@@ -19,16 +19,18 @@ export default async function SaldosInicialesPage() {
   if (rol !== "admin" && rol !== "gerente") redirect("/");
 
   const supabase = await createClient();
-  const [{ data: clientes }, saldos] = await Promise.all([
+  const [{ data: clientes }, { data: contenedores }, saldos] = await Promise.all([
     supabase
       .from("clientes")
       .select("id, razon_social, rif_nit")
       .eq("activo", true)
       .order("razon_social"),
+    supabase.from("tipos_contenedores").select("id, codigo, nombre").order("codigo"),
     listarSaldosInicialesAction(),
   ]);
 
   const items = saldos.ok ? saldos.items : [];
+  const vacios = saldos.ok ? saldos.vacios : [];
   const pendientes = items.filter((i) => i.estado !== "anulada");
   const total = pendientes.reduce((s, i) => s + i.total_recaudar_usd, 0);
 
@@ -36,7 +38,7 @@ export default async function SaldosInicialesPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Cuentas por cobrar iniciales"
-        description="Carga la deuda previa de un cliente sin crear una orden. Queda por liquidar y se cobra con una cobranza normal."
+        description="Carga la deuda previa y los vacíos que ya tiene un cliente, sin crear una orden. La deuda queda por liquidar y se cobra con una cobranza normal."
       />
 
       <SaldoInicialForm
@@ -44,6 +46,10 @@ export default async function SaldosInicialesPage() {
           value: c.id,
           label: c.razon_social,
           hint: c.rif_nit ?? null,
+        }))}
+        contenedores={(contenedores ?? []).map((t) => ({
+          value: t.id,
+          label: `${t.nombre} (${t.codigo})`,
         }))}
       />
 
@@ -108,6 +114,46 @@ export default async function SaldosInicialesPage() {
             <span className="font-semibold text-lt-text">{formatCurrency(total)}</span>
           </p>
         ) : null}
+      </Card>
+
+      <Card title="Vacíos iniciales cargados">
+        {!vacios.length ? (
+          <p className="text-sm text-lt-text-muted">
+            Todavía no hay vacíos iniciales cargados.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-lt-border text-left text-lt-text-muted">
+                  <th className="py-2 pr-3 font-medium">Cliente</th>
+                  <th className="py-2 pr-3 font-medium">Contenedor</th>
+                  <th className="py-2 pr-3 font-medium">Fecha</th>
+                  <th className="py-2 text-right font-medium">Vacíos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vacios.map((v) => (
+                  <tr key={v.id} className="border-b border-lt-border-light">
+                    <td className="py-2 pr-3">
+                      <span className="block text-lt-text">{v.cliente_razon_social}</span>
+                      {v.cliente_rif ? (
+                        <span className="block text-xs text-lt-text-muted">{v.cliente_rif}</span>
+                      ) : null}
+                    </td>
+                    <td className="py-2 pr-3">{v.contenedor}</td>
+                    <td className="py-2 pr-3">{formatDateOnly(v.fecha)}</td>
+                    <td className="py-2 text-right tabular-nums">{formatNumber(v.cantidad)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-4 text-xs text-lt-text-muted">
+          El saldo total de vacíos por cliente se consulta en Cobranzas →
+          «Consulta de contenedores».
+        </p>
       </Card>
     </div>
   );
