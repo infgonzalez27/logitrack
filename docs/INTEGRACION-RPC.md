@@ -699,7 +699,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ### 2.14.1. Alta de clientes por vendedor (RLS, 2026-09-28)
 - **Problema:** `clientes_write_staff` usa `lt_is_staff()` (admin, gerente, despachador); el vendedor recibía `new row violates row-level security policy for table "clientes"` al registrar un cliente.
-- **Cambio** (`supabase/migrations/20260928170000_clientes_vendedor.sql`, aplicado en Central y `lt_ramirez`, incluido al final de `schema_base.sql`):
+- **Cambio** (`supabase/migrations/20260928170000_clientes_vendedor.sql`, aplicado en Central, `lt_ramirez` y Berraco (`fhcorxffeojptwvhtvqc`), incluido al final de `schema_base.sql`):
   - Trigger `trg_clientes_asignar_vendedor` (BEFORE INSERT): si el rol es vendedor, fuerza `vendedor_id = auth.uid()`.
   - Políticas `clientes_insert_vendedor` y `clientes_update_vendedor`: el vendedor inserta y edita solo clientes con `vendedor_id = auth.uid()`.
 - **Frontend:** no requiere cambios; el `insert` directo en `clientes` ya funciona para vendedor (web y móvil).
