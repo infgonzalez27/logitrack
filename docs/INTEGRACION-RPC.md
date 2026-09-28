@@ -697,6 +697,14 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 
+### 2.14.1. Alta de clientes por vendedor (RLS, 2026-09-28)
+- **Problema:** `clientes_write_staff` usa `lt_is_staff()` (admin, gerente, despachador); el vendedor recibía `new row violates row-level security policy for table "clientes"` al registrar un cliente.
+- **Cambio** (`supabase/migrations/20260928170000_clientes_vendedor.sql`, aplicado en Central y `lt_ramirez`, incluido al final de `schema_base.sql`):
+  - Trigger `trg_clientes_asignar_vendedor` (BEFORE INSERT): si el rol es vendedor, fuerza `vendedor_id = auth.uid()`.
+  - Políticas `clientes_insert_vendedor` y `clientes_update_vendedor`: el vendedor inserta y edita solo clientes con `vendedor_id = auth.uid()`.
+- **Frontend:** no requiere cambios; el `insert` directo en `clientes` ya funciona para vendedor (web y móvil).
+- **Pendiente agente BD:** `lt_is_staff()` tampoco incluye vendedor en los SELECT de `productos`, `ordenes_distribucion`, `detalle_distribucion`, `camiones` e `inventario_movil`; el front lo esquiva con RPC `SECURITY DEFINER` o service role.
+
 ### 2.15. Actualizar Registro de Cliente por UUID (`actualiza_registro_cliente_segun_uuid`)
 - **Firma SQL:** `actualiza_registro_cliente_segun_uuid(p_id UUID, p_rif_nit TEXT DEFAULT NULL, p_razon_social TEXT DEFAULT NULL, p_direccion_fiscal TEXT DEFAULT NULL, p_telefono TEXT DEFAULT NULL, p_movil1 TEXT DEFAULT NULL, p_movil2 TEXT DEFAULT NULL, p_movil3 TEXT DEFAULT NULL, p_correo_e TEXT DEFAULT NULL, p_cond_liq NUMERIC DEFAULT NULL, p_max_liq NUMERIC DEFAULT NULL, p_vendedor_id UUID DEFAULT NULL, p_despachador_id UUID DEFAULT NULL, p_id_ruta UUID DEFAULT NULL, p_activo BOOLEAN DEFAULT NULL, p_limite_credito NUMERIC DEFAULT NULL, p_max_facturas_vencidas INT DEFAULT NULL, p_permiso_despacho_manual BOOLEAN DEFAULT NULL)`
 - **Notas (DB-027):** permite actualizar políticas de crédito del cliente desde el formulario UI (`limite_credito`, `max_facturas_vencidas`, `permiso_despacho_manual`). `excepcion_despacho_gerencia` **no** se edita aquí: solo vía `otorgar_excepcion_despacho_gerencia` (§2.23).
