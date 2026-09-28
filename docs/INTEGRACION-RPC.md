@@ -1388,6 +1388,20 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ---
 
+### 2.42.1. Cuentas por cobrar iniciales (`registra_saldo_inicial_cliente`, 2026-09-28)
+- **Objetivo:** cargar la deuda previa de un cliente sin crear una orden con productos.
+- **Esquema** (`supabase/tenant_patches/20260928190000_saldo_inicial_cxc.sql`, aplicado en Central, `lt_ramirez` y Berraco):
+  - `ordenes_distribucion.es_saldo_inicial BOOLEAN NOT NULL DEFAULT FALSE` («es cuenta inicial»).
+  - Trigger `trg_ordenes_saldo_inicial_sin_radar`: un saldo inicial nunca queda con `radar_id` (evita que `crear_o_obtener_radar` / sincronizar radar lo vinculen por fecha y despachador).
+- **Firma SQL:** `registra_saldo_inicial_cliente(p_cliente_id UUID, p_total_recaudar_usd NUMERIC, p_factura_origen_numero TEXT, p_fecha_factura DATE DEFAULT CURRENT_DATE) RETURNS JSONB` (`SECURITY DEFINER`, solo rol admin/gerente).
+- **Qué inserta:** orden en `por_liquidar`, `es_saldo_inicial = TRUE`, sin detalle, sin camión ni radar; `total_recaudar_usd` = deuda; `total_recaudar_bs` con la última tasa; `vendedor_id`/`despachador_id`/`id_ruta` del cliente; `fecha_despacho` y `created_at` = fecha de la factura (mediodía Caracas), así `dias_vencidos` y el orden FIFO de `solicita_abonos_orden_distribucion` son reales.
+- **Validaciones:** monto > 0, factura obligatoria (máx. 30), fecha no futura, cliente existente, factura no repetida para el mismo cliente (sin distinguir mayúsculas, ignora anuladas). Códigos: `NO_AUTORIZADO`, `PARAMETRO_INVALIDO`, `CLIENTE_INEXISTENTE`, `DUPLICADO`.
+- **Respuesta:** `{ success, data: { orden_id, correlativo, factura_origen_numero, total_recaudar_usd, fecha_factura }, error }`.
+- **Efecto en el resto del sistema:** aparece en `retorna_ordenes_por_liquidar` y en `solicita_abonos_orden_distribucion`; se cobra con `registrar_rendicion_cuentas` como cualquier orden. El dashboard lo suma en cuentas por cobrar (con `total_recaudar_usd`) y **no** en ventas.
+- **Frontend web:** `/rendiciones/saldos-iniciales` (menú Cobranzas → «Cuentas por cobrar iniciales»), buscador de clientes por nombre o RIF; action `registrarSaldoInicialAction` en `src/lib/actions/saldos-iniciales.ts`.
+
+---
+
 ### 2.43. Gestión Multi-Tenant (Base de Datos Central)
 
 Esta sección define las funciones para gestionar el aprovisionamiento central de tenants: registro de bases `lt_*` en el catálogo de enrutamiento y asignación de usuarios (p. ej. gerente).

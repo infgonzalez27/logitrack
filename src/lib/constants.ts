@@ -114,6 +114,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/rendiciones/por-liquidar", label: "Órdenes por liquidar" },
       { href: "/rendiciones", label: "Cobranzas" },
+      { href: "/rendiciones/saldos-iniciales", label: "Cuentas por cobrar iniciales" },
       { href: "/rendiciones/formas-pago", label: "Reporte formas de pago" },
       { href: "/contenedores", label: "Consulta de contenedores" },
     ],

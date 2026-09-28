@@ -24,13 +24,15 @@ async function fetchOrdenesFinancieras(
       estado,
       created_at,
       fecha_despacho,
+      total_recaudar_usd,
+      es_saldo_inicial,
       clientes(razon_social),
       detalle_distribucion(subtotal_recaudar_usd),
       detalle_rendicion_ordenes(recaudado)
     `);
 
   if (isDashboardVendedorScope(rol)) {
-    query = query.eq("creado_por", userId);
+    query = query.or(`creado_por.eq.${userId},vendedor_id.eq.${userId}`);
   }
 
   const { data, error } = await query;

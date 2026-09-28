@@ -220,6 +220,8 @@ export interface OrdenDistribucion {
   created_at: string;
   /** Venta en ruta sin radar (`registrar_venta_en_ruta_autoventa`). */
   es_autoventa?: boolean;
+  /** Deuda previa del cliente sin productos (`registra_saldo_inicial_cliente`). */
+  es_saldo_inicial?: boolean;
   clientes?: Cliente | null;
   camiones?: Camion | null;
   /** @deprecated FK a choferes eliminada; usar despachador_id + perfiles. */

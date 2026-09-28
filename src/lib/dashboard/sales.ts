@@ -34,6 +34,8 @@ export type OrdenFinanciera = {
   estado: string;
   created_at: string;
   fecha_despacho: string | null;
+  total_recaudar_usd?: number | string | null;
+  es_saldo_inicial?: boolean | null;
   clientes?: { razon_social: string } | { razon_social: string }[] | null;
   detalle_distribucion?: DetalleLinea[] | DetalleLinea | null;
   detalle_rendicion_ordenes?: RendicionOrden | RendicionOrden[] | null;
@@ -63,7 +65,9 @@ const ESTADOS_CXC = new Set([
   "liquidada",
 ]);
 
+/** Cuentas iniciales (deuda previa) no son ventas: devuelve 0. */
 export function ordenMontoVenta(orden: OrdenFinanciera): number {
+  if (orden.es_saldo_inicial) return 0;
   const lineas = Array.isArray(orden.detalle_distribucion)
     ? orden.detalle_distribucion
     : orden.detalle_distribucion
@@ -73,13 +77,20 @@ export function ordenMontoVenta(orden: OrdenFinanciera): number {
 }
 
 export function ordenMontoCobrado(orden: OrdenFinanciera): number {
-  const rend = joinOne(orden.detalle_rendicion_ordenes ?? null);
-  return Number(rend?.recaudado ?? 0);
+  const rend = orden.detalle_rendicion_ordenes;
+  const filas = Array.isArray(rend) ? rend : rend ? [rend] : [];
+  return filas.reduce((sum, r) => sum + Number(r.recaudado ?? 0), 0);
+}
+
+function ordenMontoAdeudado(orden: OrdenFinanciera): number {
+  return orden.es_saldo_inicial
+    ? Number(orden.total_recaudar_usd ?? 0)
+    : ordenMontoVenta(orden);
 }
 
 export function ordenSaldoPorCobrar(orden: OrdenFinanciera): number {
   if (!ESTADOS_CXC.has(orden.estado)) return 0;
-  return Math.max(0, ordenMontoVenta(orden) - ordenMontoCobrado(orden));
+  return Math.max(0, ordenMontoAdeudado(orden) - ordenMontoCobrado(orden));
 }
 
 export function clienteNombre(orden: OrdenFinanciera): string {

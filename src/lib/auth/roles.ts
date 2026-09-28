@@ -90,6 +90,8 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/rendiciones/por-liquidar",
 
+    "/rendiciones/saldos-iniciales",
+
     "/rendiciones/formas-pago",
 
     "/contenedores",

@@ -95,6 +95,7 @@ export default async function OrdenDetallePage({
   const puedeRegistrarContenedores =
     canRegistrarContenedores(rol) &&
     rol !== "despachador" &&
+    !orden.es_saldo_inicial &&
     (orden.estado === "en_transito" || orden.estado === "por_liquidar");
   const tiposContenedores = contenedoresResult.ok
     ? contenedoresResult.contenedores
@@ -111,7 +112,11 @@ export default async function OrdenDetallePage({
       <div className="lt-no-print">
         <PageHeader
           title={`Orden #${orden.correlativo}`}
-          description={`Factura origen: ${orden.factura_origen_numero}`}
+          description={
+            orden.es_saldo_inicial
+              ? `Cuenta por cobrar inicial · Factura: ${orden.factura_origen_numero}`
+              : `Factura origen: ${orden.factura_origen_numero}`
+          }
           action={
             <div className="flex flex-wrap gap-2">
               {puedeEditar ? (
