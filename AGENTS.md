@@ -13,6 +13,9 @@ El usuario principal (Jorge) realiza sus pruebas desde un dispositivo móvil apu
 
 Vercel NO está conectado a GitHub: cada cambio del frontend se publica a mano con `npx vercel --prod --yes` (https://logitrack.informaticagonzalez.com).
 
+# REGLA DE BUILDS DE LA APP MÓVIL (APK)
+Los builds de EAS cuestan dinero. NUNCA lances `eas build` sin autorización explícita del usuario en ese momento. Los cambios en `apps/mobile` se hacen, se prueban con typecheck y se suben a GitHub, pero el APK se compila solo cuando el usuario lo pida, agrupando varios cambios en un mismo build.
+
 # REGLA DE CAMBIOS DE BD PARA EMPRESAS (TENANTS lt_*)
 Cada empresa tiene su propio proyecto Supabase. Todo cambio de esquema, RPC, trigger o política RLS que deba existir en las empresas va como archivo **idempotente** en `supabase/tenant_patches/AAAAMMDDHHMMSS_descripcion.sql` (`CREATE OR REPLACE`, `DROP ... IF EXISTS` antes de `CREATE`, `IF NOT EXISTS`). `bootstrapTenant` los aplica todos, en orden de nombre, al crear una empresa y al pulsar «Sincronizar» en `/admin`. Los archivos se leen del deploy de Vercel: tras agregar un parche hay que publicar (`npx vercel --prod --yes`) y luego sincronizar cada empresa existente.
 <!-- END:logitrack-agent-rules -->
