@@ -139,6 +139,45 @@ export async function listarSaldosContenedores(input?: {
   return { ok: true, rows };
 }
 
+export type SaldoEnvaseCliente = {
+  contenedor_id: string;
+  nombre: string;
+  codigo: string | null;
+  saldo: number;
+};
+
+/** Todos los tipos de contenedor con el saldo actual del cliente (0 si no tiene). */
+export async function obtenerSaldosEnvasesCliente(
+  clienteId: string,
+): Promise<
+  { ok: true; envases: SaldoEnvaseCliente[] } | { ok: false; error: string }
+> {
+  const [tiposRes, saldosRes] = await Promise.all([
+    supabase.from("tipos_contenedores").select("id, codigo, nombre").order("nombre"),
+    supabase
+      .from("saldo_contenedores_clientes")
+      .select("contenedor_id, saldo_pendiente")
+      .eq("cliente_id", clienteId),
+  ]);
+  if (tiposRes.error) return { ok: false, error: tiposRes.error.message };
+  if (saldosRes.error) return { ok: false, error: saldosRes.error.message };
+
+  const saldos = new Map<string, number>();
+  for (const s of saldosRes.data ?? []) {
+    saldos.set(String(s.contenedor_id), Number(s.saldo_pendiente) || 0);
+  }
+
+  return {
+    ok: true,
+    envases: (tiposRes.data ?? []).map((t) => ({
+      contenedor_id: String(t.id),
+      nombre: String(t.nombre ?? ""),
+      codigo: t.codigo ? String(t.codigo) : null,
+      saldo: saldos.get(String(t.id)) ?? 0,
+    })),
+  };
+}
+
 export function agruparSaldosPorCliente(
   rows: SaldoContenedorRow[],
 ): ClienteSaldoContenedoresResumen[] {

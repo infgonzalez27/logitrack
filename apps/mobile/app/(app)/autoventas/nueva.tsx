@@ -11,13 +11,17 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
-import { listClientesForProfile, type ClienteListaItem } from "@/lib/clientes";
+import { buscarClientesForProfile, type ClienteListaItem } from "@/lib/clientes";
 import { listarCamiones, retornaUltimaTasa, type CamionOption } from "@/lib/catalogos";
 import {
   listarInventarioMovil,
   registrarVentaEnRuta,
   type InventarioMovilRow,
 } from "@/lib/autoventas";
+import {
+  obtenerSaldosEnvasesCliente,
+  type SaldoEnvaseCliente,
+} from "@/lib/contenedores";
 import { formatMoney } from "@/lib/format";
 
 type Linea = {
@@ -28,18 +32,30 @@ type Linea = {
   disponible: number;
 };
 
+type Envase = SaldoEnvaseCliente & { entregados: string; retirados: string };
+
+function soloEnteros(texto: string): string {
+  return texto.replace(/[^0-9]/g, "");
+}
+
+function aEntero(texto: string): number {
+  const n = Number.parseInt(texto, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export default function AutoventaNuevaScreen() {
   const { camionId: camionParam } = useLocalSearchParams<{ camionId?: string }>();
   const { profile } = useAuth();
   const router = useRouter();
 
-  const [clientes, setClientes] = useState<ClienteListaItem[]>([]);
   const [camiones, setCamiones] = useState<CamionOption[]>([]);
   const [inventario, setInventario] = useState<InventarioMovilRow[]>([]);
   const [clienteId, setClienteId] = useState("");
   const [clienteLabel, setClienteLabel] = useState("");
   const [camionId, setCamionId] = useState(camionParam ?? "");
   const [lineas, setLineas] = useState<Linea[]>([]);
+  const [envases, setEnvases] = useState<Envase[]>([]);
+  const [envasesLoading, setEnvasesLoading] = useState(false);
   const [obs, setObs] = useState("");
   const [tasa, setTasa] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,18 +64,21 @@ export default function AutoventaNuevaScreen() {
   const [picker, setPicker] = useState<"cliente" | "camion" | "producto" | null>(
     null,
   );
+  const [clienteQ, setClienteQ] = useState("");
+  const [clienteResultados, setClienteResultados] = useState<ClienteListaItem[]>(
+    [],
+  );
+  const [buscandoClientes, setBuscandoClientes] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!profile) return;
-      const [cRes, camRes, tRes] = await Promise.all([
-        listClientesForProfile(profile),
+      const [camRes, tRes] = await Promise.all([
         listarCamiones(),
         retornaUltimaTasa(),
       ]);
       if (cancelled) return;
-      if (cRes.ok) setClientes(cRes.clientes);
       if (camRes.ok) {
         setCamiones(camRes.camiones);
         if (!camionId && camRes.camiones[0]) setCamionId(camRes.camiones[0].id);
@@ -72,6 +91,30 @@ export default function AutoventaNuevaScreen() {
     };
   }, [profile, camionId]);
 
+  useEffect(() => {
+    if (picker !== "cliente" || !profile) return;
+    const term = clienteQ.trim();
+    if (term.length < 2) {
+      setClienteResultados([]);
+      setBuscandoClientes(false);
+      return;
+    }
+    let cancelled = false;
+    setBuscandoClientes(true);
+    const timeout = setTimeout(() => {
+      void buscarClientesForProfile(profile, term).then((res) => {
+        if (cancelled) return;
+        setBuscandoClientes(false);
+        if (res.ok) setClienteResultados(res.clientes);
+        else setError(res.error);
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [clienteQ, picker, profile]);
+
   const loadInv = useCallback(async (id: string) => {
     if (!id) return;
     const res = await listarInventarioMovil(id);
@@ -81,6 +124,37 @@ export default function AutoventaNuevaScreen() {
   useEffect(() => {
     void loadInv(camionId);
   }, [camionId, loadInv]);
+
+  const elegirCliente = async (cliente: ClienteListaItem) => {
+    setClienteId(cliente.id);
+    setClienteLabel(cliente.razon_social);
+    setPicker(null);
+    setClienteQ("");
+    setClienteResultados([]);
+    setEnvases([]);
+    setEnvasesLoading(true);
+    const res = await obtenerSaldosEnvasesCliente(cliente.id);
+    setEnvasesLoading(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setEnvases(
+      res.envases.map((e) => ({ ...e, entregados: "", retirados: "" })),
+    );
+  };
+
+  const actualizarEnvase = (
+    contenedorId: string,
+    campo: "entregados" | "retirados",
+    valor: string,
+  ) => {
+    setEnvases((prev) =>
+      prev.map((e) =>
+        e.contenedor_id === contenedorId ? { ...e, [campo]: soloEnteros(valor) } : e,
+      ),
+    );
+  };
 
   const disponible = useMemo(() => {
     return inventario
@@ -130,20 +204,8 @@ export default function AutoventaNuevaScreen() {
     setPicker(null);
   };
 
-  const submit = async () => {
+  const registrar = async () => {
     if (!profile) return;
-    if (!clienteId) {
-      setError("Selecciona un cliente.");
-      return;
-    }
-    if (!camionId) {
-      setError("Selecciona un camión.");
-      return;
-    }
-    if (!lineas.length) {
-      setError("Agrega al menos un producto del inventario móvil.");
-      return;
-    }
     setSaving(true);
     setError(null);
     const res = await registrarVentaEnRuta({
@@ -157,6 +219,13 @@ export default function AutoventaNuevaScreen() {
         cantidad: l.cantidad,
         precio_unitario: l.precio,
       })),
+      contenedores: envases
+        .map((e) => ({
+          contenedor_id: e.contenedor_id,
+          cantidad_entregada: aEntero(e.entregados),
+          cantidad_retirada: aEntero(e.retirados),
+        }))
+        .filter((e) => e.cantidad_entregada > 0 || e.cantidad_retirada > 0),
     });
     setSaving(false);
     if (!res.ok) {
@@ -168,11 +237,50 @@ export default function AutoventaNuevaScreen() {
       `Orden ${res.correlativo != null ? `#${res.correlativo}` : ""} creada. Lista para rendición.`,
       [
         {
-          text: "OK",
+          text: "Listo",
+          style: "cancel",
           onPress: () => router.replace("/(app)/autoventas" as Href),
+        },
+        {
+          text: "Ver / imprimir ticket",
+          onPress: () => router.replace(`/(app)/ordenes/${res.ordenId}` as Href),
         },
       ],
     );
+  };
+
+  const submit = () => {
+    if (!profile) return;
+    if (!clienteId) {
+      setError("Selecciona un cliente.");
+      return;
+    }
+    if (!camionId) {
+      setError("Selecciona un camión.");
+      return;
+    }
+    if (!lineas.length) {
+      setError("Agrega al menos un producto del inventario móvil.");
+      return;
+    }
+    const excedidos = envases.filter(
+      (e) => aEntero(e.retirados) > e.saldo + aEntero(e.entregados),
+    );
+    if (excedidos.length) {
+      const detalle = excedidos
+        .map((e) => `${e.nombre}: saldo ${e.saldo}, retira ${aEntero(e.retirados)}`)
+        .join("\n");
+      Alert.alert(
+        "Retiro mayor al saldo",
+        `El cliente tiene menos envases pendientes de los que se retiran:\n${detalle}\n\nSi continúas, el saldo quedará en 0.`,
+        [
+          { text: "Revisar", style: "cancel" },
+          { text: "Registrar igual", onPress: () => void registrar() },
+        ],
+      );
+      return;
+    }
+    void registrar();
   };
 
   if (loading) {
@@ -184,24 +292,42 @@ export default function AutoventaNuevaScreen() {
   }
 
   if (picker === "cliente") {
+    const term = clienteQ.trim();
     return (
       <View style={styles.root}>
         <Pressable onPress={() => setPicker(null)}>
           <Text style={styles.back}>← Volver</Text>
         </Pressable>
+        <View style={styles.searchWrap}>
+          <TextInput
+            style={styles.input}
+            placeholder="Nombre, razón social o RIF…"
+            value={clienteQ}
+            onChangeText={setClienteQ}
+            autoFocus
+            autoCorrect={false}
+            autoCapitalize="characters"
+            returnKeyType="search"
+          />
+        </View>
         <FlatList
-          data={clientes}
+          data={clienteResultados}
           keyExtractor={(c) => c.id}
-          contentContainerStyle={{ padding: 16 }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+          ListEmptyComponent={
+            buscandoClientes ? (
+              <ActivityIndicator color="#0B3A5C" style={{ marginTop: 16 }} />
+            ) : (
+              <Text style={styles.meta}>
+                {term.length < 2
+                  ? "Escribe al menos 2 letras para buscar."
+                  : "Sin clientes que coincidan."}
+              </Text>
+            )
+          }
           renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() => {
-                setClienteId(item.id);
-                setClienteLabel(item.razon_social);
-                setPicker(null);
-              }}
-            >
+            <Pressable style={styles.card} onPress={() => void elegirCliente(item)}>
               <Text style={styles.name}>{item.razon_social}</Text>
               <Text style={styles.meta}>{item.rif_nit}</Text>
             </Pressable>
@@ -281,6 +407,7 @@ export default function AutoventaNuevaScreen() {
       style={styles.root}
       data={lineas}
       keyExtractor={(l) => l.producto_id}
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
       ListHeaderComponent={
         <View style={{ gap: 10 }}>
@@ -288,7 +415,7 @@ export default function AutoventaNuevaScreen() {
           <Text style={styles.label}>Cliente</Text>
           <Pressable style={styles.select} onPress={() => setPicker("cliente")}>
             <Text style={styles.selectText}>
-              {clienteLabel || "Elegir cliente"}
+              {clienteLabel || "Buscar cliente"}
             </Text>
           </Pressable>
           <Text style={styles.label}>Camión</Text>
@@ -370,10 +497,69 @@ export default function AutoventaNuevaScreen() {
       ListFooterComponent={
         <View style={{ gap: 12, marginTop: 8 }}>
           <Text style={styles.total}>Total ${formatMoney(total)}</Text>
+
+          {clienteId ? (
+            <View style={{ gap: 8 }}>
+              <Text style={styles.section}>Envases / vacíos</Text>
+              {envasesLoading ? (
+                <ActivityIndicator color="#0B3A5C" />
+              ) : envases.length === 0 ? (
+                <Text style={styles.meta}>No hay tipos de envase registrados.</Text>
+              ) : (
+                envases.map((e) => {
+                  const saldoFinal = Math.max(
+                    0,
+                    e.saldo + aEntero(e.entregados) - aEntero(e.retirados),
+                  );
+                  return (
+                    <View key={e.contenedor_id} style={styles.card}>
+                      <Text style={styles.name}>
+                        {e.codigo ? `${e.codigo} · ` : ""}
+                        {e.nombre}
+                      </Text>
+                      <Text style={styles.meta}>
+                        Saldo actual del cliente: {e.saldo}
+                      </Text>
+                      <View style={styles.envaseRow}>
+                        <View style={styles.envaseCol}>
+                          <Text style={styles.label}>Entregados</Text>
+                          <TextInput
+                            style={styles.input}
+                            keyboardType="number-pad"
+                            placeholder="0"
+                            value={e.entregados}
+                            onChangeText={(t) =>
+                              actualizarEnvase(e.contenedor_id, "entregados", t)
+                            }
+                          />
+                        </View>
+                        <View style={styles.envaseCol}>
+                          <Text style={styles.label}>Retirados</Text>
+                          <TextInput
+                            style={styles.input}
+                            keyboardType="number-pad"
+                            placeholder="0"
+                            value={e.retirados}
+                            onChangeText={(t) =>
+                              actualizarEnvase(e.contenedor_id, "retirados", t)
+                            }
+                          />
+                        </View>
+                      </View>
+                      <Text style={styles.saldoFinal}>
+                        Saldo final: {saldoFinal}
+                      </Text>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          ) : null}
+
           <Pressable
             style={[styles.btn, saving && { opacity: 0.6 }]}
             disabled={saving}
-            onPress={() => void submit()}
+            onPress={submit}
           >
             <Text style={styles.btnText}>
               {saving ? "Registrando…" : "Registrar venta"}
@@ -406,6 +592,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
   },
+  searchWrap: { paddingHorizontal: 16 },
   section: { fontSize: 16, fontWeight: "600", color: "#0B3A5C" },
   card: {
     backgroundColor: "#fff",
@@ -417,6 +604,9 @@ const styles = StyleSheet.create({
   },
   name: { fontWeight: "600", color: "#0B3A5C" },
   meta: { fontSize: 13, color: "#5B6B7C", marginTop: 2 },
+  envaseRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  envaseCol: { flex: 1, gap: 4 },
+  saldoFinal: { marginTop: 10, fontWeight: "700", color: "#0B3A5C" },
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },
   qtyBtn: {
     width: 36,

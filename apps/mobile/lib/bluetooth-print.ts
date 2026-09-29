@@ -141,6 +141,23 @@ export async function listBondedPrinters(): Promise<
   }
 }
 
+/** Imprime en la impresora guardada; `sinImpresora` si aún no se configuró. */
+export async function printToPreferredPrinter(
+  texto: string,
+): Promise<
+  { ok: true } | { ok: false; error: string; sinImpresora?: boolean }
+> {
+  const mac = await getPreferredPrinterMac();
+  if (!mac) {
+    return {
+      ok: false,
+      sinImpresora: true,
+      error: "No hay impresora guardada. Configúrala en Impresora.",
+    };
+  }
+  return printTextToBluetooth(mac, texto);
+}
+
 export async function printTextToBluetooth(
   address: string,
   texto: string,

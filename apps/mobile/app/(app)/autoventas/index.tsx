@@ -10,8 +10,13 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { listarCamiones, type CamionOption } from "@/lib/catalogos";
+import { printToPreferredPrinter } from "@/lib/bluetooth-print";
+import {
+  buildCargaCamionTicketText,
+  type CargaCamionTicketData,
+} from "@/lib/ticket";
 import {
   cargarInventarioMovil,
   listarInventarioMovil,
@@ -47,6 +52,14 @@ export default function AutoventasScreen() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [productosVistos, setProductosVistos] = useState<
+    Record<string, { codigo: string; nombre: string }>
+  >({});
+  const [ultimaCarga, setUltimaCarga] = useState<CargaCamionTicketData | null>(
+    null,
+  );
+  const [verComprobante, setVerComprobante] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
 
   const loadResumen = useCallback(async (id: string) => {
     if (!id) {
@@ -80,7 +93,17 @@ export default function AutoventasScreen() {
 
   const loadProductos = useCallback(async (term: string) => {
     const res = await listarProductos(term || ".F.");
-    if (res.ok) setProductos(res.productos.slice(0, 80));
+    if (res.ok) {
+      const lista = res.productos.slice(0, 80);
+      setProductos(lista);
+      setProductosVistos((prev) => {
+        const next = { ...prev };
+        for (const p of lista) {
+          next[p.id] = { codigo: p.codigo_producto ?? "", nombre: p.nombre };
+        }
+        return next;
+      });
+    }
   }, []);
 
   const load = useCallback(async () => {
@@ -146,8 +169,34 @@ export default function AutoventasScreen() {
       return;
     }
     setMessage(res.message || "Inventario cargado.");
+    setUltimaCarga({
+      camionLabel: camiones.find((c) => c.id === camionId)?.placa ?? "-",
+      fecha: new Date().toISOString(),
+      lineas: items.map((i) => ({
+        codigo: productosVistos[i.producto_id]?.codigo ?? "",
+        producto: productosVistos[i.producto_id]?.nombre ?? "Producto",
+        cantidad: i.cantidad_solicitada,
+      })),
+    });
+    setVerComprobante(false);
     setCantidadesCarga({});
     await loadResumen(camionId);
+  }
+
+  async function onImprimirCarga() {
+    if (!ultimaCarga) return;
+    setImprimiendo(true);
+    setError(null);
+    const res = await printToPreferredPrinter(
+      buildCargaCamionTicketText(ultimaCarga),
+    );
+    setImprimiendo(false);
+    if (!res.ok) {
+      setError(res.error);
+      if (res.sinImpresora) router.push("/(app)/impresora" as Href);
+      return;
+    }
+    setMessage("Comprobante de carga enviado a la impresora.");
   }
 
   async function onReversar(todo = false) {
@@ -203,6 +252,7 @@ export default function AutoventasScreen() {
               style={styles.card}
               onPress={() => {
                 setCamionId(item.id);
+                setUltimaCarga(null);
                 setPicking(false);
                 setLoading(true);
                 void loadResumen(item.id).finally(() => setLoading(false));
@@ -337,6 +387,32 @@ export default function AutoventasScreen() {
           keyExtractor={(p) => p.id}
           ListHeaderComponent={
             <View style={{ marginBottom: 8, gap: 8 }}>
+              {ultimaCarga ? (
+                <View style={styles.cargaCard}>
+                  <Text style={styles.name}>Carga confirmada</Text>
+                  <Text style={styles.meta}>
+                    {ultimaCarga.lineas.length} producto
+                    {ultimaCarga.lineas.length === 1 ? "" : "s"} · Total{" "}
+                    {ultimaCarga.lineas.reduce((s, l) => s + l.cantidad, 0)}{" "}
+                    unidades
+                  </Text>
+                  <PrimaryButton
+                    label="Imprimir carga"
+                    loading={imprimiendo}
+                    onPress={() => void onImprimirCarga()}
+                  />
+                  <Pressable onPress={() => setVerComprobante((v) => !v)}>
+                    <Text style={styles.link}>
+                      {verComprobante ? "Ocultar comprobante" : "Ver comprobante"}
+                    </Text>
+                  </Pressable>
+                  {verComprobante ? (
+                    <Text style={styles.ticket}>
+                      {buildCargaCamionTicketText(ultimaCarga)}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
               <SectionTitle>Cargar desde almacén</SectionTitle>
               <TextInput
                 style={styles.search}
@@ -496,6 +572,24 @@ const styles = StyleSheet.create({
   empty: { color: "#5B6B7C", marginBottom: 8 },
   ok: { color: "#027A48", marginBottom: 8, fontWeight: "600" },
   back: { color: "#0B3A5C", fontWeight: "600", marginBottom: 10 },
+  cargaCard: {
+    backgroundColor: "#ECFDF3",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#ABEFC6",
+    gap: 8,
+  },
+  link: { color: "#0B3A5C", fontWeight: "600", textAlign: "center" },
+  ticket: {
+    fontFamily: "monospace",
+    fontSize: 11,
+    lineHeight: 16,
+    color: "#0B3A5C",
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 8,
+  },
   search: {
     backgroundColor: "#fff",
     borderWidth: 1,

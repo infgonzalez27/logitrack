@@ -13,9 +13,22 @@ export type TicketLinea = {
 export type LineaEstadoCuentaVacios = {
   contenedor_id: string;
   nombre: string;
+  saldo_anterior: number;
   entregado: number;
   retirado: number;
   saldo_nuevo: number;
+};
+
+export type CargaCamionLinea = {
+  codigo: string;
+  producto: string;
+  cantidad: number;
+};
+
+export type CargaCamionTicketData = {
+  camionLabel: string;
+  fecha: string;
+  lineas: CargaCamionLinea[];
 };
 
 export type OrdenTicketData = {
@@ -64,6 +77,78 @@ export function toThermalText(value: string): string {
     .trimEnd();
 }
 
+const ANCHO = LINE.length;
+const COL_CODIGO = 6;
+const COL_CANTIDAD = 7;
+const COL_PRODUCTO = ANCHO - COL_CODIGO - COL_CANTIDAD - 2;
+
+function filaValor(label: string, value: number): string {
+  const num = formatNumber(value);
+  return `${label.padEnd(ANCHO - num.length)}${num}`;
+}
+
+function partirTexto(texto: string, ancho: number): string[] {
+  const palabras = texto.trim().split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  let actual = "";
+  for (const palabra of palabras) {
+    let resto = palabra;
+    while (resto.length > ancho) {
+      if (actual) {
+        out.push(actual);
+        actual = "";
+      }
+      out.push(resto.slice(0, ancho));
+      resto = resto.slice(ancho);
+    }
+    if (!actual) actual = resto;
+    else if (actual.length + 1 + resto.length <= ancho) actual += ` ${resto}`;
+    else {
+      out.push(actual);
+      actual = resto;
+    }
+  }
+  if (actual) out.push(actual);
+  return out.length ? out : [""];
+}
+
+/** Comprobante de carga de camión: CODIGO | PRODUCTO | CARGADO + total. */
+export function buildCargaCamionTicketText(data: CargaCamionTicketData): string {
+  const total = data.lineas.reduce((s, l) => s + l.cantidad, 0);
+  const lines: string[] = [
+    "LogiTrack",
+    "CARGA DE CAMION",
+    `Camion: ${data.camionLabel}`,
+    formatDate(data.fecha),
+    LINE,
+    `${"CODIGO".padEnd(COL_CODIGO)} ${"PRODUCTO".padEnd(COL_PRODUCTO)} ${"CARGADO".padStart(COL_CANTIDAD)}`,
+    LINE,
+  ];
+
+  for (const linea of data.lineas) {
+    const codigo = toThermalText(linea.codigo || "-").slice(0, COL_CODIGO);
+    const nombre = partirTexto(toThermalText(linea.producto), COL_PRODUCTO);
+    const cantidad = formatNumber(linea.cantidad);
+    lines.push(
+      `${codigo.padEnd(COL_CODIGO)} ${nombre[0]!.padEnd(COL_PRODUCTO)} ${cantidad.padStart(COL_CANTIDAD)}`,
+    );
+    for (const extra of nombre.slice(1)) {
+      lines.push(`${"".padEnd(COL_CODIGO)} ${extra}`);
+    }
+  }
+
+  if (!data.lineas.length) lines.push("(sin productos)");
+
+  lines.push(LINE);
+  lines.push(
+    `${"TOTAL:".padStart(ANCHO - COL_CANTIDAD - 1)} ${formatNumber(total).padStart(COL_CANTIDAD)}`,
+  );
+  lines.push(LINE);
+  lines.push("*** Fin del comprobante ***");
+
+  return `${toThermalText(lines.join("\n"))}\n\n\n`;
+}
+
 export function buildOrdenTicketText(data: OrdenTicketData): string {
   const lines: string[] = [
     "LogiTrack",
@@ -108,9 +193,10 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
   if (data.estadoCuentaVacios && data.estadoCuentaVacios.length > 0) {
     for (const v of data.estadoCuentaVacios) {
       lines.push(v.nombre);
-      lines.push(
-        `  Ent:${formatNumber(v.entregado)} Ret:${formatNumber(v.retirado)} Saldo:${formatNumber(v.saldo_nuevo)}`,
-      );
+      lines.push(filaValor("  Saldo anterior:", v.saldo_anterior));
+      lines.push(filaValor("  Entregados:", v.entregado));
+      lines.push(filaValor("  Retirados:", v.retirado));
+      lines.push(filaValor("  Saldo final:", v.saldo_nuevo));
     }
     if (data.estadoCuentaProvisional) {
       lines.push("(provisional hasta aprobar radar)");

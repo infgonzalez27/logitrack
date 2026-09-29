@@ -245,6 +245,7 @@ export async function resolveDespachadorNombre(
 export type LineaVaciosTicket = {
   contenedor_id: string;
   nombre: string;
+  saldo_anterior: number;
   entregado: number;
   retirado: number;
   saldo_nuevo: number;
@@ -261,13 +262,14 @@ export async function fetchEstadoCuentaVacios(orden: OrdenDetalle): Promise<{
 
   const { data: movs } = await supabase
     .from("movimientos_contenedores")
-    .select("contenedor_id, cantidad_entregada, cantidad_retirada")
+    .select("contenedor_id, cantidad_entregada, cantidad_retirada, created_at")
     .eq("cliente_id", clienteId)
     .eq("orden_id", ordenId);
 
   if (!movs?.length) return { lineas: [], provisional: false };
 
   const byId = new Map<string, { entregado: number; retirado: number }>();
+  let ultimoMovimiento = "";
   for (const m of movs) {
     const cid = String(m.contenedor_id ?? "").trim();
     if (!cid) continue;
@@ -275,18 +277,48 @@ export async function fetchEstadoCuentaVacios(orden: OrdenDetalle): Promise<{
     prev.entregado += Number(m.cantidad_entregada) || 0;
     prev.retirado += Number(m.cantidad_retirada) || 0;
     byId.set(cid, prev);
+    const ts = String(m.created_at ?? "");
+    if (ts > ultimoMovimiento) ultimoMovimiento = ts;
   }
 
   const ids = [...byId.keys()];
-  const { data: saldos } = await supabase
-    .from("saldo_contenedores_clientes")
-    .select("contenedor_id, saldo_pendiente")
-    .eq("cliente_id", clienteId)
-    .in("contenedor_id", ids);
+  const [{ data: saldos }, { data: posteriores }] = await Promise.all([
+    supabase
+      .from("saldo_contenedores_clientes")
+      .select("contenedor_id, saldo_pendiente")
+      .eq("cliente_id", clienteId)
+      .in("contenedor_id", ids),
+    ultimoMovimiento
+      ? supabase
+          .from("movimientos_contenedores")
+          .select("contenedor_id, cantidad_entregada, cantidad_retirada, orden_id")
+          .eq("cliente_id", clienteId)
+          .in("contenedor_id", ids)
+          .gt("created_at", ultimoMovimiento)
+      : Promise.resolve({ data: [] as never[] }),
+  ]);
+
+  // El saldo de la tabla es el actual; se descuentan los movimientos
+  // posteriores a esta orden para obtener el saldo al cierre de la orden.
+  const netoPosterior = new Map<string, number>();
+  for (const p of posteriores ?? []) {
+    if (p.orden_id === ordenId) continue;
+    const cid = String(p.contenedor_id);
+    netoPosterior.set(
+      cid,
+      (netoPosterior.get(cid) ?? 0) +
+        (Number(p.cantidad_entregada) || 0) -
+        (Number(p.cantidad_retirada) || 0),
+    );
+  }
 
   const saldoTabla = new Map<string, number>();
   for (const s of saldos ?? []) {
-    saldoTabla.set(String(s.contenedor_id), Number(s.saldo_pendiente) || 0);
+    const cid = String(s.contenedor_id);
+    saldoTabla.set(
+      cid,
+      (Number(s.saldo_pendiente) || 0) - (netoPosterior.get(cid) ?? 0),
+    );
   }
 
   const nombres = new Map<string, string>();
@@ -305,17 +337,21 @@ export async function fetchEstadoCuentaVacios(orden: OrdenDetalle): Promise<{
   }
 
   const lineas = [...byId.entries()]
-    .map(([contenedor_id, v]) => ({
-      contenedor_id,
-      nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
-      entregado: v.entregado,
-      retirado: v.retirado,
-      saldo_nuevo: Math.max(
+    .map(([contenedor_id, v]) => {
+      const saldoNuevo = Math.max(
         0,
         saldoTabla.get(contenedor_id) ??
           Math.max(0, v.entregado - v.retirado),
-      ),
-    }))
+      );
+      return {
+        contenedor_id,
+        nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
+        saldo_anterior: Math.max(0, saldoNuevo - v.entregado + v.retirado),
+        entregado: v.entregado,
+        retirado: v.retirado,
+        saldo_nuevo: saldoNuevo,
+      };
+    })
     .filter((l) => l.entregado > 0 || l.retirado > 0 || l.saldo_nuevo > 0)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 

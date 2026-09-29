@@ -67,6 +67,34 @@ export async function listClientesForProfile(
   return { ok: true, clientes: (data ?? []) as ClienteListaItem[] };
 }
 
+/** Typeahead: busca en el servidor por razón social o RIF, sin traer la cartera completa. */
+export async function buscarClientesForProfile(
+  profile: AppProfile,
+  texto: string,
+  limite = 20,
+): Promise<
+  { ok: true; clientes: ClienteListaItem[] } | { ok: false; error: string }
+> {
+  const term = texto.replace(/[%,()*\\]/g, " ").trim();
+  if (term.length < 2) return { ok: true, clientes: [] };
+
+  let q = supabase
+    .from("clientes")
+    .select("id, razon_social, rif_nit, despachador_id, id_ruta, vendedor_id")
+    .eq("activo", true)
+    .or(`razon_social.ilike.%${term}%,rif_nit.ilike.%${term}%`)
+    .order("razon_social")
+    .limit(limite);
+
+  if (profile.rol === "vendedor") {
+    q = q.eq("vendedor_id", profile.id);
+  }
+
+  const { data, error } = await q;
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, clientes: (data ?? []) as ClienteListaItem[] };
+}
+
 export async function getClienteVisita(
   clienteId: string,
   profile: AppProfile,

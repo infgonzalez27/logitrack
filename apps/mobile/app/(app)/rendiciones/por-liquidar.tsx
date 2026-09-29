@@ -1,12 +1,14 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import {
   retornaOrdenesPorLiquidar,
@@ -20,12 +22,21 @@ import {
   SectionTitle,
 } from "@/components/ui";
 
+function normalizar(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export default function PorLiquidarScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<OrdenPorLiquidarCliente[]>([]);
+  const [q, setQ] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -47,15 +58,50 @@ export default function PorLiquidarScreen() {
     }, [load]),
   );
 
+  const filtrados = useMemo(() => {
+    const term = normalizar(q);
+    if (!term) return items;
+    return items.filter(
+      (i) =>
+        normalizar(i.razon_social ?? "").includes(term) ||
+        normalizar(i.rif_nit ?? "").includes(term),
+    );
+  }, [items, q]);
+
   if (loading) return <LoadingBlock />;
 
   return (
     <View style={styles.root}>
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={18} color="#5B6B7C" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar cliente o RIF…"
+          value={q}
+          onChangeText={setQ}
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {q ? (
+          <Pressable
+            onPress={() => setQ("")}
+            hitSlop={10}
+            accessibilityLabel="Limpiar búsqueda"
+          >
+            <Ionicons name="close-circle" size={20} color="#5B6B7C" />
+          </Pressable>
+        ) : null}
+      </View>
       <ErrorText message={error} />
-      <SectionTitle>{`Clientes (${items.length})`}</SectionTitle>
+      <SectionTitle>
+        {q.trim()
+          ? `Clientes (${filtrados.length} de ${items.length})`
+          : `Clientes (${items.length})`}
+      </SectionTitle>
       <FlatList
-        data={items}
+        data={filtrados}
         keyExtractor={(item) => item.cliente_id}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -66,7 +112,13 @@ export default function PorLiquidarScreen() {
           />
         }
         ListEmptyComponent={
-          <EmptyState message="No hay órdenes por liquidar." />
+          <EmptyState
+            message={
+              q.trim()
+                ? "Ningún cliente coincide con la búsqueda."
+                : "No hay órdenes por liquidar."
+            }
+          />
         }
         renderItem={({ item }) => (
           <View style={styles.card}>
@@ -107,6 +159,23 @@ export default function PorLiquidarScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F4F6F8", padding: 16 },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#D0D7DE",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: "#0B3A5C",
+  },
   card: {
     backgroundColor: "#fff",
     borderRadius: 12,

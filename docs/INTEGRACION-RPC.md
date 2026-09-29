@@ -1290,6 +1290,12 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   }
   ```
 - **Permisos (RLS, 2026-09-29):** el rol `vendedor` opera AutoVentas igual que el despachador (cargar camión, vender, devolver sobrante). Parche `supabase/tenant_patches/20260929100000_autoventas_vendedor.sql` agrega lectura de `camiones` (`camiones_select_vendedor`) e `inventario_movil` (`inv_movil_select_vendedor`) para vendedor. Las escrituras siguen por las RPC `SECURITY DEFINER`; sus ventas quedan visibles porque `creado_por = p_vendedor_id`. Aplicado en Central, Ramirez y Berraco. Sin cambios en el frontend.
+- **Ticket del vendedor (RLS, 2026-09-29):** parche `supabase/tenant_patches/20260929120000_vendedor_ticket_lectura.sql` agrega lectura de `productos` (`productos_select_vendedor`) y de `detalle_distribucion` de sus órdenes (`detalle_select_vendedor`: `creado_por` o `vendedor_id` = `auth.uid()`). Sin esto el detalle/ticket de la orden salía sin líneas para el vendedor. Aplicado en Central, Ramirez y Berraco.
+- **App móvil (APK, 2026-09-29):**
+  - AutoVentas → Carga: tras confirmar, botón «Imprimir carga» con comprobante térmico de 32 columnas (`CODIGO | PRODUCTO | CARGADO` + `TOTAL`). `buildCargaCamionTicketText` en `apps/mobile/lib/ticket.ts`.
+  - Nueva venta en ruta: cliente por búsqueda predictiva en servidor (`buscarClientesForProfile`, `ilike` sobre `razon_social`/`rif_nit`, mínimo 2 letras, 20 resultados; ya no precarga la cartera). Al elegir cliente muestra el saldo por tipo de envase (`obtenerSaldosEnvasesCliente`) con inputs enteros de Entregados/Retirados y saldo final; se envían en `p_contenedores_json`.
+  - Ticket de la orden: bloque de vacíos con Saldo anterior, Entregados, Retirados y Saldo final. El saldo final se reconstruye restando al saldo actual los movimientos posteriores a la orden; saldo anterior = final − entregados + retirados.
+  - Órdenes por liquidar: buscador por cliente/RIF con botón para limpiar.
 
 ---
 
