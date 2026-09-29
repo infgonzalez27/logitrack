@@ -1296,6 +1296,11 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   - Nueva venta en ruta: cliente por búsqueda predictiva en servidor (`buscarClientesForProfile`, `ilike` sobre `razon_social`/`rif_nit`, mínimo 2 letras, 20 resultados; ya no precarga la cartera). Al elegir cliente muestra el saldo por tipo de envase (`obtenerSaldosEnvasesCliente`) con inputs enteros de Entregados/Retirados y saldo final; se envían en `p_contenedores_json`.
   - Ticket de la orden: bloque de vacíos con Saldo anterior, Entregados, Retirados y Saldo final. El saldo final se reconstruye restando al saldo actual los movimientos posteriores a la orden; saldo anterior = final − entregados + retirados.
   - Órdenes por liquidar: buscador por cliente/RIF con botón para limpiar.
+- **Web (Next.js, 2026-09-29):** mismos requerimientos en `/autoventas` y `/rendiciones/por-liquidar`.
+  - Carga: tras «Cargar al camión» aparece la tarjeta «Carga confirmada» con «Imprimir carga» → `/autoventas/carga/imprimir?d=<base64url>` (`CargaCamionTicket`, columnas Código/Producto/Cargado + TOTAL). El payload se codifica con `encodeCargaTicket` (`src/lib/autoventas/carga-ticket.ts`); no se guarda en BD.
+  - Venta: cliente con `ClienteCombobox` (`minChars={2}`, no lista nada hasta escribir 2 letras). Al elegirlo, `obtenerSaldosEnvasesClienteAction(clienteId)` lee `saldo_contenedores_clientes` y la sección Envases muestra una fila por tipo con saldo actual, Entregados/Retirados (solo enteros ≥ 0) y saldo final; pide confirmación si los retirados superan saldo + entregados. Al registrar, botón «Ver / imprimir ticket» → `/ordenes/{id}/imprimir?volver=/autoventas`.
+  - Ticket de orden (web y texto térmico): Saldo anterior / Entregados / Retirados / Saldo final. `lineasDesdeMovimientosOrden` ahora descuenta los movimientos posteriores a la orden para reimprimir el saldo histórico.
+  - Órdenes por liquidar: buscador (nombre o RIF, sin acentos) con botón × y contador «Clientes (X de Y)».
 
 ---
 

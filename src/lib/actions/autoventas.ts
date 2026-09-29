@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile, type RolNombre } from "@/lib/auth/roles";
 import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
+import { createClient } from "@/lib/supabase/server";
 import type {
   ResumenAutoVentaData,
   VentaAutoVentaParams,
@@ -43,7 +44,7 @@ async function requireAutoVentaAccess(): Promise<
 /** Registra venta en caliente (`registrar_venta_en_ruta_autoventa`). */
 export async function registrarVentaEnRutaAction(
   params: VentaAutoVentaParams,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ orden_id?: string; correlativo?: number }>> {
   const access = await requireAutoVentaAccess();
   if (!access.ok) return { success: false, message: access.message };
 
@@ -95,6 +96,28 @@ export async function registrarVentaEnRutaAction(
     message: response.message || "Venta en ruta registrada exitosamente.",
     data: response.data ?? undefined,
   };
+}
+
+/** Saldo actual de envases del cliente por tipo de contenedor. */
+export async function obtenerSaldosEnvasesClienteAction(
+  clienteId: string,
+): Promise<ActionResult<Record<string, number>>> {
+  const access = await requireAutoVentaAccess();
+  if (!access.ok) return { success: false, message: access.message };
+  if (!clienteId?.trim()) return { success: false, message: "Cliente requerido." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("saldo_contenedores_clientes")
+    .select("contenedor_id, saldo_pendiente")
+    .eq("cliente_id", clienteId);
+  if (error) return { success: false, message: error.message };
+
+  const saldos: Record<string, number> = {};
+  for (const row of data ?? []) {
+    saldos[String(row.contenedor_id)] = Number(row.saldo_pendiente) || 0;
+  }
+  return { success: true, data: saldos };
 }
 
 /** Resumen de jornada (`retorna_resumen_autoventas_jornada`). */

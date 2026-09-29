@@ -284,7 +284,7 @@ export async function lineasDesdeMovimientosOrden(input: {
   const db = await dbClient();
   const { data: movimientos } = await db
     .from("movimientos_contenedores")
-    .select("contenedor_id, cantidad_entregada, cantidad_retirada")
+    .select("contenedor_id, cantidad_entregada, cantidad_retirada, created_at")
     .eq("cliente_id", input.clienteId)
     .eq("orden_id", input.ordenId);
 
@@ -294,6 +294,7 @@ export async function lineasDesdeMovimientosOrden(input: {
     string,
     { entregado: number; retirado: number }
   >();
+  let ultimoMovimiento = "";
   for (const m of movimientos) {
     const id = String(m.contenedor_id ?? "").trim();
     if (!id) continue;
@@ -301,6 +302,30 @@ export async function lineasDesdeMovimientosOrden(input: {
     prev.entregado += Number(m.cantidad_entregada) || 0;
     prev.retirado += Number(m.cantidad_retirada) || 0;
     byId.set(id, prev);
+    const creado = String(m.created_at ?? "");
+    if (creado > ultimoMovimiento) ultimoMovimiento = creado;
+  }
+
+  // El saldo consolidado es el de hoy: se descuentan los movimientos
+  // posteriores a esta orden para reimprimir el saldo que tenía entonces.
+  const netoPosterior = new Map<string, number>();
+  if (ultimoMovimiento) {
+    const { data: posteriores } = await db
+      .from("movimientos_contenedores")
+      .select("orden_id, contenedor_id, cantidad_entregada, cantidad_retirada")
+      .eq("cliente_id", input.clienteId)
+      .in("contenedor_id", [...byId.keys()])
+      .gt("created_at", ultimoMovimiento);
+    for (const m of posteriores ?? []) {
+      if (String(m.orden_id) === input.ordenId) continue;
+      const id = String(m.contenedor_id);
+      netoPosterior.set(
+        id,
+        (netoPosterior.get(id) ?? 0) +
+          (Number(m.cantidad_entregada) || 0) -
+          (Number(m.cantidad_retirada) || 0),
+      );
+    }
   }
 
   const { data: saldos } = await db
@@ -334,12 +359,13 @@ export async function lineasDesdeMovimientosOrden(input: {
 
   return [...byId.entries()]
     .map(([contenedor_id, v]) => {
+      const saldoHoy = saldoTabla.get(contenedor_id);
       const saldo_nuevo = Math.max(
         0,
-        saldoTabla.get(contenedor_id) ??
-          Math.max(0, v.entregado - v.retirado),
+        saldoHoy != null
+          ? saldoHoy - (netoPosterior.get(contenedor_id) ?? 0)
+          : v.entregado - v.retirado,
       );
-      // saldo_anterior aproximado desde el movimiento de esta orden
       const saldo_anterior = Math.max(0, saldo_nuevo - v.entregado + v.retirado);
       return {
         contenedor_id,

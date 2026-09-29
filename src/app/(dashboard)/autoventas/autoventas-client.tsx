@@ -1,17 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LogiImage } from "@/components/media/logi-image";
 import { ProductoCatalogo } from "@/components/productos/producto-catalogo";
+import { ClienteCombobox } from "@/components/clientes/cliente-combobox";
 import { resolveProductoImage } from "@/lib/product-images";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
+  encodeCargaTicket,
+  type CargaTicketData,
+} from "@/lib/autoventas/carga-ticket";
+import {
   cargarInventarioMovilAutoVentasAction,
   obtenerResumenAutoVentasJornada,
+  obtenerSaldosEnvasesClienteAction,
   registrarVentaEnRutaAction,
   reversarInventarioMovilAutoVentasAction,
 } from "@/lib/actions/autoventas";
@@ -77,11 +83,11 @@ type LineaVenta = {
   precio_unitario: number;
 };
 
-type LineaContenedor = {
-  contenedor_id: string;
-  cantidad_entregada: number;
-  cantidad_retirada: number;
-};
+type EnvaseInput = { entregados: string; retirados: string };
+
+function soloEnteros(raw: string): string {
+  return raw.replace(/\D/g, "").slice(0, 6);
+}
 
 type Props = {
   camiones: CamionItem[];
@@ -121,12 +127,16 @@ export function AutoVentasClient({
   const [cargandoResumen, setCargandoResumen] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
-  const [buscarCliente, setBuscarCliente] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [lineasVenta, setLineasVenta] = useState<LineaVenta[]>([]);
-  const [lineasContenedor, setLineasContenedor] = useState<LineaContenedor[]>(
-    [],
-  );
+  const [envases, setEnvases] = useState<Record<string, EnvaseInput>>({});
+  const [saldosEnvases, setSaldosEnvases] = useState<Record<
+    string,
+    number
+  > | null>(null);
+  const [cargandoSaldos, setCargandoSaldos] = useState(false);
+  const [ultimaVentaId, setUltimaVentaId] = useState<string | null>(null);
+  const [ultimaCarga, setUltimaCarga] = useState<CargaTicketData | null>(null);
   const [lineasCarga, setLineasCarga] = useState<LineaCarga[]>([]);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
     () => Object.fromEntries(productos.map((p) => [p.id, p])),
@@ -142,15 +152,63 @@ export function AutoVentasClient({
     [ordenesJornada, camionId],
   );
 
-  const clientesFiltrados = useMemo(() => {
-    const q = buscarCliente.trim().toLowerCase();
-    if (!q) return clientes;
-    return clientes.filter(
-      (c) =>
-        c.razon_social.toLowerCase().includes(q) ||
-        c.rif_nit.toLowerCase().includes(q),
-    );
-  }, [clientes, buscarCliente]);
+  const clienteOptions = useMemo(
+    () =>
+      clientes.map((c) => ({
+        value: c.id,
+        label: c.razon_social,
+        hint: c.rif_nit,
+      })),
+    [clientes],
+  );
+
+  const clienteSolicitado = useRef("");
+
+  function seleccionarCliente(id: string) {
+    setClienteId(id);
+    setEnvases({});
+    setSaldosEnvases(null);
+    clienteSolicitado.current = id;
+    if (!id) {
+      setCargandoSaldos(false);
+      return;
+    }
+    setCargandoSaldos(true);
+    void obtenerSaldosEnvasesClienteAction(id).then((res) => {
+      if (clienteSolicitado.current !== id) return;
+      setCargandoSaldos(false);
+      setSaldosEnvases(res.success && res.data ? res.data : {});
+    });
+  }
+
+  function envaseValor(contenedorId: string) {
+    const e = envases[contenedorId];
+    const saldo = saldosEnvases?.[contenedorId] ?? 0;
+    const entregados = Number(e?.entregados) || 0;
+    const retirados = Number(e?.retirados) || 0;
+    return {
+      saldo,
+      entregados,
+      retirados,
+      final: Math.max(0, saldo + entregados - retirados),
+      excede: retirados > saldo + entregados,
+    };
+  }
+
+  function editarEnvase(
+    contenedorId: string,
+    campo: keyof EnvaseInput,
+    raw: string,
+  ) {
+    setEnvases((prev) => ({
+      ...prev,
+      [contenedorId]: {
+        entregados: prev[contenedorId]?.entregados ?? "",
+        retirados: prev[contenedorId]?.retirados ?? "",
+        [campo]: soloEnteros(raw),
+      },
+    }));
+  }
 
   /** Catálogo para venta: stock = disponible en el camión seleccionado. */
   const productosParaVenta = useMemo((): ProductoListaRpc[] => {
@@ -274,6 +332,7 @@ export function AutoVentasClient({
 
   const handleGuardarVenta = () => {
     setMensaje(null);
+    setUltimaVentaId(null);
     if (!camionId) {
       setMensaje({ tipo: "error", texto: "Selecciona un camión." });
       return;
@@ -287,6 +346,21 @@ export function AutoVentasClient({
       return;
     }
 
+    const contenedoresJson = contenedores
+      .map((c) => ({ id: c.id, nombre: c.nombre, ...envaseValor(c.id) }))
+      .filter((c) => c.entregados > 0 || c.retirados > 0);
+    const excedidos = contenedoresJson.filter((c) => c.excede);
+    if (
+      excedidos.length &&
+      !confirm(
+        `Los retirados superan el saldo del cliente en: ${excedidos
+          .map((c) => c.nombre)
+          .join(", ")}. El saldo final quedará en 0. ¿Continuar?`,
+      )
+    ) {
+      return;
+    }
+
     startTransition(async () => {
       const res = await registrarVentaEnRutaAction({
         vendedor_id: vendedorId,
@@ -297,16 +371,11 @@ export function AutoVentasClient({
           cantidad: l.cantidad,
           precio_unitario: l.precio_unitario,
         })),
-        contenedores_json: lineasContenedor
-          .filter(
-            (c) =>
-              (c.cantidad_entregada || 0) > 0 || (c.cantidad_retirada || 0) > 0,
-          )
-          .map((c) => ({
-            contenedor_id: c.contenedor_id,
-            cantidad_entregada: c.cantidad_entregada,
-            cantidad_retirada: c.cantidad_retirada,
-          })),
+        contenedores_json: contenedoresJson.map((c) => ({
+          contenedor_id: c.id,
+          cantidad_entregada: c.entregados,
+          cantidad_retirada: c.retirados,
+        })),
         observaciones: observaciones || undefined,
         tasa_cambio: tasaOficial > 0 ? tasaOficial : undefined,
       });
@@ -316,8 +385,9 @@ export function AutoVentasClient({
           tipo: "success",
           texto: res.message || "Venta registrada.",
         });
+        setUltimaVentaId(res.data?.orden_id ?? null);
         setLineasVenta([]);
-        setLineasContenedor([]);
+        seleccionarCliente("");
         setObservaciones("");
         setTab("resumen");
         router.refresh();
@@ -351,6 +421,15 @@ export function AutoVentasClient({
         setMensaje({
           tipo: "success",
           texto: res.message || "Inventario cargado.",
+        });
+        setUltimaCarga({
+          camion: camiones.find((c) => c.id === camionId)?.placa ?? "—",
+          fecha: new Date().toISOString(),
+          lineas: lineasCarga.map((l) => ({
+            codigo: catalogo[l.producto_id]?.codigo_producto ?? "",
+            producto: catalogo[l.producto_id]?.nombre ?? "Producto",
+            cantidad: l.cantidad,
+          })),
         });
         setLineasCarga([]);
         setTab("resumen");
@@ -409,6 +488,65 @@ export function AutoVentasClient({
         </p>
       ) : null}
 
+      {ultimaVentaId ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-lt-text">
+            Venta registrada. Puedes imprimir el ticket con el balance de
+            envases.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              href={`/ordenes/${ultimaVentaId}/imprimir?volver=/autoventas`}
+              variant="primary"
+            >
+              Ver / imprimir ticket
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setUltimaVentaId(null)}
+            >
+              Listo
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      {ultimaCarga ? (
+        <Card className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-lt-success-text">
+                Carga confirmada
+              </h2>
+              <p className="text-sm text-lt-text-muted">
+                Camión {ultimaCarga.camion} ·{" "}
+                {formatNumber(
+                  ultimaCarga.lineas.reduce((s, l) => s + l.cantidad, 0),
+                )}{" "}
+                unidades en {formatNumber(ultimaCarga.lineas.length)} producto
+                {ultimaCarga.lineas.length === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                href={`/autoventas/carga/imprimir?d=${encodeCargaTicket(ultimaCarga)}`}
+                variant="primary"
+              >
+                Imprimir carga
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setUltimaCarga(null)}
+              >
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
       <Card className="space-y-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-[14rem] flex-1 space-y-1.5">
@@ -417,7 +555,10 @@ export function AutoVentasClient({
             </label>
             <select
               value={camionId}
-              onChange={(e) => setCamionId(e.target.value)}
+              onChange={(e) => {
+                setCamionId(e.target.value);
+                setUltimaCarga(null);
+              }}
               className={inputClass}
             >
               {camiones.length === 0 ? (
@@ -772,30 +913,14 @@ export function AutoVentasClient({
                 Solo productos con stock en el camión seleccionado.
               </p>
             </div>
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-lt-text">
-                Cliente *
-              </label>
-              <input
-                type="search"
-                placeholder="Buscar razón social o RIF…"
-                value={buscarCliente}
-                onChange={(e) => setBuscarCliente(e.target.value)}
-                className={`${inputClass} mb-2`}
-              />
-              <select
-                value={clienteId}
-                onChange={(e) => setClienteId(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Selecciona cliente</option>
-                {clientesFiltrados.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.razon_social} ({c.rif_nit})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ClienteCombobox
+              label="Cliente *"
+              options={clienteOptions}
+              value={clienteId}
+              onChange={seleccionarCliente}
+              placeholder="Escribe razón social o RIF…"
+              minChars={2}
+            />
             <Input
               label="Observaciones"
               value={observaciones}
@@ -921,109 +1046,88 @@ export function AutoVentasClient({
             </p>
 
             <div className="mt-4 space-y-3 border-t border-lt-border-light pt-4">
-              <div className="flex items-center justify-between gap-2">
+              <div>
                 <h3 className="text-sm font-semibold text-lt-text">
                   Envases (opcional)
                 </h3>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={!contenedores.length}
-                  onClick={() => {
-                    if (!contenedores[0]) return;
-                    setLineasContenedor((prev) => [
-                      ...prev,
-                      {
-                        contenedor_id: contenedores[0].id,
-                        cantidad_entregada: 0,
-                        cantidad_retirada: 0,
-                      },
-                    ]);
-                  }}
-                >
-                  + Envase
-                </Button>
+                <p className="text-xs text-lt-text-muted">
+                  Saldo final = saldo actual + entregados − retirados
+                </p>
               </div>
-              {lineasContenedor.map((linea, idx) => (
-                <div
-                  key={idx}
-                  className="grid gap-2 rounded-xl border border-lt-border p-3 sm:grid-cols-12 sm:items-end"
-                >
-                  <div className="sm:col-span-5">
-                    <select
-                      value={linea.contenedor_id}
-                      onChange={(e) =>
-                        setLineasContenedor((prev) => {
-                          const next = [...prev];
-                          next[idx] = {
-                            ...next[idx],
-                            contenedor_id: e.target.value,
-                          };
-                          return next;
-                        })
-                      }
-                      className={inputClass}
+              {!clienteId ? (
+                <p className="text-sm text-lt-text-muted">
+                  Selecciona un cliente para ver su saldo de envases.
+                </p>
+              ) : cargandoSaldos ? (
+                <p className="text-sm text-lt-text-muted">
+                  Consultando saldo de envases…
+                </p>
+              ) : !contenedores.length ? (
+                <p className="text-sm text-lt-text-muted">
+                  No hay tipos de envase registrados.
+                </p>
+              ) : (
+                contenedores.map((c) => {
+                  const v = envaseValor(c.id);
+                  return (
+                    <div
+                      key={c.id}
+                      className="grid gap-2 rounded-xl border border-lt-border p-3 sm:grid-cols-12 sm:items-end"
                     >
-                      {contenedores.map((c) => (
-                        <option key={c.id} value={c.id}>
+                      <div className="sm:col-span-4">
+                        <p className="text-sm font-medium text-lt-text">
                           {c.codigo ? `${c.codigo} — ` : ""}
                           {c.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="sm:col-span-3">
-                    <Input
-                      label="Entregados"
-                      type="number"
-                      min={0}
-                      value={linea.cantidad_entregada}
-                      onChange={(e) =>
-                        setLineasContenedor((prev) => {
-                          const next = [...prev];
-                          next[idx] = {
-                            ...next[idx],
-                            cantidad_entregada: Number(e.target.value),
-                          };
-                          return next;
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <Input
-                      label="Retirados"
-                      type="number"
-                      min={0}
-                      value={linea.cantidad_retirada}
-                      onChange={(e) =>
-                        setLineasContenedor((prev) => {
-                          const next = [...prev];
-                          next[idx] = {
-                            ...next[idx],
-                            cantidad_retirada: Number(e.target.value),
-                          };
-                          return next;
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="sm:col-span-1">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="w-full"
-                      onClick={() =>
-                        setLineasContenedor((prev) =>
-                          prev.filter((_, i) => i !== idx),
-                        )
-                      }
-                    >
-                      ×
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                        </p>
+                        <p className="text-xs text-lt-text-muted">
+                          Saldo actual:{" "}
+                          <span className="font-semibold text-lt-text">
+                            {formatNumber(v.saldo)}
+                          </span>
+                        </p>
+                      </div>
+                      <div className="sm:col-span-3">
+                        <Input
+                          label="Entregados"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={envases[c.id]?.entregados ?? ""}
+                          onChange={(e) =>
+                            editarEnvase(c.id, "entregados", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <Input
+                          label="Retirados"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={envases[c.id]?.retirados ?? ""}
+                          onChange={(e) =>
+                            editarEnvase(c.id, "retirados", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="sm:col-span-2 sm:text-right">
+                        <p className="text-xs text-lt-text-muted">Saldo final</p>
+                        <p
+                          className={`text-lg font-bold tabular-nums ${
+                            v.excede ? "text-lt-danger-text" : "text-lt-text"
+                          }`}
+                        >
+                          {formatNumber(v.final)}
+                        </p>
+                      </div>
+                      {v.excede ? (
+                        <p className="text-xs text-lt-danger-text sm:col-span-12">
+                          Los retirados superan el saldo del cliente más lo
+                          entregado.
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <div className="mt-4 flex flex-wrap justify-end gap-2">

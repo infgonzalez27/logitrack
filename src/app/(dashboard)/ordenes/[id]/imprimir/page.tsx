@@ -146,7 +146,9 @@ export default async function OrdenImprimirPage({
         volverLabel={
           volverParam?.startsWith("/radar")
             ? "Volver al radar"
-            : "Volver a la orden"
+            : volverParam?.startsWith("/autoventas")
+              ? "Volver a AutoVentas"
+              : "Volver a la orden"
         }
       />
 

@@ -32,6 +32,12 @@ export type OrdenTicketData = {
 
 const LINE = "--------------------------------";
 
+function filaVacios(label: string, valor: number): string {
+  const v = formatNumber(valor);
+  const espacios = Math.max(1, LINE.length - 2 - label.length - v.length);
+  return `  ${label}${" ".repeat(espacios)}${v}`;
+}
+
 /** Monto simple para térmicas (evita símbolos Unicode de Intl). */
 function moneyThermal(value: number): string {
   return `USD ${value.toFixed(2)}`;
@@ -93,9 +99,10 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
   if (data.estadoCuentaVacios && data.estadoCuentaVacios.length > 0) {
     for (const v of data.estadoCuentaVacios) {
       lines.push(v.nombre);
-      lines.push(
-        `  Ant:${formatNumber(v.saldo_anterior)} Ent:${formatNumber(v.entregado)} Ret:${formatNumber(v.retirado)} Saldo:${formatNumber(v.saldo_nuevo)}`,
-      );
+      lines.push(filaVacios("Saldo anterior", v.saldo_anterior));
+      lines.push(filaVacios("Entregados", v.entregado));
+      lines.push(filaVacios("Retirados", v.retirado));
+      lines.push(filaVacios("Saldo final", v.saldo_nuevo));
     }
     if (data.estadoCuentaProvisional) {
       lines.push("(provisional hasta aprobar radar)");
@@ -210,15 +217,15 @@ export function OrdenTicket(data: OrdenTicketData) {
                 <span>{formatNumber(v.saldo_anterior)}</span>
               </p>
               <p className="lt-ticket__row">
-                <span>Entregado</span>
+                <span>Entregados</span>
                 <span>{formatNumber(v.entregado)}</span>
               </p>
               <p className="lt-ticket__row">
-                <span>Retirado</span>
+                <span>Retirados</span>
                 <span>{formatNumber(v.retirado)}</span>
               </p>
               <p className="lt-ticket__row">
-                <span>Saldo pendiente</span>
+                <span>Saldo final</span>
                 <span className="lt-ticket__strong">
                   {formatNumber(v.saldo_nuevo)}
                 </span>

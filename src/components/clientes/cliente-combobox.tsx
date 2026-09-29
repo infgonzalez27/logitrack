@@ -28,10 +28,13 @@ export function ClienteCombobox({
   placeholder = "Buscar por nombre o RIF…",
   name,
   emptyMessage = "Sin clientes que coincidan.",
+  minChars = 0,
 }: {
   label?: string;
   name?: string;
   emptyMessage?: string;
+  /** Letras mínimas antes de listar opciones (0 = lista al enfocar). */
+  minChars?: number;
   options: ClienteComboboxOption[];
   value: string;
   onChange: (value: string) => void;
@@ -59,7 +62,13 @@ export function ClienteCombobox({
     return () => document.removeEventListener("mousedown", onClickFuera);
   }, []);
 
+  const faltanLetras =
+    minChars > 0 &&
+    normalizar(query).length < minChars &&
+    !(seleccionado && query === seleccionado.label);
+
   const resultados = useMemo(() => {
+    if (faltanLetras) return [];
     const q = normalizar(query);
     const filtrados =
       !q || (seleccionado && query === seleccionado.label)
@@ -70,7 +79,7 @@ export function ClienteCombobox({
               normalizar(o.hint ?? "").includes(q),
           );
     return filtrados.slice(0, MAX_RESULTADOS);
-  }, [options, query, seleccionado]);
+  }, [options, query, seleccionado, faltanLetras]);
 
   function elegir(option: ClienteComboboxOption) {
     onChange(option.value);
@@ -141,7 +150,11 @@ export function ClienteCombobox({
           role="listbox"
           className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-lt-border bg-lt-surface py-1 shadow-lg"
         >
-          {resultados.length === 0 ? (
+          {faltanLetras ? (
+            <li className="px-3.5 py-2.5 text-sm text-lt-text-muted">
+              Escribe al menos {minChars} letras para buscar.
+            </li>
+          ) : resultados.length === 0 ? (
             <li className="px-3.5 py-2.5 text-sm text-lt-text-muted">
               {emptyMessage}
             </li>
