@@ -1,8 +1,21 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PermissionsAndroid, Platform } from "react-native";
-import { buildEscPosBytes, bytesToBase64 } from "./ticket";
+import { buildEscPosBytes, toThermalText } from "./ticket";
+import { buildRasterEscPosChunks, type AnchoPapel } from "./escpos-raster";
 
 const PRINTER_KEY = "logitrack.print.preferred_mac";
+const CONFIG_KEY_PREFIX = "logitrack.print.config.";
+
+/**
+ * `texto`: ESC/POS con la fuente de la impresora.
+ * `imagen`: el ticket se envía como mapa de bits (GS v 0), para impresoras
+ * que avanzan papel pero no dibujan el texto.
+ */
+export type ModoImpresion = "texto" | "imagen";
+
+export type PrinterConfig = { modo: ModoImpresion; ancho: AnchoPapel };
+
+const CONFIG_DEFAULT: PrinterConfig = { modo: "texto", ancho: 58 };
 
 export type BondedDevice = {
   address: string;
@@ -16,7 +29,7 @@ type BluetoothClassicModule = {
   connectToDevice: (
     address: string,
   ) => Promise<{
-    write: (data: string) => Promise<boolean>;
+    write: (data: string, encoding?: string) => Promise<boolean>;
     disconnect: () => Promise<boolean>;
   }>;
 };
@@ -97,6 +110,37 @@ export async function setPreferredPrinterMac(mac: string): Promise<void> {
 
 export async function clearPreferredPrinterMac(): Promise<void> {
   await AsyncStorage.removeItem(PRINTER_KEY);
+}
+
+export async function getPrinterConfig(mac: string): Promise<PrinterConfig> {
+  try {
+    const raw = await AsyncStorage.getItem(CONFIG_KEY_PREFIX + mac);
+    if (!raw) return CONFIG_DEFAULT;
+    const parsed = JSON.parse(raw) as Partial<PrinterConfig>;
+    return {
+      modo: parsed.modo === "imagen" ? "imagen" : "texto",
+      ancho: parsed.ancho === 80 ? 80 : 58,
+    };
+  } catch {
+    return CONFIG_DEFAULT;
+  }
+}
+
+export async function setPrinterConfig(
+  mac: string,
+  config: PrinterConfig,
+): Promise<void> {
+  await AsyncStorage.setItem(CONFIG_KEY_PREFIX + mac, JSON.stringify(config));
+}
+
+function toLatin1(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]!);
+  return out;
+}
+
+function esperar(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function listBondedPrinters(): Promise<
@@ -181,14 +225,23 @@ export async function printTextToBluetooth(
       await bt.requestBluetoothEnabled();
     }
 
+    const config = await getPrinterConfig(address);
     const connection = await bt.connectToDevice(address);
-    const bytes = buildEscPosBytes(texto, opts);
-    const asLatin1 = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
-    try {
-      await connection.write(asLatin1);
-    } catch {
-      await connection.write(bytesToBase64(bytes));
+    // Sin encoding la librería convierte el string a UTF-8 y altera bytes ≥ 0x80.
+    if (config.modo === "imagen") {
+      const chunks = buildRasterEscPosChunks(toThermalText(texto), {
+        ancho: config.ancho,
+        cut: opts?.cut,
+      });
+      for (const chunk of chunks) {
+        await connection.write(toLatin1(chunk), "latin1");
+        await esperar(25);
+      }
+    } else {
+      await connection.write(toLatin1(buildEscPosBytes(texto, opts)), "latin1");
     }
+    // Cerrar el socket enseguida puede descartar lo que aún no salió por RFCOMM.
+    await esperar(config.modo === "imagen" ? 1500 : 800);
     try {
       await connection.disconnect();
     } catch {

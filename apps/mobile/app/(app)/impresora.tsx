@@ -11,23 +11,50 @@ import { useFocusEffect } from "expo-router";
 import {
   clearPreferredPrinterMac,
   getPreferredPrinterMac,
+  getPrinterConfig,
   listBondedPrinters,
   printTextToBluetooth,
   setPreferredPrinterMac,
+  setPrinterConfig,
   type BondedDevice,
+  type PrinterConfig,
 } from "@/lib/bluetooth-print";
-import { buildEscPosBytes, toThermalText } from "@/lib/ticket";
+import { toThermalText } from "@/lib/ticket";
 
 const TEST_TICKET = toThermalText(
   [
     "LogiTrack",
     "PRUEBA DE IMPRESORA",
     "--------------------------------",
-    "Si lees esto, Bluetooth ESC/POS OK",
+    "Si lees esto, la impresora",
+    "funciona con LogiTrack.",
+    "CODIGO  PRODUCTO        CARGADO",
+    "0001    Producto demo         12",
     "--------------------------------",
     "*** Fin ***",
   ].join("\n") + "\n\n\n",
 );
+
+function Opcion({
+  label,
+  activo,
+  onPress,
+}: {
+  label: string;
+  activo: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.chip, activo && styles.chipActivo]}
+    >
+      <Text style={[styles.chipText, activo && styles.chipTextActivo]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
 export default function ImpresoraScreen() {
   const [devices, setDevices] = useState<BondedDevice[]>([]);
@@ -36,6 +63,14 @@ export default function ImpresoraScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [configs, setConfigs] = useState<Record<string, PrinterConfig>>({});
+
+  async function cambiarConfig(address: string, cambio: Partial<PrinterConfig>) {
+    const actual = configs[address] ?? (await getPrinterConfig(address));
+    const nueva = { ...actual, ...cambio };
+    setConfigs((prev) => ({ ...prev, [address]: nueva }));
+    await setPrinterConfig(address, nueva);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +86,12 @@ export default function ImpresoraScreen() {
       return;
     }
     setDevices(result.devices);
+    const entradas = await Promise.all(
+      result.devices.map(
+        async (d) => [d.address, await getPrinterConfig(d.address)] as const,
+      ),
+    );
+    setConfigs(Object.fromEntries(entradas));
   }, []);
 
   useFocusEffect(
@@ -69,7 +110,6 @@ export default function ImpresoraScreen() {
     setBusy(true);
     setError(null);
     setMessage(null);
-    void buildEscPosBytes(TEST_TICKET);
     const result = await printTextToBluetooth(address, TEST_TICKET);
     setBusy(false);
     if (!result.ok) {
@@ -111,10 +151,45 @@ export default function ImpresoraScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {message ? <Text style={styles.ok}>{message}</Text> : null}
 
-      {devices.map((d) => (
+      {devices.map((d) => {
+        const cfg = configs[d.address] ?? { modo: "texto", ancho: 58 };
+        return (
         <View key={d.address} style={styles.card}>
           <Text style={styles.name}>{d.name}</Text>
           <Text style={styles.mac}>{d.address}</Text>
+          <Text style={styles.optLabel}>Modo de impresión</Text>
+          <View style={styles.chips}>
+            <Opcion
+              label="Texto"
+              activo={cfg.modo === "texto"}
+              onPress={() => void cambiarConfig(d.address, { modo: "texto" })}
+            />
+            <Opcion
+              label="Imagen"
+              activo={cfg.modo === "imagen"}
+              onPress={() => void cambiarConfig(d.address, { modo: "imagen" })}
+            />
+          </View>
+          {cfg.modo === "imagen" ? (
+            <>
+              <Text style={styles.optLabel}>Ancho del papel</Text>
+              <View style={styles.chips}>
+                <Opcion
+                  label="58 mm"
+                  activo={cfg.ancho === 58}
+                  onPress={() => void cambiarConfig(d.address, { ancho: 58 })}
+                />
+                <Opcion
+                  label="80 mm"
+                  activo={cfg.ancho === 80}
+                  onPress={() => void cambiarConfig(d.address, { ancho: 80 })}
+                />
+              </View>
+            </>
+          ) : null}
+          <Text style={styles.optHint}>
+            Si el papel avanza pero sale en blanco, usa «Imagen».
+          </Text>
           <View style={styles.row}>
             <Pressable
               style={styles.smallBtn}
@@ -131,7 +206,8 @@ export default function ImpresoraScreen() {
             </Pressable>
           </View>
         </View>
-      ))}
+        );
+      })}
 
       {!loading && !devices.length && !error ? (
         <Text style={styles.empty}>
@@ -176,6 +252,20 @@ const styles = StyleSheet.create({
   name: { fontWeight: "700", fontSize: 16, color: "#0B3A5C" },
   mac: { color: "#5B6B7C", marginTop: 4 },
   row: { flexDirection: "row", gap: 8, marginTop: 12 },
+  optLabel: { fontSize: 12, color: "#5B6B7C", marginTop: 12 },
+  optHint: { fontSize: 12, color: "#5B6B7C", marginTop: 8 },
+  chips: { flexDirection: "row", gap: 8, marginTop: 6 },
+  chip: {
+    borderWidth: 1,
+    borderColor: "#C8D3DE",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    backgroundColor: "#fff",
+  },
+  chipActivo: { backgroundColor: "#0B3A5C", borderColor: "#0B3A5C" },
+  chipText: { color: "#0B3A5C", fontWeight: "600" },
+  chipTextActivo: { color: "#fff" },
   smallBtn: {
     backgroundColor: "#0B3A5C",
     borderRadius: 10,
