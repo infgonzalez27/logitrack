@@ -1289,6 +1289,7 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
     "error": null
   }
   ```
+- **Permisos (RLS, 2026-09-29):** el rol `vendedor` opera AutoVentas igual que el despachador (cargar camión, vender, devolver sobrante). Parche `supabase/tenant_patches/20260929100000_autoventas_vendedor.sql` agrega lectura de `camiones` (`camiones_select_vendedor`) e `inventario_movil` (`inv_movil_select_vendedor`) para vendedor. Las escrituras siguen por las RPC `SECURITY DEFINER`; sus ventas quedan visibles porque `creado_por = p_vendedor_id`. Aplicado en Central, Ramirez y Berraco. Sin cambios en el frontend.
 
 ---
 
