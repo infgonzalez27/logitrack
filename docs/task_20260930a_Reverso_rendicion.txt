@@ -31,3 +31,5 @@ Implementa en Supabase, las credenciales CLI están activas
 Actualiza Github
  
 Genera el informe para el Frontend en el archivo D:\ProyectosWeb\LogiTrack\docs\INTEGRACION-RPC.md
+
+[ESTADO: CUMPLIDA - Implementado con restricción para rol de Gerente]

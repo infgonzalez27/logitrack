@@ -9,16 +9,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 Siempre que modifiques lógica, base de datos o arquitectura que afecte el desarrollo del Frontend, DEBES documentarlo inmediatamente en el archivo `docs/INTEGRACION-RPC.md` y hacer un `git push` a Github. El desarrollador Frontend leerá este archivo para actualizar su código local.
 
 # REGLA DE ENTORNO DE PRUEBAS
-El usuario principal (Jorge) realiza sus pruebas desde un dispositivo móvil apuntando a la nube (entorno de producción/staging), no en local. Esto significa que cuando el agente (tú) hace un `git push` a Github, esos cambios solo se reflejarán en las pruebas del usuario UNA VEZ que el servicio de hosting en la nube (Vercel, etc.) haya terminado de desplegar (build) la nueva versión. Ten esto en cuenta si el usuario reporta que "los cambios no aparecen" a pesar de que el código en el repositorio ya está correcto.
-
-Vercel NO está conectado a GitHub: cada cambio del frontend se publica a mano con `npx vercel --prod --yes` (https://logitrack.informaticagonzalez.com).
+El usuario principal (Jorge) realiza sus pruebas desde un dispositivo móvil apuntando a la nube (entorno de producción/staging), no en local. Esto significa que cuando el agente (tú) hace un `git push` a Github, esos cambios se reflejarán cuando el frontend se despliegue.
+NO ACTUALIZAMOS tareas del Frontend y Backend en Vercel.
 
 # REGLA DE BUILDS DE LA APP MÓVIL (APK)
 Los builds de EAS cuestan dinero. NUNCA lances `eas build` sin autorización explícita del usuario en ese momento. Los cambios en `apps/mobile` se hacen, se prueban con typecheck y se suben a GitHub, pero el APK se compila solo cuando el usuario lo pida, agrupando varios cambios en un mismo build.
 
 # REGLA DE CAMBIOS DE BD PARA EMPRESAS (TENANTS lt_*)
-Cada empresa tiene su propio proyecto Supabase. Todo cambio de esquema, RPC, trigger o política RLS que deba existir en las empresas va como archivo **idempotente** en `supabase/tenant_patches/AAAAMMDDHHMMSS_descripcion.sql` (`CREATE OR REPLACE`, `DROP ... IF EXISTS` antes de `CREATE`, `IF NOT EXISTS`). `bootstrapTenant` los aplica todos, en orden de nombre, al crear una empresa y al pulsar «Sincronizar» en `/admin`. Los archivos se leen del deploy de Vercel: un parche publicado se aplicará en la próxima sincronización o alta de empresa, así que el DB admin debe haberlo aprobado antes.
+Cada empresa tiene su propio proyecto Supabase. Todo cambio de esquema, RPC, trigger o política RLS que deba existir en las empresas va como archivo **idempotente** en `supabase/tenant_patches/AAAAMMDDHHMMSS_descripcion.sql` (`CREATE OR REPLACE`, `DROP ... IF EXISTS` antes de `CREATE`, `IF NOT EXISTS`).
 
-# REGLA DE SQL: SOLO EL DB ADMIN EJECUTA
-El agente NUNCA ejecuta SQL que modifique una base de datos Supabase (central ni empresas): nada de `apply_migration`, ni DDL/DML con `execute_sql` (`CREATE`, `ALTER`, `DROP`, `INSERT`, `UPDATE`, `DELETE`, `GRANT`…), ni bloques `DO` de prueba, ni pulsar «Sincronizar» en `/admin`. Se permiten consultas de solo lectura (`SELECT`) para diagnosticar. Cuando haga falta un SP, trigger, política o cambio de esquema: escribir el archivo `.sql` idempotente (en `supabase/tenant_patches/` si va a las empresas), explicarle al usuario qué hace, en qué proyectos va y cómo probarlo, y el usuario se lo pasa al DB admin, que es quien lo ejecuta.
+# REGLA DE SQL: EL AGENTE EJECUTA
+El agente (tú) es el encargado con permiso para ejecutar sentencias SQL en la base de datos en Supabase. Si hay un cambio pendiente, puedes ejecutarlo utilizando las credenciales CLI activas o los comandos correspondientes.
 <!-- END:logitrack-agent-rules -->
