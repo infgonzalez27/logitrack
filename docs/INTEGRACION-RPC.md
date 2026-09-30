@@ -1720,7 +1720,7 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
   - `retorna_ordenes_por_liquidar`, `reporte_formas_pago_rendicion` y `liquidar_orden_distribucion` ya filtran `estado = 'aprobada'`, así que una cobranza reversada deja de contar sin cambios adicionales.
 
 ### 6. Registro de Movimientos Especiales de Inventario (`registrar_movimiento_inventario_especial`)
-- **Firma SQL:** `registrar_movimiento_inventario_especial(p_tipo_movimiento VARCHAR, p_concepto VARCHAR, p_tipo_inventario_afectado VARCHAR, p_id_referencia_movil UUID, p_id_cliente UUID, p_autorizado_por UUID, p_observaciones TEXT, p_detalles JSONB)`
+- **Firma SQL:** `registrar_movimiento_inventario_especial(p_tipo_movimiento VARCHAR, p_concepto VARCHAR, p_tipo_inventario_afectado VARCHAR, p_id_referencia_movil UUID, p_id_cliente UUID, p_observaciones TEXT, p_detalles JSONB)`
 - **Uso en Frontend (RPC):**
   ```typescript
   const { data, error } = await supabase.rpc('registrar_movimiento_inventario_especial', {
@@ -1729,7 +1729,6 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
     p_tipo_inventario_afectado: 'ALMACEN', // O 'MOVIL'
     p_id_referencia_movil: null, // Obligatorio si es MOVIL
     p_id_cliente: 'UUID_DEL_CLIENTE', // Opcional
-    p_autorizado_por: 'UUID_DEL_USUARIO',
     p_observaciones: 'Obsequio a cliente por fidelidad',
     p_detalles: [
       { id_producto: 'UUID_DEL_PRODUCTO', cantidad: 5, costo_unitario: 10.50 }
@@ -1738,9 +1737,16 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
   ```
 - **Notas de Comportamiento:**
   - Registra el movimiento en la cabecera `movimientos_inventario` y sus ítems en `movimientos_inventario_detalle`.
-  - Dependiendo de `p_tipo_inventario_afectado` y `p_tipo_movimiento`, actualiza las existencias en `inventario_almacen` o `inventario_movil`.
+  - El usuario que autoriza se toma automáticamente de la sesión (`auth.uid()`). Da error si se ejecuta sin sesión.
+  - Dependiendo de `p_tipo_inventario_afectado` y `p_tipo_movimiento`, actualiza las existencias en `inventario_almacen` o `inventario_movil` usando las columnas correctas (`stock_disponible` y `cantidad_cargada`).
   - En caso de una salida sin stock suficiente, aborta y retorna un error `Stock insuficiente en almacén...` o `Stock insuficiente en inventario móvil...`.
-- **Respuesta esperada en `data`:** Retorna el UUID del movimiento creado de forma directa (como un string).
+- **Respuesta esperada en `data`:**
   ```json
-  "UUID_NUEVO_MOVIMIENTO"
+  {
+    "success": true,
+    "data": {
+      "movimiento_id": "UUID_NUEVO_MOVIMIENTO"
+    },
+    "error": null
+  }
   ```
