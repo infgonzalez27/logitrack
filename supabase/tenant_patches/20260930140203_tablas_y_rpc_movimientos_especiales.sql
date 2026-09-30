@@ -1,4 +1,4 @@
--- Migración para Movimientos Especiales de Inventario
+-- Parche Idempotente para Movimientos Especiales de Inventario (Multi-tenant)
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -12,19 +12,32 @@ CREATE TABLE IF NOT EXISTS public.movimientos_inventario (
     id_referencia_movil UUID,
     id_cliente UUID,
     autorizado_por UUID REFERENCES auth.users(id),
-    observaciones TEXT,
-    CONSTRAINT chk_movil_referencia CHECK (
-        (tipo_inventario_afectado = 'MOVIL' AND id_referencia_movil IS NOT NULL) OR 
-        (tipo_inventario_afectado = 'ALMACEN')
-    )
+    observaciones TEXT
 );
+
+-- Si la tabla ya existe y se necesita asegurar el constraint (idempotente)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'chk_movil_referencia'
+    ) THEN
+        ALTER TABLE public.movimientos_inventario
+        ADD CONSTRAINT chk_movil_referencia CHECK (
+            (tipo_inventario_afectado = 'MOVIL' AND id_referencia_movil IS NOT NULL) OR 
+            (tipo_inventario_afectado = 'ALMACEN')
+        );
+    END IF;
+END $$;
 
 -- Habilitar RLS
 ALTER TABLE public.movimientos_inventario ENABLE ROW LEVEL SECURITY;
 
--- Políticas Base
+-- Políticas Base (Idempotentes)
+DROP POLICY IF EXISTS "Lectura general autenticados" ON public.movimientos_inventario;
 CREATE POLICY "Lectura general autenticados" ON public.movimientos_inventario
     FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Inserción autenticados" ON public.movimientos_inventario;
 CREATE POLICY "Inserción autenticados" ON public.movimientos_inventario
     FOR INSERT TO authenticated WITH CHECK (true);
 
@@ -40,9 +53,12 @@ CREATE TABLE IF NOT EXISTS public.movimientos_inventario_detalle (
 -- Habilitar RLS
 ALTER TABLE public.movimientos_inventario_detalle ENABLE ROW LEVEL SECURITY;
 
--- Políticas Base
+-- Políticas Base (Idempotentes)
+DROP POLICY IF EXISTS "Lectura general autenticados" ON public.movimientos_inventario_detalle;
 CREATE POLICY "Lectura general autenticados" ON public.movimientos_inventario_detalle
     FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Inserción autenticados" ON public.movimientos_inventario_detalle;
 CREATE POLICY "Inserción autenticados" ON public.movimientos_inventario_detalle
     FOR INSERT TO authenticated WITH CHECK (true);
 
