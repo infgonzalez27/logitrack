@@ -10,11 +10,13 @@ import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AprobarRendicionButton } from "./aprobar-rendicion-button";
+import { ReversarRendicionButton } from "./reversar-rendicion-button";
 
 export default async function RendicionesPage() {
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
   const canApprove = rol === "admin" || rol === "gerente";
+  const canReverse = rol === "gerente";
 
   const supabase = await createClient();
   const { data } = await supabase
@@ -51,7 +53,7 @@ export default async function RendicionesPage() {
                 r.total_transferencias_recaudado,
               ),
               estado: (
-                <Badge>
+                <Badge tone={r.estado === "reversada" ? "danger" : "default"}>
                   {RENDICION_ESTADOS.find((e) => e.value === r.estado)?.label ??
                     r.estado}
                 </Badge>
@@ -61,6 +63,11 @@ export default async function RendicionesPage() {
                     acciones:
                       r.estado === "revision" ? (
                         <AprobarRendicionButton rendicionId={r.id} />
+                      ) : r.estado === "aprobada" && canReverse ? (
+                        <ReversarRendicionButton
+                          rendicionId={r.id}
+                          cliente={joinOne(r.clientes)?.razon_social ?? "este cliente"}
+                        />
                       ) : (
                         "—"
                       ),

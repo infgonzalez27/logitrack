@@ -696,6 +696,9 @@ export async function aprobarRendicionAction(rendicionId: string) {
   if (actual.estado === "aprobada") {
     return { error: "La rendición ya está aprobada." };
   }
+  if (actual.estado === "reversada") {
+    return { error: "La cobranza está reversada; no se puede aprobar." };
+  }
 
   const user = await getSessionUser();
   const { error } = await supabase
@@ -713,6 +716,45 @@ export async function aprobarRendicionAction(rendicionId: string) {
   revalidatePath("/rendiciones");
   revalidatePath("/ordenes");
   return { success: true };
+}
+
+/**
+ * Reversa una cobranza aprobada (`reversa_rendicion_cuenta_segun_id_rendicion`).
+ * Solo gerente: sus órdenes vuelven a por liquidar y se revierte el saldo a favor.
+ */
+export async function reversarRendicionAction(
+  rendicionId: string,
+): Promise<{ success: true; message: string } | { error: string }> {
+  const id = rendicionId?.trim();
+  if (!id || !isUuid(id)) {
+    return { error: "ID de cobranza inválido." };
+  }
+
+  const profile = await getCurrentProfile();
+  if (getRoleNameFromProfile(profile) !== "gerente") {
+    return { error: "Solo el gerente puede reversar cobranzas." };
+  }
+
+  const response = await callDbProcedure<{
+    rendicion_id: string;
+    estado_nuevo: string;
+    ordenes_liberadas?: number;
+  }>("reversa_rendicion_cuenta_segun_id_rendicion", { p_id_rendicion: id });
+
+  if (!response.success) {
+    return {
+      error: rpcErrorMessage(response, "No se pudo reversar la cobranza."),
+    };
+  }
+
+  revalidatePath("/rendiciones");
+  revalidatePath("/rendiciones/por-liquidar");
+  revalidatePath("/ordenes");
+  revalidatePath("/clientes");
+  return {
+    success: true,
+    message: response.message ?? "Cobranza reversada.",
+  };
 }
 
 function mapOrdenPorLiquidar(raw: unknown): OrdenPorLiquidarCliente | null {

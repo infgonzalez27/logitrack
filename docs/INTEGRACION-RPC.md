@@ -1702,3 +1702,19 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
     "error": null
   }
   ```
+- **Corrección `20260930140000_reversa_rendicion_fix.sql` (2026-09-30, pendiente de que el DB admin la ejecute en Ramirez y Berraco):**
+  - **Por qué:** el parche original no funciona. `rendiciones_cuentas_estado_check` no admite `reversada` y `movimientos_saldo_favor_tipo_check` no admite `reverso_rendicion`, así que el SP siempre devuelve `success: false`. Además:
+    - las órdenes `liquidada` no volvían a `por_liquidar`, porque `liquidar_orden_distribucion` solo evalúa órdenes que ya están en `por_liquidar`;
+    - con un rol NULL (anon) se saltaba la validación de gerente, y la función tenía EXECUTE para `PUBLIC`/`anon`.
+  - **Qué hace:**
+    - amplía ambos CHECK;
+    - pasa las órdenes `liquidada` a `por_liquidar` y las reevalúa con las cobranzas aprobadas restantes;
+    - valida el rol con `IS DISTINCT FROM`;
+    - bloquea el reverso si el cliente ya usó el saldo a favor que generó esa cobranza (mensaje «El cliente ya usó X del saldo a favor…»);
+    - revoca el acceso a `anon`.
+  - Solo se reversan cobranzas en estado `aprobada`. Los errores llegan como `success: false` con `error.message` legible.
+  - **Respuesta extra:** `message` («Cobranza reversada. N orden(es) vuelven a por liquidar.»), `data.ordenes_liberadas` y `data.saldo_favor_ajuste`.
+- **Frontend (2026-09-30):**
+  - **Web `/rendiciones` (Cobranzas):** botón rojo **«Reversar»** en cada cobranza `aprobada`, visible solo para el rol `gerente`, con confirmación. Acción: `reversarRendicionAction` (`src/lib/actions/rendiciones.ts`). El estado se muestra como «Reversada» (badge rojo). Una cobranza reversada ya no se puede aprobar.
+  - **APK, detalle de cobranza:** botón **«Reversar cobranza»** (solo `gerente`, estado `aprobada`), con `reversarRendicion` en `apps/mobile/lib/rendiciones.ts`. Se oculta «Aprobar rendición» en las reversadas. Requiere un nuevo build.
+  - `retorna_ordenes_por_liquidar`, `reporte_formas_pago_rendicion` y `liquidar_orden_distribucion` ya filtran `estado = 'aprobada'`, así que una cobranza reversada deja de contar sin cambios adicionales.

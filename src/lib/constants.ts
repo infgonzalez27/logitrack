@@ -46,6 +46,7 @@ export const RENDICION_ESTADOS: { value: RendicionEstado; label: string }[] = [
   { value: "revision", label: "En revisión" },
   { value: "aprobada", label: "Aprobada" },
   { value: "con_discrepancia", label: "Con discrepancia" },
+  { value: "reversada", label: "Reversada" },
 ];
 
 export const METODOS_PAGO_RENDICION: {

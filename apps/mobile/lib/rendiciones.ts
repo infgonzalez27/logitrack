@@ -547,6 +547,9 @@ export async function aprobarRendicion(
   if (actual.estado === "aprobada") {
     return { ok: false, error: "La Rendición ya está aprobada." };
   }
+  if (actual.estado === "reversada") {
+    return { ok: false, error: "La cobranza está reversada; no se puede aprobar." };
+  }
 
   const { error } = await supabase
     .from("rendiciones_cuentas")
@@ -558,6 +561,31 @@ export async function aprobarRendicion(
 
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * Reversa una cobranza aprobada (`reversa_rendicion_cuenta_segun_id_rendicion`).
+ * Solo gerente: sus órdenes vuelven a por liquidar y se revierte el saldo a favor.
+ */
+export async function reversarRendicion(
+  rendicionId: string,
+): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const id = rendicionId?.trim();
+  if (!id) return { ok: false, error: "ID de cobranza inválido." };
+
+  const { data, error } = await supabase.rpc(
+    "reversa_rendicion_cuenta_segun_id_rendicion",
+    { p_id_rendicion: id },
+  );
+  if (error) return { ok: false, error: error.message };
+  if (!isRpcSuccess(data)) {
+    return {
+      ok: false,
+      error: rpcFailMessage(data, "No se pudo reversar la cobranza."),
+    };
+  }
+  const env = data as { message?: string };
+  return { ok: true, message: env.message || "Cobranza reversada." };
 }
 
 export async function retornaOrdenesPorLiquidar(): Promise<

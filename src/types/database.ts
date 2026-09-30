@@ -23,7 +23,11 @@ export type CamionEstado =
 
 export type ChoferEstado = "disponible" | "en_ruta" | "libre" | "suspendido";
 
-export type RendicionEstado = "revision" | "aprobada" | "con_discrepancia";
+export type RendicionEstado =
+  | "revision"
+  | "aprobada"
+  | "con_discrepancia"
+  | "reversada";
 
 export type MetodoPagoRendicion =
   | "efectivo_usd"

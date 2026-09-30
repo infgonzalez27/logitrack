@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import {
   aprobarRendicion,
   getRendicionDetalle,
+  reversarRendicion,
   type RendicionDetalle,
 } from "@/lib/rendiciones";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -27,6 +28,7 @@ export default function RendicionDetalleScreen() {
 
   const canApprove =
     profile?.rol === "gerente" || profile?.rol === "admin";
+  const canReverse = profile?.rol === "gerente";
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -59,6 +61,35 @@ export default function RendicionDetalleScreen() {
     }
     Alert.alert("Aprobada", "La rendición fue aprobada.");
     void load();
+  };
+
+  const reversar = async () => {
+    if (!id) return;
+    setSaving(true);
+    setError(null);
+    const res = await reversarRendicion(id);
+    setSaving(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    Alert.alert("Cobranza reversada", res.message);
+    void load();
+  };
+
+  const onReverse = () => {
+    Alert.alert(
+      "Reversar cobranza",
+      "Sus órdenes vuelven a «por liquidar» y se revierte el saldo a favor que haya movido. Esta acción no se puede deshacer. ¿Continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Reversar",
+          style: "destructive",
+          onPress: () => void reversar(),
+        },
+      ],
+    );
   };
 
   if (loading) return <LoadingBlock />;
@@ -101,11 +132,19 @@ export default function RendicionDetalleScreen() {
       ))}
 
       <ErrorText message={error} />
-      {canApprove && item.estado !== "aprobada" ? (
+      {canApprove &&
+      item.estado !== "aprobada" &&
+      item.estado !== "reversada" ? (
         <PrimaryButton
           label="Aprobar rendición"
           loading={saving}
           onPress={() => void onApprove()}
+        />
+      ) : null}
+      {canReverse && item.estado === "aprobada" ? (
+        <SecondaryButton
+          label={saving ? "Reversando…" : "Reversar cobranza"}
+          onPress={onReverse}
         />
       ) : null}
     </ScrollView>
