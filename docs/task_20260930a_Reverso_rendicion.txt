@@ -1,0 +1,33 @@
+Objetivo:
+Desarrollar el código SQL para crear una función en PL/pgSQL llamada reversa_rendicion_cuenta_segun_id_rendicion. Su propósito es anular una rendición de cuentas (liquidación) en caso de errores en la caja o en la carga de datos, garantizando la integridad relacional y transaccional.
+
+Análisis de tablas y lógica requerida:
+Antes de generar el código, analiza el modelo relacional implícito de este proceso y detalla qué tablas se verán afectadas (por ejemplo: cabecera de rendiciones, detalle de ordenes_distribucion, tablas de pagos o saldos de caja/repartidores). Al construir la función, aplica estrictamente la siguiente secuencia:
+
+Parámetro de entrada: La función recibe como argumento el identificador p_id_rendicion.
+
+Validación de seguridad y estado: Comprueba que la rendición exista y se encuentre en estado 'LIQUIDADA' o 'CERRADA'. Si ya está 'REVERSADA' o no se encuentra, utiliza RAISE EXCEPTION para abortar inmediatamente la transacción.
+
+Liberación de Órdenes de Distribución: Identifica todas las órdenes de distribución vinculadas a esta rendición. Su estado debe retroceder obligatoriamente a 'POR LIQUIDAR', desvinculando el ID de la rendición para que vuelvan a aparecer en la cola de cobranzas pendientes.
+
+Reversión de Cobranzas y Saldos: Si la liquidación afectó la caja principal o el saldo del repartidor, genera los movimientos inversos correspondientes (rollback lógico) para devolver los saldos a su estado previo a la rendición.
+
+Anulación de la Cabecera: Actualiza el registro en la tabla de rendiciones, cambiando su estatus a 'REVERSADA', y registra el timestamp de esta anulación.
+
+Consideraciones técnicas para Supabase:
+
+La función debe ser completamente atómica para evitar inconsistencias entre las órdenes y la caja.
+
+Evalúa y define en el código si es necesario usar SECURITY DEFINER (para evitar bloqueos de RLS al actualizar tablas de órdenes o cajas globales que el usuario operativo quizás no posea directamente) o SECURITY INVOKER, justificando brevemente tu elección.
+
+Entrega el código en PL/pgSQL puro, optimizado y con comentarios explicativos.
+
+Presentame el IMPLEMENTATION -PLAN antes de proceder
+
+Crea la tarea y una vez desarrollada la marcas como solventada o cumplida
+
+Implementa en Supabase, las credenciales CLI están activas
+
+Actualiza Github
+ 
+Genera el informe para el Frontend en el archivo D:\ProyectosWeb\LogiTrack\docs\INTEGRACION-RPC.md

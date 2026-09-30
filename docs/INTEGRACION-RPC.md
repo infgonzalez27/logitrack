@@ -1677,3 +1677,28 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
     "estado_entrega": "pendiente"
   }
   ```
+
+### 5. Reverso de Rendición de Cuentas (`reversa_rendicion_cuenta_segun_id_rendicion`)
+- **Firma SQL:** `reversa_rendicion_cuenta_segun_id_rendicion(p_id_rendicion UUID)`
+- **Uso en Frontend (RPC):** Solo disponible para usuarios con rol `gerente`.
+  ```typescript
+  const { data, error } = await supabase.rpc('reversa_rendicion_cuenta_segun_id_rendicion', {
+    p_id_rendicion: 'UUID_DE_LA_RENDICION'
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Cambia el estado de la rendición a `reversada`.
+  - Libera las órdenes de distribución asociadas pasándolas nuevamente a estado `por_liquidar`.
+  - Genera movimientos inversos en caja y revierte el `saldo_favor` del cliente involucrado.
+  - Aborta y retorna error mediante RAISE EXCEPTION si el usuario no tiene rol de gerente, o si la rendición no existe o ya estaba reversada.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "rendicion_id": "UUID_DE_LA_RENDICION",
+      "estado_nuevo": "reversada"
+    },
+    "error": null
+  }
+  ```
