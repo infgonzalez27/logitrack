@@ -12,6 +12,10 @@ export default function OrdenesLayout() {
       <Stack.Screen name="[id]" options={stackChildOptions("Detalle")} />
       <Stack.Screen name="nueva" options={stackChildOptions("Nueva orden")} />
       <Stack.Screen
+        name="venta-directa"
+        options={stackChildOptions("Venta directa")}
+      />
+      <Stack.Screen
         name="editar/[id]"
         options={stackChildOptions("Editar orden")}
       />

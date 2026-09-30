@@ -21,6 +21,7 @@ type DrawerNav = {
 const ICON_BY_HREF: Record<string, keyof typeof Ionicons.glyphMap> = {
   "/visita": "map-outline",
   "/ordenes": "document-text-outline",
+  "/ordenes/venta-directa": "storefront-outline",
   "/autoventas": "car-outline",
   "/radar": "radio-outline",
   "/clientes": "people-outline",

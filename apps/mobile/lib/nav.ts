@@ -23,6 +23,11 @@ export const NAV_SECTIONS: NavSection[] = [
         route: "/(app)/ordenes",
       },
       {
+        href: "/ordenes/venta-directa",
+        label: "Venta directa (almacén)",
+        route: "/(app)/ordenes/venta-directa",
+      },
+      {
         href: "/autoventas",
         label: "AutoVentas (venta en ruta)",
         route: "/(app)/autoventas",

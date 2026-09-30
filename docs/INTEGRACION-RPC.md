@@ -190,6 +190,31 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     }
   }
   ```
+- **Corrección (2026-09-30), patch `supabase/tenant_patches/20260930180000_venta_directa_almacen_fix.sql`:** va en las empresas después del patch original. Reemplaza la función con la misma firma.
+  - **Seguridad:**
+    - Exige sesión y rol admin, gerente o vendedor.
+    - Un vendedor solo puede vender a su nombre (`p_vendedor_id` = `auth.uid()`).
+    - `creado_por` registra al usuario que hizo la venta.
+    - `search_path` fijo; sin EXECUTE para `PUBLIC`/`anon`.
+  - **Stock:**
+    - Bloquea la fila de `inventario_almacen` con `FOR UPDATE`.
+    - Rechaza la venta si el producto no tiene fila en `inventario_almacen` (antes se vendía sin descontar).
+    - Rechaza productos repetidos en `p_productos_json`.
+  - **Precio:** se calcula una sola vez por línea, así que la cabecera coincide con la suma del detalle.
+    - Prioridad: `valor_unitario_usd` enviado, luego el precio pactado o el % de descuento del cliente, y por último `precio_lista1`.
+    - `porcentaje_descuento` y `monto_descuento_usd` se calculan contra el precio de lista.
+  - **Estado:** contado y crédito quedan en `por_liquidar`. El cobro se registra con una rendición, como cualquier otra orden. `p_tipo_venta` se sigue validando y se devuelve en `data.tipo_venta`, pero no cambia el estado.
+  - **Otros:**
+    - `fecha_despacho = now()`.
+    - `origen_venta` pasa a NOT NULL con CHECK (`'RUTA'`, `'ALMACEN'`).
+    - Los errores usan el formato estándar `{success:false, data:null, error:{code, message, details}}`, con `message` también en la raíz. Códigos: `NO_AUTENTICADO`, `PERMISO_DENEGADO`, `PARAMETRO_INVALIDO`, `PRODUCTO_DUPLICADO`, `CLIENTE_INEXISTENTE`, `CLIENTE_INACTIVO`, `TASA_INEXISTENTE`, `CANTIDAD_INVALIDA`, `PRODUCTO_INEXISTENTE`, `STOCK_INSUFICIENTE`, `SQL_ERROR`.
+    - `data` incluye además `factura_origen_numero`.
+- **Frontend:**
+  - **Web:**
+    - Ruta `/ordenes/venta-directa`, en el menú **Distribución → Venta directa (almacén)**, para admin, gerente y vendedor. El vendedor solo ve sus clientes.
+    - Acción `crearVentaDirectaAlmacenAction` en `src/lib/actions/venta-directa.ts`. Envía `p_vendedor_id` = usuario actual y `p_tipo_venta: 'credito'`.
+    - Al terminar ofrece imprimir, registrar el cobro (`/rendiciones/nuevo?cliente_id=…`) o ver la orden.
+  - **APK:** pantalla `apps/mobile/app/(app)/ordenes/venta-directa.tsx`, en el menú **Venta directa (almacén)**. Usa `crearVentaDirectaAlmacen` de `apps/mobile/lib/venta-directa.ts`. Requiere un nuevo build.
 
 ### 2.2. Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)
 - **Firma SQL:** `aprobar_orden_distribucion(p_orden_id UUID)`
