@@ -1,115 +1,61 @@
-# Plan de Implementación: Movimientos Especiales de Inventario
+# Plan de Implementación: Venta Directa en Almacén (Caso #3)
 
-## 1. Estructura DDL Propuesta
+## 1. Análisis de Impacto y Tablas Afectadas
+El nuevo requerimiento de venta directa impacta las siguientes áreas del modelo de datos:
+*   **`ordenes_distribucion`:** Actualmente está orientada a despachos en ruta (requiere `camion_id`, `vendedor_id`, y fluye de `aprobada` -> `en_transito` -> `por_liquidar` / `liquidada`).
+*   **`inventario_almacen`:** Debe recibir la deducción directa del stock en el momento en que se procesa la venta, sin pasar por una carga de camión (`inventario_movil`).
 
-```sql
--- Tabla: movimientos_inventario
-CREATE TABLE IF NOT EXISTS public.movimientos_inventario (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    fecha_movimiento TIMESTAMPTZ DEFAULT now(),
-    tipo_movimiento VARCHAR(20) NOT NULL CHECK (tipo_movimiento IN ('ENTRADA', 'SALIDA')),
-    concepto VARCHAR(100) NOT NULL,
-    tipo_inventario_afectado VARCHAR(20) NOT NULL CHECK (tipo_inventario_afectado IN ('ALMACEN', 'MOVIL')),
-    id_referencia_movil UUID,
-    id_cliente UUID,
-    autorizado_por UUID REFERENCES auth.users(id),
-    observaciones TEXT,
-    CONSTRAINT chk_movil_referencia CHECK (
-        (tipo_inventario_afectado = 'MOVIL' AND id_referencia_movil IS NOT NULL) OR 
-        (tipo_inventario_afectado = 'ALMACEN')
-    )
-);
+## 2. Decisión Arquitectónica: Crear Nueva Función (RPC)
+Se decide **crear un nuevo RPC exclusivo (`crear_venta_directa_almacen`)** en lugar de reutilizar `crear_orden_distribucion`.
 
--- Habilitar RLS
-ALTER TABLE public.movimientos_inventario ENABLE ROW LEVEL SECURITY;
+**Justificación:**
+1.  **Diferencia Transaccional:** El flujo actual separa la creación de la orden (`aprobada`), la reserva/carga (`en_transito` en `inventario_movil`), y la entrega (`por_liquidar`). La venta directa ocurre de forma atómica: se crea la orden, se deduce directamente de `inventario_almacen` y se entrega en el mismo momento, pasando directamente al estado `por_liquidar` o `liquidada`.
+2.  **Parámetros y Dependencias:** La venta directa no requiere `camion_id`, `radar_id`, ni un `despachador_id` en ruta. Reutilizar la función existente obligaría a ensuciar el código con múltiples condicionales y a saltar validaciones estrictas.
+3.  **Claridad del Código:** Separar la lógica mantiene el código limpio y evita efectos secundarios accidentales en el flujo de "Preventa" o "Auto-Venta".
 
--- Políticas Base
-CREATE POLICY "Lectura general autenticados" ON public.movimientos_inventario
-    FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Inserción autenticados" ON public.movimientos_inventario
-    FOR INSERT TO authenticated WITH CHECK (true);
-
--- Tabla: movimientos_inventario_detalle
-CREATE TABLE IF NOT EXISTS public.movimientos_inventario_detalle (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    id_movimiento UUID NOT NULL REFERENCES public.movimientos_inventario(id) ON DELETE CASCADE,
-    id_producto UUID NOT NULL, 
-    cantidad NUMERIC NOT NULL CHECK (cantidad > 0),
-    costo_unitario NUMERIC NOT NULL
-);
-
--- Habilitar RLS
-ALTER TABLE public.movimientos_inventario_detalle ENABLE ROW LEVEL SECURITY;
-
--- Políticas Base
-CREATE POLICY "Lectura general autenticados" ON public.movimientos_inventario_detalle
-    FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Inserción autenticados" ON public.movimientos_inventario_detalle
-    FOR INSERT TO authenticated WITH CHECK (true);
-```
-
-## 2. Firma de la Función (RPC PL/pgSQL)
+## 3. Modificaciones a la Estructura de la Orden
+Para identificar correctamente estas órdenes y evitar que sean arrastradas por consultas de "Radares" o liquidación de camiones, se propone agregar una nueva columna (bandera) en la tabla `ordenes_distribucion`:
 
 ```sql
-CREATE OR REPLACE FUNCTION public.registrar_movimiento_inventario_especial(
-    p_tipo_movimiento VARCHAR,
-    p_concepto VARCHAR,
-    p_tipo_inventario_afectado VARCHAR,
-    p_id_referencia_movil UUID,
-    p_id_cliente UUID,
-    p_autorizado_por UUID,
-    p_observaciones TEXT,
-    p_detalles JSONB
-) RETURNS UUID
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_id_movimiento UUID;
-    v_detalle RECORD;
-    v_stock_actual NUMERIC;
-BEGIN
-    -- 1. Insertar Cabecera
-    INSERT INTO public.movimientos_inventario (
-        tipo_movimiento, concepto, tipo_inventario_afectado, id_referencia_movil,
-        id_cliente, autorizado_por, observaciones
-    ) VALUES (
-        p_tipo_movimiento, p_concepto, p_tipo_inventario_afectado, p_id_referencia_movil,
-        p_id_cliente, p_autorizado_por, p_observaciones
-    ) RETURNING id INTO v_id_movimiento;
+ALTER TABLE public.ordenes_distribucion 
+ADD COLUMN origen_venta VARCHAR(20) DEFAULT 'RUTA'; -- Valores: 'RUTA' o 'ALMACEN'
+-- O alternativamente:
+-- ADD COLUMN es_venta_directa BOOLEAN DEFAULT false;
+```
+Adicionalmente, se revisará la nulabilidad de `camion_id` para asegurar que permita `NULL` en estos casos (si actualmente es obligatorio).
 
-    -- 2. Procesar Detalles y Actualizar Stock
-    FOR v_detalle IN SELECT * FROM jsonb_to_recordset(p_detalles) AS x(id_producto UUID, cantidad NUMERIC, costo_unitario NUMERIC)
-    LOOP
-        -- Insertar Detalle
-        INSERT INTO public.movimientos_inventario_detalle (
-            id_movimiento, id_producto, cantidad, costo_unitario
-        ) VALUES (
-            v_id_movimiento, v_detalle.id_producto, v_detalle.cantidad, v_detalle.costo_unitario
-        );
+## 4. Propuesta de Parámetros JSON para el Frontend (Cursor)
 
-        -- Lógica de validación y actualización de stock (Almacén o Móvil)
-        IF p_tipo_movimiento = 'SALIDA' THEN
-            -- [Validar stock suficiente e interrupción con RAISE EXCEPTION]
-            -- [Restar stock]
-        ELSE
-            -- [Sumar stock]
-        END IF;
-    END LOOP;
+El Frontend invocará la nueva función `crear_venta_directa_almacen` enviando los siguientes parámetros:
 
-    RETURN v_id_movimiento;
-END;
-$$;
+```json
+{
+  "p_cliente_id": "uuid-del-cliente",
+  "p_vendedor_id": "uuid-del-vendedor-en-mostrador",
+  "p_tasa_cambio": 45.50, // Opcional, si es null toma la del día
+  "p_tipo_venta": "credito", // 'credito' (pasa a por_liquidar) o 'contado' (pasa a liquidada)
+  "p_productos_json": [
+    {
+      "producto_id": "uuid-del-producto-1",
+      "cantidad": 5,
+      "valor_unitario_usd": 10.00
+    },
+    {
+      "producto_id": "uuid-del-producto-2",
+      "cantidad": 2,
+      "valor_unitario_usd": 25.00
+    }
+  ]
+}
 ```
 
-## 3. Comandos de Supabase CLI a Ejecutar
+**Comportamiento de la función:**
+1. Valida el stock directamente contra `inventario_almacen`.
+2. Crea la orden con `origen_venta = 'ALMACEN'`.
+3. Deduce las cantidades de `inventario_almacen`.
+4. Establece el estado de la orden en `por_liquidar` (si es a crédito) o `liquidada` (si es de contado).
 
-1. Crear la migración:
-   ```bash
-   supabase migration new tablas_y_rpc_movimientos_especiales
-   ```
-2. Insertar el código SQL anterior (DDL + RPC) en el archivo de migración generado.
-3. Aplicar los cambios:
-   ```bash
-   supabase db push
-   ```
+## 5. Próximos Pasos
+*   [ ] Esperar aprobación de este plan.
+*   [ ] Generar y ejecutar el parche SQL (DDL para la nueva columna y DML para el nuevo RPC).
+*   [ ] Actualizar `INTEGRACION-RPC.md` con la firma y ejemplos de uso de la nueva función.

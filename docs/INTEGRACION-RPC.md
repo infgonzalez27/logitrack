@@ -149,6 +149,48 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
   }
   ```
 
+### 2.1.1. Venta Directa en Almacén (`crear_venta_directa_almacen`)
+- **Firma SQL:** `crear_venta_directa_almacen(p_cliente_id UUID, p_vendedor_id UUID, p_tipo_venta TEXT, p_tasa_cambio NUMERIC DEFAULT NULL, p_productos_json JSONB DEFAULT '[]'::jsonb)`
+- **Uso en Frontend (RPC):**
+  ```typescript
+  const { data, error } = await supabase.rpc('crear_venta_directa_almacen', {
+    p_cliente_id: 'UUID_DEL_CLIENTE',
+    p_vendedor_id: 'UUID_DEL_VENDEDOR_O_MOSTRADOR',
+    p_tipo_venta: 'credito', // 'credito' (pasa a por_liquidar) o 'contado' (pasa a liquidada)
+    p_tasa_cambio: 50.25, // Opcional (si se omite/es null, toma la tasa oficial más reciente)
+    p_productos_json: [
+      {
+        producto_id: 'UUID_PRODUCTO_1',
+        cantidad: 5,
+        valor_unitario_usd: 9.95
+      }
+    ]
+  });
+  ```
+- **Notas de Comportamiento:**
+  - Crea la orden con la bandera `origen_venta = 'ALMACEN'`.
+  - No requiere `camion_id` ni estar asociada a un radar.
+  - Deduce el stock directamente de `inventario_almacen` al momento de ejecutar el RPC.
+  - El estado final de la orden será `por_liquidar` (crédito) o `liquidada` (contado).
+  - Los detalles nacen con `cantidad_despachada` = `cantidad_solicitada` y estado `entregado`.
+- **Respuesta esperada en `data`:**
+  ```json
+  {
+    "success": true,
+    "message": "Venta directa procesada exitosamente.",
+    "orden_id": "UUID_DE_LA_NUEVA_ORDEN",
+    "data": {
+      "orden_id": "UUID_DE_LA_NUEVA_ORDEN",
+      "correlativo": 106,
+      "tasa_cambio": 50.25,
+      "estado_orden": "por_liquidar",
+      "total_recaudar_bs": null,
+      "total_recaudar_usd": 49.75,
+      "peso_total_calculado": 12.50
+    }
+  }
+  ```
+
 ### 2.2. Aprobación de Orden y Reserva de Stock (`aprobar_orden_distribucion`)
 - **Firma SQL:** `aprobar_orden_distribucion(p_orden_id UUID)`
 - **Uso en Frontend (RPC):**
