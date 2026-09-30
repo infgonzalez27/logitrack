@@ -472,6 +472,7 @@ A continuación se listan las firmas de los procedimientos almacenados que el eq
     "error": null
   }
   ```
+- **Pago de más / saldo a favor (2026-09-30):** el SP genera saldo a favor con `total_pagos − total_ordenes`, así que `monto_recaudado` de cada orden **no debe superar su saldo pendiente** (si lo supera, la orden queda sobrepagada y no se genera crédito). Web (`nueva-rendicion-form.tsx`) y APK (`rendiciones/nueva.tsx`) ya no bloquean una Cobranza/Abono mayor al saldo: envían `min(digitado, saldo_pendiente)` por orden y el excedente de los pagos queda como saldo a favor del cliente. La pantalla muestra «Se aplican $X a la orden y $Y quedan como saldo a favor».
 
 ### 2.9. Consulta de Registros de Formas de Pago (`consulta_registros_formas_pago`)
 - **Firma SQL:** `consulta_registros_formas_pago()`

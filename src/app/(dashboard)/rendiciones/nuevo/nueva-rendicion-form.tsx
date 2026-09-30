@@ -56,9 +56,18 @@ type OrdenAgregada = {
   abonos: number;
   saldo_pendiente: number;
   saldo_pendiente_bs: number | null;
+  /** Lo escrito en Cobranza/Abono. */
+  monto_digitado: number;
+  /** Lo que se aplica a la orden (tope: saldo pendiente). */
   monto_rendicion: number;
   monto_rendicion_bs: number;
 };
+
+/** Parte de la cobranza que se aplica a la orden; el resto es saldo a favor. */
+function montoAplicable(monto: number, saldoPendiente: number): number {
+  const saldo = Number(saldoPendiente) || 0;
+  return saldo > 0 ? Math.min(monto, saldo) : monto;
+}
 
 function newKey() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -255,8 +264,9 @@ export function NuevaRendicionForm({
 
   const ordenes = useMemo((): OrdenAgregada[] => {
     return ordenesDisponibles.flatMap((o) => {
-      const monto = Number(cobranzas[o.id] ?? 0);
-      if (!Number.isFinite(monto) || monto <= 0) return [];
+      const digitado = Number(cobranzas[o.id] ?? 0);
+      if (!Number.isFinite(digitado) || digitado <= 0) return [];
+      const monto = montoAplicable(digitado, o.saldo_pendiente);
       const saldoPendienteBs = saldoPendienteBsDeOrden(o, tasaValor);
       const montoBs =
         tasaValor != null
@@ -274,6 +284,7 @@ export function NuevaRendicionForm({
           abonos: o.abonos_acumulados,
           saldo_pendiente: o.saldo_pendiente,
           saldo_pendiente_bs: saldoPendienteBs,
+          monto_digitado: digitado,
           monto_rendicion: monto,
           monto_rendicion_bs: montoBs,
         },
@@ -285,6 +296,12 @@ export function NuevaRendicionForm({
     () => ordenes.reduce((sum, o) => sum + o.monto_rendicion, 0),
     [ordenes],
   );
+  /** Total escrito en Cobranza/Abono (incluye lo que excede el saldo). */
+  const totalDigitado = useMemo(
+    () => ordenes.reduce((sum, o) => sum + o.monto_digitado, 0),
+    [ordenes],
+  );
+  const excedenteOrdenes = Math.max(0, totalDigitado - totalOrdenes);
   const totalPagosIncluidos = useMemo(
     () => pagos.reduce((sum, p) => sum + p.monto_usd, 0),
     [pagos],
@@ -341,7 +358,7 @@ export function NuevaRendicionForm({
   const diferencia = totalRendicion - totalOrdenes;
   const faltanteCobrar = Math.max(0, totalOrdenes - totalRendicion);
   /** Faltante solo con pagos ya en la lista (para precargar el borrador). */
-  const faltanteSinBorrador = Math.max(0, totalOrdenes - totalPagosIncluidos);
+  const faltanteSinBorrador = Math.max(0, totalDigitado - totalPagosIncluidos);
   /** Estimación previa al SP: cuánto del saldo acumulado cubriría el faltante. */
   const saldoFavorUsadoEstimado = Math.min(
     saldoFavor,
@@ -456,7 +473,6 @@ export function NuevaRendicionForm({
   }
 
   function aplicarTotalOrden(orden: OrdenParaRendicion) {
-    // Total cobrable ahora = saldo pendiente (no superar lo adeudado).
     setCobranzaOrden(orden.id, Number(orden.saldo_pendiente ?? 0).toFixed(2));
   }
 
@@ -636,15 +652,6 @@ export function NuevaRendicionForm({
     if (!ordenes.length) {
       setError("Indica Cobranza/Abono mayor a 0 en al menos una orden.");
       return;
-    }
-
-    for (const o of ordenes) {
-      if (o.monto_rendicion > o.saldo_pendiente + 0.009) {
-        setError(
-          `Orden #${o.correlativo}: la cobranza no puede superar el saldo pendiente (${formatCurrency(o.saldo_pendiente)}).`,
-        );
-        return;
-      }
     }
 
     const obs = [
@@ -935,6 +942,20 @@ export function NuevaRendicionForm({
                           Total de la orden
                         </Button>
                       </div>
+                      {(() => {
+                        const digitado = Number(cobranza);
+                        const saldo = Number(o.saldo_pendiente ?? 0);
+                        if (!Number.isFinite(digitado) || saldo <= 0) return null;
+                        const excede = digitado - saldo;
+                        if (excede <= 0.009) return null;
+                        return (
+                          <p className="text-xs text-lt-success-text">
+                            Se aplican {formatCurrency(saldo)} a la orden y{" "}
+                            {formatCurrency(excede)} quedan como saldo a favor
+                            del cliente.
+                          </p>
+                        );
+                      })()}
                     </div>
                   </article>
                 );
@@ -943,13 +964,19 @@ export function NuevaRendicionForm({
           ) : null}
         </div>
 
-        <div className="flex justify-end border-t border-lt-border-light bg-lt-surface-muted px-4 py-3">
+        <div className="flex flex-col items-end gap-0.5 border-t border-lt-border-light bg-lt-surface-muted px-4 py-3">
           <p className="text-sm font-semibold text-lt-text">
             Monto total a cobrar:{" "}
             <span className="text-lt-primary">
-              {formatCurrency(totalOrdenes)}
+              {formatCurrency(totalDigitado)}
             </span>
           </p>
+          {excedenteOrdenes > 0.009 ? (
+            <p className="text-xs text-lt-text-muted">
+              Aplicado a órdenes {formatCurrency(totalOrdenes)} · excedente{" "}
+              {formatCurrency(excedenteOrdenes)} a saldo a favor
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -1278,7 +1305,7 @@ export function NuevaRendicionForm({
             <Input
               label="Monto total a cobrar $"
               readOnly
-              value={formatNumber(totalOrdenes)}
+              value={formatNumber(totalDigitado)}
             />
           </div>
           <div className="text-right text-sm space-y-0.5">

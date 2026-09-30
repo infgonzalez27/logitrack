@@ -25,6 +25,12 @@ import {
 import { esFormaPagoEnBs } from "@/lib/moneda";
 import { formatDate, formatMoney } from "@/lib/format";
 
+/** Parte de la cobranza que se aplica a la orden; el resto es saldo a favor. */
+function montoAplicable(monto: number, saldoPendiente: number): number {
+  const saldo = Number(saldoPendiente) || 0;
+  return saldo > 0 ? Math.min(monto, saldo) : monto;
+}
+
 type PagoDraft = {
   key: string;
   fpago_id: string;
@@ -102,6 +108,24 @@ export default function NuevaRendicionScreen() {
     [montos],
   );
 
+  function montoDigitado(ordenId: string): number {
+    return Number((montos[ordenId] ?? "0").replace(",", ".")) || 0;
+  }
+
+  const totalAplicado = useMemo(
+    () =>
+      ordenes.reduce(
+        (acc, o) =>
+          acc +
+          montoAplicable(
+            Number((montos[o.id] ?? "0").replace(",", ".")) || 0,
+            o.saldo_pendiente,
+          ),
+        0,
+      ),
+    [ordenes, montos],
+  );
+
   const totalPagosUsd = useMemo(() => {
     return pagos.reduce((acc, p) => {
       const forma = formas.find((f) => f.fpago_id === p.fpago_id);
@@ -137,20 +161,13 @@ export default function NuevaRendicionScreen() {
     const ordenesPayload = ordenes
       .map((o) => ({
         orden_id: o.id,
-        monto_recaudado: Number((montos[o.id] ?? "0").replace(",", ".")) || 0,
+        monto_recaudado: montoAplicable(montoDigitado(o.id), o.saldo_pendiente),
       }))
       .filter((o) => o.monto_recaudado > 0);
 
     if (!ordenesPayload.length) {
       setError("Indica el monto a cobrar en al menos una orden.");
       return;
-    }
-    for (const o of ordenesPayload) {
-      const max = ordenes.find((x) => x.id === o.orden_id)?.saldo_pendiente ?? 0;
-      if (o.monto_recaudado > max + 0.009) {
-        setError("Un monto supera el saldo pendiente de la orden.");
-        return;
-      }
     }
     if (!pagos.length) {
       setError("Agrega al menos una forma de pago.");
@@ -325,6 +342,14 @@ export default function NuevaRendicionScreen() {
               <Text style={styles.chipText}>Total</Text>
             </Pressable>
           </View>
+          {montoDigitado(item.id) - item.saldo_pendiente > 0.009 &&
+          item.saldo_pendiente > 0 ? (
+            <Text style={styles.favor}>
+              Se aplican ${formatMoney(item.saldo_pendiente)} a la orden y $
+              {formatMoney(montoDigitado(item.id) - item.saldo_pendiente)}{" "}
+              quedan como saldo a favor.
+            </Text>
+          ) : null}
         </View>
       )}
       ListFooterComponent={
@@ -407,6 +432,12 @@ export default function NuevaRendicionScreen() {
             <Text style={styles.meta}>
               Pagos ≈ ${formatMoney(totalPagosUsd)}
             </Text>
+            {totalPagosUsd - totalAplicado > 0.009 ? (
+              <Text style={styles.favor}>
+                Saldo a favor a generar ≈ $
+                {formatMoney(totalPagosUsd - totalAplicado)}
+              </Text>
+            ) : null}
           </View>
 
           <Pressable
@@ -428,6 +459,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F4F6F8" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontWeight: "700", color: "#0B3A5C" },
+  favor: { fontSize: 12, color: "#027A48", marginTop: 6 },
   section: { fontSize: 16, fontWeight: "600", color: "#0B3A5C", marginTop: 4 },
   label: { fontSize: 12, color: "#5B6B7C", textTransform: "uppercase" },
   card: {
