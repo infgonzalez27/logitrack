@@ -1,6 +1,13 @@
 -- Parche para implementar la reversión de rendición de cuentas
 -- Fecha: 2026-09-30
 
+ALTER TABLE IF EXISTS public.movimientos_saldo_favor 
+  DROP CONSTRAINT IF EXISTS movimientos_saldo_favor_tipo_check;
+
+ALTER TABLE public.movimientos_saldo_favor 
+  ADD CONSTRAINT movimientos_saldo_favor_tipo_check 
+  CHECK (tipo = ANY (ARRAY['abono_recaudacion'::text, 'cargo_pago_orden'::text, 'devolucion_efectivo'::text, 'reverso_rendicion'::text]));
+
 CREATE OR REPLACE FUNCTION public.reversa_rendicion_cuenta_segun_id_rendicion(p_id_rendicion UUID)
 RETURNS json
 LANGUAGE plpgsql
