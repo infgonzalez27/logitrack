@@ -58,6 +58,11 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Inventario móvil",
         route: "/(app)/inventario-movil",
       },
+      {
+        href: "/inventario-movimientos",
+        label: "Movimientos especiales",
+        route: "/(app)/inventario-movimientos",
+      },
     ],
   },
   {

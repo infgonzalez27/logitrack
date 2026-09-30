@@ -39,6 +39,7 @@ const ROLE_ALLOWED_HREFS: Record<AppRole, string[] | "*"> = {
     "/choferes",
     "/inventario-almacen",
     "/inventario-movil",
+    "/inventario-movimientos",
     "/rendiciones",
     "/rendiciones/por-liquidar",
     "/rendiciones/formas-pago",

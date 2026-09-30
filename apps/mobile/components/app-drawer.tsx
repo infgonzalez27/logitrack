@@ -31,6 +31,7 @@ const ICON_BY_HREF: Record<string, keyof typeof Ionicons.glyphMap> = {
   "/choferes": "person-outline",
   "/inventario-almacen": "archive-outline",
   "/inventario-movil": "phone-portrait-outline",
+  "/inventario-movimientos": "swap-vertical-outline",
   "/rendiciones": "wallet-outline",
   "/rendiciones/por-liquidar": "cash-outline",
   "/rendiciones/formas-pago": "card-outline",

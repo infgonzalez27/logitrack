@@ -41,6 +41,7 @@ export default function AppLayout() {
       <Drawer.Screen name="choferes" options={{ headerShown: false }} />
       <Drawer.Screen name="inventario-almacen" options={{ headerShown: false }} />
       <Drawer.Screen name="inventario-movil" options={{ headerShown: false }} />
+      <Drawer.Screen name="inventario-movimientos" options={{ headerShown: false }} />
       <Drawer.Screen name="rendiciones" options={{ headerShown: false }} />
       <Drawer.Screen name="contenedores" options={{ headerShown: false }} />
       <Drawer.Screen name="facturas-compras" options={{ headerShown: false }} />

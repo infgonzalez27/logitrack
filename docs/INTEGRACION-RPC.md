@@ -1750,3 +1750,13 @@ Para interactuar con la tabla `descuentos_cliente_producto` desde los componente
     "error": null
   }
   ```
+- **Frontend (2026-09-30):**
+  - **Web:** menú **Inventario → Movimientos especiales**, solo admin y gerente.
+    - `/inventario-movimientos`: historial de los últimos 100 movimientos (tipo, concepto, inventario, productos, costo total, cliente y quién autorizó).
+    - `/inventario-movimientos/nuevo`: formulario con tipo, inventario (almacén o camión), concepto, cliente opcional, observaciones y productos.
+    - Acción de servidor `registrarMovimientoEspecialAction` en `src/lib/actions/movimientos-inventario.ts`.
+  - **APK:** menú **Movimientos especiales** (`apps/mobile/app/(app)/inventario-movimientos/`), con el mismo historial y formulario. Usa `registrarMovimientoEspecial` de `apps/mobile/lib/movimientos-inventario.ts`. Requiere un nuevo build.
+  - **Conceptos:** `OBSEQUIO`, `CONSUMO_INTERNO`, `EVENTOS`, `MERMA` y `AJUSTE`, o texto libre con «Otro». Se envían en mayúsculas.
+  - **Costo unitario propuesto:** el último `precio_unitario_compra` de `detalle_facturas_compras` para el producto, o 0 si no hay compras. Es editable.
+  - **Salidas:** el frontend valida contra el disponible antes de enviar (almacén: `stock_disponible`; camión: `cantidad_cargada − cantidad_entregada`). En los errores del SP, el UUID del producto se reemplaza por su nombre.
+  - **Pendiente en BD:** el SP no valida el rol (cualquier usuario autenticado podría llamarlo) y conserva EXECUTE para `PUBLIC`/`anon`. El frontend restringe a admin y gerente, pero la protección real debe estar en el SP.

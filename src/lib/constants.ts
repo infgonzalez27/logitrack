@@ -108,6 +108,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/inventario-almacen", label: "Almacén" },
       { href: "/inventario-movil", label: "Inventario móvil" },
+      { href: "/inventario-movimientos", label: "Movimientos especiales" },
     ],
   },
   {

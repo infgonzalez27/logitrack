@@ -86,6 +86,8 @@ const ROLE_ALLOWED_HREFS: Record<RolNombre, string[] | "*"> = {
 
     "/inventario-movil",
 
+    "/inventario-movimientos",
+
     "/rendiciones",
 
     "/rendiciones/por-liquidar",
