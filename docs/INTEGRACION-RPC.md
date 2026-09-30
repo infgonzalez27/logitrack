@@ -1355,6 +1355,36 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
 
 ---
 
+### 2.41.1. Descargar camión AutoVenta (`descargar_camion_autoventa`, 2026-09-30)
+- **Parche tenant:** `supabase/tenant_patches/20260930120000_descargar_camion_autoventa.sql` (ya aplicado a Ramirez, Berraco y central).
+- **Firma SQL:** `descargar_camion_autoventa(p_camion_id UUID, p_productos JSONB DEFAULT NULL) RETURNS JSONB`
+- **Roles:** admin, gerente, vendedor, despachador.
+- **Qué hace:** devuelve al `inventario_almacen` solo el **sobrante** del camión (`cantidad_cargada − cantidad_entregada`). Lo vendido no vuelve.
+  - **Descarga total** (`p_productos` null o `[]`): suma el sobrante de cada producto al almacén, borra las filas de `inventario_movil` del camión y, si estaba `en_ruta`, lo pasa a `disponible`.
+  - **Descarga parcial** (`[{ "producto_id": "...", "cantidad": 5 }]`, también acepta `cantidad_solicitada`): resta de `cantidad_cargada` y suma al almacén. Valida todo antes de mover nada.
+- **Reemplaza** a `solicita_reversar_carga_inventario_movil_a_almacen` **solo en AutoVentas** (el Radar sigue usando el SP antiguo). El antiguo fallaba en autoventa y devolvía también lo vendido.
+- **Errores:** `ACCESO_DENEGADO`, `CAMION_INEXISTENTE`, `RUTA_RADAR_ACTIVA` (el camión tiene órdenes de radar en tránsito), `CANTIDAD_EXCEDE_DISPONIBLE` («X: solo hay N disponible(s) en el camión.»).
+- **Respuesta:**
+  ```json
+  {
+    "success": true,
+    "message": "Se devolvieron 114 unidad(es) de 8 producto(s) al almacén.",
+    "data": {
+      "camion_id": "uuid",
+      "descarga_total": true,
+      "productos_devueltos": 8,
+      "unidades_devueltas": 114,
+      "detalle": [{ "producto_id": "uuid", "codigo": "Z222", "nombre": "Zulia 222", "cantidad": 44 }]
+    },
+    "error": null
+  }
+  ```
+- **Frontend:**
+  - **Web:** en `/autoventas`, pestaña Resumen, el botón es «Descargar camión (devolver sobrante)». Al terminar muestra la tarjeta «Descarga confirmada» con «Imprimir descarga», que abre `/autoventas/carga/imprimir?d=…` con `tipo: "descarga"` (ticket «DESCARGA DE CAMIÓN», columna «Devuelto»).
+  - **APK:** la pestaña «Reverso» ahora se llama «Descarga», con «Descargar camión completo» y «Devolver solo las cantidades indicadas». Tras descargar muestra «Descarga confirmada» con «Imprimir descarga» (ticket térmico «DESCARGA DE CAMION»). Requiere un nuevo build del APK.
+
+---
+
 ### 2.42. Reporte Gerencial de Formas de Pago por Rango de Fecha (`reporte_formas_pago_rendicion`)
 - **Firma SQL:** `reporte_formas_pago_rendicion(p_fecha_desde DATE DEFAULT NULL, p_fecha_hasta DATE DEFAULT NULL, p_solo_bancarios BOOLEAN DEFAULT FALSE)`
 - **Descripción:** Genera la consulta detallada e informe gerencial de las Formas de Pago recibidas en rendiciones de cuentas aprobadas durante un rango de fechas. Soporta filtrado exclusivo de transacciones bancarias/electrónicas (donde `es_bancario = TRUE`: Pago Móvil, Transferencia, Zelle, Binance).

@@ -202,11 +202,21 @@ export async function cargarInventarioMovilAutoVentasAction(
   };
 }
 
-/** Devuelve sobrante móvil → almacén (`solicita_reversar_carga_inventario_movil_a_almacen`). */
+export type DescargaCamionLinea = {
+  producto_id: string;
+  codigo: string | null;
+  nombre: string;
+  cantidad: number;
+};
+
+/**
+ * Descarga el camión (`descargar_camion_autoventa`): devuelve al almacén solo
+ * el sobrante (cargado − entregado). Sin `productos` vacía el inventario móvil.
+ */
 export async function reversarInventarioMovilAutoVentasAction(
   camionId: string,
-  productos?: Array<{ producto_id: string; cantidad_solicitada: number }>,
-): Promise<ActionResult> {
+  productos?: Array<{ producto_id: string; cantidad: number }>,
+): Promise<ActionResult<{ detalle: DescargaCamionLinea[] }>> {
   const access = await requireAutoVentaAccess();
   if (!access.ok) return { success: false, message: access.message };
 
@@ -214,22 +224,18 @@ export async function reversarInventarioMovilAutoVentasAction(
     return { success: false, message: "Camión requerido." };
   }
 
-  const response = await callDbProcedure(
-    "solicita_reversar_carga_inventario_movil_a_almacen",
+  const response = await callDbProcedure<{ detalle?: DescargaCamionLinea[] }>(
+    "descargar_camion_autoventa",
     {
       p_camion_id: camionId,
-      p_resumen_productos: productos ?? null,
-      p_radar_id: null,
+      p_productos: productos?.length ? productos : null,
     },
   );
 
   if (!response.success) {
     return {
       success: false,
-      message: rpcErrorMessage(
-        response,
-        "No se pudo devolver el inventario al almacén.",
-      ),
+      message: rpcErrorMessage(response, "No se pudo descargar el camión."),
     };
   }
 
@@ -239,8 +245,7 @@ export async function reversarInventarioMovilAutoVentasAction(
 
   return {
     success: true,
-    message:
-      response.message ||
-      "Inventario móvil devuelto exitosamente al almacén central.",
+    message: response.message || "Sobrante devuelto al almacén.",
+    data: { detalle: response.data?.detalle ?? [] },
   };
 }

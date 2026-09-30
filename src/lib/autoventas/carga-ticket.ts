@@ -8,6 +8,8 @@ export type CargaTicketData = {
   camion: string;
   fecha: string;
   lineas: CargaTicketLinea[];
+  /** `descarga`: sobrante devuelto al almacén. */
+  tipo?: "carga" | "descarga";
 };
 
 /** Codifica el comprobante para pasarlo en la URL de impresión (base64url). */
@@ -33,6 +35,7 @@ export function decodeCargaTicket(raw: string | undefined): CargaTicketData | nu
         producto: String(l?.producto ?? ""),
         cantidad: Number(l?.cantidad) || 0,
       })),
+      tipo: parsed.tipo === "descarga" ? "descarga" : "carga",
     };
   } catch {
     return null;

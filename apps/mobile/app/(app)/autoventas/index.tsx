@@ -60,6 +60,9 @@ export default function AutoventasScreen() {
   );
   const [verComprobante, setVerComprobante] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [ultimaDescarga, setUltimaDescarga] =
+    useState<CargaCamionTicketData | null>(null);
+  const [verDescarga, setVerDescarga] = useState(false);
 
   const loadResumen = useCallback(async (id: string) => {
     if (!id) {
@@ -183,20 +186,22 @@ export default function AutoventasScreen() {
     await loadResumen(camionId);
   }
 
-  async function onImprimirCarga() {
-    if (!ultimaCarga) return;
+  async function onImprimirComprobante(data: CargaCamionTicketData | null) {
+    if (!data) return;
     setImprimiendo(true);
     setError(null);
-    const res = await printToPreferredPrinter(
-      buildCargaCamionTicketText(ultimaCarga),
-    );
+    const res = await printToPreferredPrinter(buildCargaCamionTicketText(data));
     setImprimiendo(false);
     if (!res.ok) {
       setError(res.error);
       if (res.sinImpresora) router.push("/(app)/impresora" as Href);
       return;
     }
-    setMessage("Comprobante de carga enviado a la impresora.");
+    setMessage(
+      data.tipo === "descarga"
+        ? "Comprobante de descarga enviado a la impresora."
+        : "Comprobante de carga enviado a la impresora.",
+    );
   }
 
   async function onReversar(todo = false) {
@@ -206,18 +211,18 @@ export default function AutoventasScreen() {
     }
 
     let productosPayload:
-      | Array<{ producto_id: string; cantidad_solicitada: number }>
+      | Array<{ producto_id: string; cantidad: number }>
       | undefined;
 
     if (!todo) {
       productosPayload = Object.entries(cantidadesReverso)
         .map(([producto_id, raw]) => ({
           producto_id,
-          cantidad_solicitada: Number(String(raw).replace(",", ".")) || 0,
+          cantidad: Math.floor(Number(String(raw).replace(",", ".")) || 0),
         }))
-        .filter((p) => p.cantidad_solicitada > 0);
+        .filter((p) => p.cantidad > 0);
       if (!productosPayload.length) {
-        setError("Indica cantidades a devolver, o usa «Devolver todo».");
+        setError("Indica cantidades a devolver, o usa «Descargar camión completo».");
         return;
       }
     }
@@ -234,7 +239,22 @@ export default function AutoventasScreen() {
       setError(res.error);
       return;
     }
-    setMessage(res.message || "Inventario devuelto al almacén.");
+    setMessage(res.message || "Sobrante devuelto al almacén.");
+    setUltimaDescarga(
+      res.detalle.length
+        ? {
+            tipo: "descarga",
+            camionLabel: camiones.find((c) => c.id === camionId)?.placa ?? "-",
+            fecha: new Date().toISOString(),
+            lineas: res.detalle.map((d) => ({
+              codigo: d.codigo ?? "",
+              producto: d.nombre,
+              cantidad: d.cantidad,
+            })),
+          }
+        : null,
+    );
+    setVerDescarga(false);
     await loadResumen(camionId);
   }
 
@@ -253,6 +273,7 @@ export default function AutoventasScreen() {
               onPress={() => {
                 setCamionId(item.id);
                 setUltimaCarga(null);
+                setUltimaDescarga(null);
                 setPicking(false);
                 setLoading(true);
                 void loadResumen(item.id).finally(() => setLoading(false));
@@ -280,7 +301,7 @@ export default function AutoventasScreen() {
           [
             ["resumen", "Resumen"],
             ["carga", "Carga"],
-            ["reverso", "Reverso"],
+            ["reverso", "Descarga"],
           ] as const
         ).map(([key, label]) => (
           <Pressable
@@ -399,7 +420,7 @@ export default function AutoventasScreen() {
                   <PrimaryButton
                     label="Imprimir carga"
                     loading={imprimiendo}
-                    onPress={() => void onImprimirCarga()}
+                    onPress={() => void onImprimirComprobante(ultimaCarga)}
                   />
                   <Pressable onPress={() => setVerComprobante((v) => !v)}>
                     <Text style={styles.link}>
@@ -454,29 +475,62 @@ export default function AutoventasScreen() {
           keyExtractor={(r) => r.id}
           ListHeaderComponent={
             <View style={{ marginBottom: 8, gap: 8 }}>
-              <SectionTitle>Devolver a almacén</SectionTitle>
+              {ultimaDescarga ? (
+                <View style={styles.cargaCard}>
+                  <Text style={styles.name}>Descarga confirmada</Text>
+                  <Text style={styles.meta}>
+                    {ultimaDescarga.lineas.length} producto
+                    {ultimaDescarga.lineas.length === 1 ? "" : "s"} · Total{" "}
+                    {ultimaDescarga.lineas.reduce((s, l) => s + l.cantidad, 0)}{" "}
+                    unidades devueltas
+                  </Text>
+                  <PrimaryButton
+                    label="Imprimir descarga"
+                    loading={imprimiendo}
+                    onPress={() => void onImprimirComprobante(ultimaDescarga)}
+                  />
+                  <Pressable onPress={() => setVerDescarga((v) => !v)}>
+                    <Text style={styles.link}>
+                      {verDescarga ? "Ocultar comprobante" : "Ver comprobante"}
+                    </Text>
+                  </Pressable>
+                  {verDescarga ? (
+                    <Text style={styles.ticket}>
+                      {buildCargaCamionTicketText(ultimaDescarga)}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+              <SectionTitle>Descargar camión</SectionTitle>
+              <Text style={styles.meta}>
+                Devuelve al almacén lo que quedó sin vender (cargado −
+                entregado).
+              </Text>
               <PrimaryButton
-                label="Devolver cantidades indicadas"
+                label="Descargar camión completo"
                 loading={saving}
-                onPress={() => void onReversar(false)}
-              />
-              <Pressable
-                style={styles.btnGhost}
                 onPress={() => {
                   Alert.alert(
-                    "Devolver todo",
-                    "¿Devolver todo el inventario disponible del camión al almacén?",
+                    "Descargar camión",
+                    "Todo el sobrante del camión vuelve al almacén y el inventario móvil queda en cero. ¿Continuar?",
                     [
                       { text: "Cancelar", style: "cancel" },
                       {
-                        text: "Devolver todo",
+                        text: "Descargar",
                         onPress: () => void onReversar(true),
                       },
                     ],
                   );
                 }}
+              />
+              <Pressable
+                style={styles.btnGhost}
+                disabled={saving}
+                onPress={() => void onReversar(false)}
               >
-                <Text style={styles.btnGhostText}>Devolver todo (RPC)</Text>
+                <Text style={styles.btnGhostText}>
+                  Devolver solo las cantidades indicadas
+                </Text>
               </Pressable>
             </View>
           }

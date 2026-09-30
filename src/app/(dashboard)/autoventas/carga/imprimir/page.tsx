@@ -26,12 +26,12 @@ export default async function CargaCamionImprimirPage({
 
   return (
     <div className="lt-ticket-page mx-auto max-w-[22rem] space-y-4 px-2 py-4">
-      <CargaPrintControls />
+      <CargaPrintControls descarga={data?.tipo === "descarga"} />
       {data ? (
         <CargaCamionTicket {...data} />
       ) : (
         <p className="lt-alert-error">
-          No se encontró la carga a imprimir. Vuelve a AutoVentas.
+          No se encontró el comprobante a imprimir. Vuelve a AutoVentas.
         </p>
       )}
     </div>

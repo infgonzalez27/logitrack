@@ -261,33 +261,45 @@ export async function cargarInventarioMovil(input: {
   return { ok: true, message: env.message };
 }
 
+export type DescargaCamionLinea = {
+  producto_id: string;
+  codigo: string | null;
+  nombre: string;
+  cantidad: number;
+};
+
+/**
+ * `descargar_camion_autoventa`: devuelve al almacén solo el sobrante
+ * (cargado − entregado). Sin `productos` descarga todo y vacía el camión.
+ */
 export async function reversarInventarioMovil(input: {
   camionId: string;
-  productos?: Array<{ producto_id: string; cantidad_solicitada: number }>;
-}): Promise<{ ok: true; message?: string } | { ok: false; error: string }> {
+  productos?: Array<{ producto_id: string; cantidad: number }>;
+}): Promise<
+  | { ok: true; message?: string; detalle: DescargaCamionLinea[] }
+  | { ok: false; error: string }
+> {
   if (!input.camionId?.trim()) {
     return { ok: false, error: "Camión requerido." };
   }
-  const { data, error } = await supabase.rpc(
-    "solicita_reversar_carga_inventario_movil_a_almacen",
-    {
-      p_camion_id: input.camionId,
-      p_resumen_productos: input.productos?.length ? input.productos : null,
-      p_radar_id: null,
-    },
-  );
+  const { data, error } = await supabase.rpc("descargar_camion_autoventa", {
+    p_camion_id: input.camionId,
+    p_productos: input.productos?.length ? input.productos : null,
+  });
   if (error) return { ok: false, error: error.message };
   if (!isRpcSuccess(data)) {
     return {
       ok: false,
-      error: rpcFailMessage(data, "No se pudo devolver el inventario al almacén."),
+      error: rpcFailMessage(data, "No se pudo descargar el camión."),
     };
   }
-  const env = data as { message?: string };
+  const env = data as {
+    message?: string;
+    data?: { detalle?: DescargaCamionLinea[] };
+  };
   return {
     ok: true,
-    message:
-      env.message ||
-      "Inventario móvil devuelto exitosamente al almacén central.",
+    message: env.message || "Sobrante devuelto al almacén.",
+    detalle: env.data?.detalle ?? [],
   };
 }

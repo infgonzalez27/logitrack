@@ -137,6 +137,9 @@ export function AutoVentasClient({
   const [cargandoSaldos, setCargandoSaldos] = useState(false);
   const [ultimaVentaId, setUltimaVentaId] = useState<string | null>(null);
   const [ultimaCarga, setUltimaCarga] = useState<CargaTicketData | null>(null);
+  const [ultimaDescarga, setUltimaDescarga] = useState<CargaTicketData | null>(
+    null,
+  );
   const [lineasCarga, setLineasCarga] = useState<LineaCarga[]>([]);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
     () => Object.fromEntries(productos.map((p) => [p.id, p])),
@@ -447,7 +450,7 @@ export function AutoVentasClient({
     if (!camionId) return;
     if (
       !confirm(
-        "¿Devolver el stock sobrante de este camión al almacén central?",
+        "Descargar camión: todo el sobrante (cargado − entregado) vuelve al almacén y el inventario móvil queda en cero. ¿Continuar?",
       )
     ) {
       return;
@@ -458,13 +461,29 @@ export function AutoVentasClient({
       if (res.success) {
         setMensaje({
           tipo: "success",
-          texto: res.message || "Inventario devuelto.",
+          texto: res.message || "Sobrante devuelto al almacén.",
         });
+        const detalle = res.data?.detalle ?? [];
+        setUltimaDescarga(
+          detalle.length
+            ? {
+                tipo: "descarga",
+                camion:
+                  camiones.find((c) => c.id === camionId)?.placa ?? "—",
+                fecha: new Date().toISOString(),
+                lineas: detalle.map((d) => ({
+                  codigo: d.codigo ?? "",
+                  producto: d.nombre,
+                  cantidad: Number(d.cantidad) || 0,
+                })),
+              }
+            : null,
+        );
         router.refresh();
       } else {
         setMensaje({
           tipo: "error",
-          texto: res.message || "Error al devolver inventario.",
+          texto: res.message || "No se pudo descargar el camión.",
         });
       }
     });
@@ -547,6 +566,42 @@ export function AutoVentasClient({
         </Card>
       ) : null}
 
+      {ultimaDescarga ? (
+        <Card className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-lt-success-text">
+                Descarga confirmada
+              </h2>
+              <p className="text-sm text-lt-text-muted">
+                Camión {ultimaDescarga.camion} ·{" "}
+                {formatNumber(
+                  ultimaDescarga.lineas.reduce((s, l) => s + l.cantidad, 0),
+                )}{" "}
+                unidades devueltas al almacén en{" "}
+                {formatNumber(ultimaDescarga.lineas.length)} producto
+                {ultimaDescarga.lineas.length === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                href={`/autoventas/carga/imprimir?d=${encodeCargaTicket(ultimaDescarga)}`}
+                variant="primary"
+              >
+                Imprimir descarga
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setUltimaDescarga(null)}
+              >
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
       <Card className="space-y-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-[14rem] flex-1 space-y-1.5">
@@ -558,6 +613,7 @@ export function AutoVentasClient({
               onChange={(e) => {
                 setCamionId(e.target.value);
                 setUltimaCarga(null);
+                setUltimaDescarga(null);
               }}
               className={inputClass}
             >
@@ -649,7 +705,7 @@ export function AutoVentasClient({
                 disabled={isPending || inventarioResumen.length === 0}
                 onClick={handleReversar}
               >
-                Devolver sobrante a almacén
+                Descargar camión (devolver sobrante)
               </Button>
             </div>
             <div className="overflow-x-auto">

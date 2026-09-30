@@ -29,6 +29,8 @@ export type CargaCamionTicketData = {
   camionLabel: string;
   fecha: string;
   lineas: CargaCamionLinea[];
+  /** `descarga`: sobrante devuelto al almacén. */
+  tipo?: "carga" | "descarga";
 };
 
 export type OrdenTicketData = {
@@ -112,16 +114,17 @@ function partirTexto(texto: string, ancho: number): string[] {
   return out.length ? out : [""];
 }
 
-/** Comprobante de carga de camión: CODIGO | PRODUCTO | CARGADO + total. */
+/** Comprobante de carga (o descarga) de camión: CODIGO | PRODUCTO | CANTIDAD + total. */
 export function buildCargaCamionTicketText(data: CargaCamionTicketData): string {
   const total = data.lineas.reduce((s, l) => s + l.cantidad, 0);
+  const descarga = data.tipo === "descarga";
   const lines: string[] = [
     "LogiTrack",
-    "CARGA DE CAMION",
+    descarga ? "DESCARGA DE CAMION" : "CARGA DE CAMION",
     `Camion: ${data.camionLabel}`,
     formatDate(data.fecha),
     LINE,
-    `${"CODIGO".padEnd(COL_CODIGO)} ${"PRODUCTO".padEnd(COL_PRODUCTO)} ${"CARGADO".padStart(COL_CANTIDAD)}`,
+    `${"CODIGO".padEnd(COL_CODIGO)} ${"PRODUCTO".padEnd(COL_PRODUCTO)} ${(descarga ? "DEVOL." : "CARGADO").padStart(COL_CANTIDAD)}`,
     LINE,
   ];
 
