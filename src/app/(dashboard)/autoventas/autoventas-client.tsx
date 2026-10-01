@@ -267,6 +267,18 @@ export function AutoVentasClient({
             item.cantidad_cargada - item.cantidad_entregada,
           ),
         }));
+  const cargaActualTicket: CargaTicketData | null = inventarioResumen.length
+    ? {
+        tipo: "carga",
+        camion: camiones.find((c) => c.id === camionId)?.placa ?? "—",
+        fecha: new Date().toISOString(),
+        lineas: inventarioResumen.map((item) => ({
+          codigo: item.codigo ?? "",
+          producto: item.nombre ?? "Producto",
+          cantidad: Number(item.cantidad_cargada) || 0,
+        })),
+      }
+    : null;
   const ventasResumen =
     resumenRpc?.ventas?.length
       ? resumenRpc.ventas
@@ -699,14 +711,24 @@ export function AutoVentasClient({
                   Disponible = cargado − entregado
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isPending || inventarioResumen.length === 0}
-                onClick={handleReversar}
-              >
-                Descargar camión (devolver sobrante)
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {cargaActualTicket ? (
+                  <Button
+                    href={`/autoventas/carga/imprimir?d=${encodeCargaTicket(cargaActualTicket)}`}
+                    variant="primary"
+                  >
+                    Imprimir carga
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={isPending || inventarioResumen.length === 0}
+                  onClick={handleReversar}
+                >
+                  Descargar camión (devolver sobrante)
+                </Button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
