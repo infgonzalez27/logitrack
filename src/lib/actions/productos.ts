@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/admin";
+
 import { createClient } from "@/lib/supabase/server";
 import type {
   ActualizarProductoRpcInput,
@@ -48,7 +48,7 @@ async function cargarStockPorProducto(
 ): Promise<Map<string, number>> {
   if (!ids.length) return new Map();
 
-  const { data } = await createAdminClient()
+  const { data } = await (await createClient())
     .from("inventario_almacen")
     .select("producto_id, stock_disponible")
     .in("producto_id", ids);
@@ -70,7 +70,7 @@ async function buscarProductosEnTabla(
   }
 
   const pattern = `%${q}%`;
-  const { data: rows, error } = await createAdminClient()
+  const { data: rows, error } = await (await createClient())
     .from("productos")
     .select(
       "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3",
@@ -127,7 +127,7 @@ async function enriquecerProductosLista(
     return { ok: true, productos: [] };
   }
 
-  const { data, error } = await createAdminClient()
+  const { data, error } = await (await createClient())
     .from("productos")
     .select(
       "id, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3",
@@ -204,7 +204,7 @@ export async function obtenerProductoParaEditarAction(
     return { ok: false, error: "ID de producto inválido." };
   }
 
-  const admin = createAdminClient();
+  const admin = (await createClient());
   const { data, error } = await admin
     .from("productos")
     .select(

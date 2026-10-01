@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 /** Roles definidos en el esquema (fallback si no hay service role key). */
 export const ROLES_FALLBACK = [
@@ -12,7 +12,7 @@ export const ROLES_FALLBACK = [
 
 export async function getRolesOptions() {
   try {
-    const supabaseAdmin = createAdminClient();
+    const supabaseAdmin = (await createClient());
     const { data, error } = await supabaseAdmin
       .from("roles")
       .select("nombre, descripcion")
@@ -35,7 +35,7 @@ export async function getRolesOptions() {
 
 export async function getRolesWithIds() {
   try {
-    const supabaseAdmin = createAdminClient();
+    const supabaseAdmin = (await createClient());
     const { data, error } = await supabaseAdmin
       .from("roles")
       .select("id, nombre, descripcion")

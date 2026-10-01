@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 /** Nombres de perfil cuando RLS bloquea el join anidado en consultas con sesión. */
 export async function getNombresPerfilByIds(
@@ -8,7 +8,7 @@ export async function getNombresPerfilByIds(
   if (!unique.length) return {};
 
   try {
-    const { data } = await createAdminClient()
+    const { data } = await (await createClient())
       .from("perfiles_usuario")
       .select("id, nombre_completo")
       .in("id", unique);

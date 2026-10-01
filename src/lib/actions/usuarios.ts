@@ -47,7 +47,7 @@ export async function listarUsuariosAction(params?: {
     return { ok: true, usuarios: [] };
   }
 
-  const { data: perfiles, error: perfilesError } = await createAdminClient()
+  const { data: perfiles, error: perfilesError } = await (await createClient())
     .from("perfiles_usuario")
     .select("id, roles(nombre)")
     .in("id", ids);
@@ -84,7 +84,7 @@ export async function listarChoferesParaOrdenAction(): Promise<
     return usuariosResult;
   }
 
-  const { data, error } = await createAdminClient()
+  const { data, error } = await (await createClient())
     .from("choferes")
     .select("perfil_id")
     .neq("estado", "suspendido");
@@ -119,7 +119,7 @@ export async function obtenerPerfilUsuarioAction(
     return { ok: false, error: "ID de perfil inválido." };
   }
 
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("perfiles_usuario")
     .select("id, nombre_completo, telefono, activo, rol_id, roles(nombre)")
