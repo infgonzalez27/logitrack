@@ -29,8 +29,8 @@ export function CargaPrintControls({
           Comprobante de {etiqueta}
         </p>
         <p className="text-sm text-lt-text-muted">
-          Toca <strong>Imprimir {etiqueta}</strong> y elige la impresora térmica
-          en el diálogo del sistema.
+          Toca <strong>Imprimir {etiqueta}</strong> y elige una impresora
+          convencional con hoja tamaño carta.
         </p>
         {aviso ? <p className="mt-2 text-sm text-lt-danger-text">{aviso}</p> : null}
       </div>

@@ -503,4 +503,23 @@ h4 {
   .lt-ticket__big {
     font-size: 16px !important;
   }
+
+  /* Reportes en hoja carta (impresora convencional) */
+  @page carta {
+    size: letter;
+    margin: 12mm;
+  }
+
+  .lt-carta-page {
+    page: carta;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .lt-carta {
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
 }
