@@ -13,6 +13,7 @@
 import fs from "fs";
 import path from "path";
 import { createCentralAdminClient } from "@/lib/supabase/admin";
+import { joinOne } from "@/lib/supabase/join";
 import { managementFetch, runProjectSql } from "@/lib/tenants/management";
 
 function centralUrl(): string {
@@ -211,9 +212,15 @@ export async function mirrorCentralUserToTenant(
 
   const { data: perfilCentral } = await central
     .from("perfiles_usuario")
-    .select("nombre_completo, telefono, activo")
+    .select("nombre_completo, telefono, activo, roles(nombre)")
     .eq("id", userId)
     .maybeSingle();
+
+  // El superadmin (admin con perfil en Central) no se copia a empresas ni pierde su perfil.
+  const rolCentral = joinOne(
+    perfilCentral?.roles as { nombre?: string } | { nombre?: string }[] | null | undefined,
+  )?.nombre;
+  if (rolCentral === "admin") return;
 
   const metadata = (authUser.user_metadata ?? {}) as {
     nombre_completo?: string;

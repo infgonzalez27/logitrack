@@ -1371,6 +1371,30 @@ El **Módulo de Mantenimiento de Tasas de Cambio** gestiona las tasas oficiales 
   - Ticket de orden (web y texto térmico): Saldo anterior / Entregados / Retirados / Saldo final. `lineasDesdeMovimientosOrden` ahora descuenta los movimientos posteriores a la orden para reimprimir el saldo histórico.
   - Órdenes por liquidar: buscador (nombre o RIF, sin acentos) con botón × y contador «Clientes (X de Y)».
 
+### 2.40.1. Contenedores automáticos en AutoVenta y Venta Directa (2026-10-01)
+- **Parche:** `supabase/tenant_patches/20261001190000_contenedores_autoventa_venta_directa.sql` (empresas lt_*: Ramirez y Berraco). Requiere antes `20260930180000_venta_directa_almacen_fix.sql`. Idempotente; se aplica con «Sincronizar» o en el editor SQL en orden 20260930180000 → 20261001190000.
+- **Qué hace la BD:**
+  - `movimientos_contenedores` gana `saldo_anterior` y `saldo_actual` (INTEGER, nullable) para reimprimir el ticket con el saldo exacto de esa orden.
+  - Helper interno `lt_asentar_contenedores_orden(p_orden_id, p_retirados JSONB)` (solo `service_role`, se invoca desde los SP): calcula los **entregados** por tipo de envase desde el detalle de la orden con `CEIL(cantidad_despachada / GREATEST(unidades_por_contenedor, 1))` agrupado por `COALESCE(detalle.contenedor_id, producto.contenedor_id)`, suma los **retirados** recibidos, bloquea el saldo (`FOR UPDATE`), inserta el movimiento y actualiza `saldo_contenedores_clientes` con `saldo_actual = GREATEST(0, anterior + entregados − retirados)`. Todo en la misma transacción de la venta.
+  - `registrar_venta_en_ruta_autoventa`: misma firma de 7 argumentos. **Ignora `cantidad_entregada`** de `p_contenedores_json`; solo usa `cantidad_retirada`. Agrega validación de sesión/rol (admin, gerente, vendedor, despachador).
+  - `crear_venta_directa_almacen`: nuevo 6.º parámetro `p_contenedores_json JSONB DEFAULT '[]'` (se elimina la firma de 5 argumentos).
+  - Elimina en las empresas `rpc_create_od_and_process_containers` (creada fuera del flujo, con EXECUTE para `anon`). En Central sigue existiendo y debe borrarla el DB admin.
+- **Entrada:** `p_contenedores_json: [{ "contenedor_id": "uuid", "cantidad_retirada": 3 }]`. Enteros ≥ 0; `contenedor_id` obligatorio si la cantidad es > 0.
+- **Salida:** ambos SP devuelven en `data.contenedores` el resumen, sin consultas extra:
+  ```json
+  [{ "contenedor_id": "uuid", "codigo": "C0136", "nombre": "Cesta", "saldo_anterior": 10, "entregados": 4, "retirados": 3, "saldo_actual": 11 }]
+  ```
+- **Web:**
+  - Utilidades compartidas: `src/lib/contenedores/envases-venta.ts` (`calcularEnvasesEntregados`, `parseEnvasesResumen`) y componentes `src/components/contenedores/envases-venta.tsx` (`EnvasesVentaFields`, `EnvasesResumenTabla`).
+  - `/autoventas` → Nueva venta: Entregados es de solo lectura y se calcula con los productos de la venta; el usuario solo escribe Retirados. Se sigue enviando `cantidad_entregada` calculada para compatibilidad con la versión anterior del SP. Tras registrar se muestra «Resumen de envases» con `data.contenedores`.
+  - `/ordenes/venta-directa`: nuevo bloque Envases (saldo anterior, entregados calculados, retirados, saldo actual); `crearVentaDirectaAlmacenAction({ ..., retirados })`. `p_contenedores_json` solo se envía si hay retirados, para seguir funcionando con la firma de 5 argumentos mientras no se aplique el parche. El resumen aparece en la tarjeta de éxito.
+  - Ticket: el bloque se titula «RESUMEN DE CONTENEDORES» y la última fila es «Saldo actual». `lineasDesdeMovimientosOrden` usa `saldo_anterior`/`saldo_actual` guardados cuando existen; si no, reconstruye como antes.
+- **App móvil (APK pendiente de build):**
+  - `apps/mobile/lib/envases-venta.ts` replica la fórmula y el parseo.
+  - Nueva AutoVenta: Entregados automáticos (lee `contenedor_id`/`unidades_por_contenedor` del join de `inventario_movil`), solo se escriben Retirados. El Alert de éxito incluye el resumen de envases.
+  - Venta directa: bloque Envases con retirados; `listarProductos` ahora trae `contenedor_id` y `unidades_por_contenedor`.
+  - Ticket térmico: «RESUMEN DE CONTENEDORES» / «Saldo actual»; `fetchEstadoCuentaVacios` usa los saldos guardados cuando existen.
+
 ---
 
 ### 2.41. Resumen de Jornada AutoVentas (`retorna_resumen_autoventas_jornada`)
@@ -1636,6 +1660,19 @@ Esta sección define las funciones para gestionar el aprovisionamiento central d
       "mensaje": "¡Empresa Nombre Empresa y su Gerente creados exitosamente!"
     }
   }
+  ```
+
+#### 2.43.5. Resolución de empresa del usuario y superadmin (2026-10-01)
+- **Una sola regla** en `resolverEmpresaAsignada` (`src/lib/supabase/empresa-asignada.ts`), usada por la sesión web (`resolveUserEmpresa`), `/api/auth/login` y la API móvil (`getBearerActor`); la app móvil (`apps/mobile/lib/supabase.ts`) aplica la misma regla:
+  1. Si el usuario tiene perfil con rol `admin` **en Central**, es el superadmin: trabaja sobre Central aunque tenga filas en `usuarios_empresas`.
+  2. Si tiene varias empresas, se toma siempre la más antigua (`ORDER BY created_at`). Antes era `LIMIT 1` sin orden y caía en una empresa al azar.
+- **Sincronizar:** `mirrorCentralUserToTenant` omite al admin de Central: no lo copia a la empresa ni borra su perfil de Central.
+- **Motivo:** el 2026-10-01 a las 22:08 UTC se insertaron por SQL directo 4 filas de `usuarios_empresas` para `inf.gonzalez27@gmail.com` (Ramirez, Berraco, InfGonzTest, Gresalbert). El superadmin quedaba enrutado a una empresa donde no tiene perfil y veía «Hola, Usuario · Panel de sin rol». Limpieza recomendada al DB admin (Central):
+  ```sql
+  DELETE FROM public.usuarios_empresas
+  WHERE user_id = '52e58161-b9dc-4a98-ad2a-555c745f7817'
+    AND created_at >= '2026-10-01 22:08:00+00'
+    AND created_at <  '2026-10-01 22:09:00+00';
   ```
 
 ---

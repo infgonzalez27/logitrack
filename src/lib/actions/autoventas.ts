@@ -44,7 +44,9 @@ async function requireAutoVentaAccess(): Promise<
 /** Registra venta en caliente (`registrar_venta_en_ruta_autoventa`). */
 export async function registrarVentaEnRutaAction(
   params: VentaAutoVentaParams,
-): Promise<ActionResult<{ orden_id?: string; correlativo?: number }>> {
+): Promise<
+  ActionResult<{ orden_id?: string; correlativo?: number; contenedores?: unknown }>
+> {
   const access = await requireAutoVentaAccess();
   if (!access.ok) return { success: false, message: access.message };
 
@@ -66,6 +68,7 @@ export async function registrarVentaEnRutaAction(
     correlativo?: number;
     es_autoventa?: boolean;
     total_recaudar_usd?: number;
+    contenedores?: unknown;
   }>("registrar_venta_en_ruta_autoventa", {
     p_vendedor_id: params.vendedor_id || access.profileId,
     p_cliente_id: params.cliente_id,

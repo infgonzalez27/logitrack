@@ -192,14 +192,14 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
   lines.push(`TOTAL: ${moneyThermal(data.totalRecaudar)}`);
 
   lines.push(LINE);
-  lines.push("ESTADO DE CUENTA - VACIOS");
+  lines.push("RESUMEN DE CONTENEDORES");
   if (data.estadoCuentaVacios && data.estadoCuentaVacios.length > 0) {
     for (const v of data.estadoCuentaVacios) {
       lines.push(v.nombre);
       lines.push(filaValor("  Saldo anterior:", v.saldo_anterior));
       lines.push(filaValor("  Entregados:", v.entregado));
       lines.push(filaValor("  Retirados:", v.retirado));
-      lines.push(filaValor("  Saldo final:", v.saldo_nuevo));
+      lines.push(filaValor("  Saldo actual:", v.saldo_nuevo));
     }
     if (data.estadoCuentaProvisional) {
       lines.push("(provisional hasta aprobar radar)");

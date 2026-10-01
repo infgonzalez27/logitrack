@@ -8,6 +8,15 @@ import {
   type VentaDirectaResultado,
 } from "@/lib/actions/venta-directa";
 import { listarProductosAction } from "@/lib/actions/productos";
+import { obtenerSaldosEnvasesClienteAction } from "@/lib/actions/autoventas";
+import {
+  EnvasesResumenTabla,
+  EnvasesVentaFields,
+} from "@/components/contenedores/envases-venta";
+import {
+  calcularEnvasesEntregados,
+  type TipoEnvase,
+} from "@/lib/contenedores/envases-venta";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,11 +44,13 @@ export function VentaDirectaForm({
   productos,
   productosError = null,
   tasaActual = null,
+  tiposEnvase = [],
 }: {
   clientes: ClienteComboboxOption[];
   productos: ProductoListaRpc[];
   productosError?: string | null;
   tasaActual?: TasaCambio | null;
+  tiposEnvase?: TipoEnvase[];
 }) {
   const router = useRouter();
   const [clienteId, setClienteId] = useState("");
@@ -54,14 +65,38 @@ export function VentaDirectaForm({
   const [error, setError] = useState<string | null>(null);
   const [venta, setVenta] = useState<VentaDirectaResultado | null>(null);
   const peticionPrecios = useRef(0);
+  const [saldosEnvases, setSaldosEnvases] = useState<Record<string, number> | null>(null);
+  const [cargandoSaldos, setCargandoSaldos] = useState(false);
+  const [retiradosEnvases, setRetiradosEnvases] = useState<Record<string, string>>({});
+
+  const envasesEntregados = useMemo(
+    () =>
+      calcularEnvasesEntregados(
+        lineas.map((l) => ({
+          cantidad: l.cantidad,
+          contenedor_id: catalogo[l.producto_id]?.contenedor_id,
+          unidades_por_contenedor: catalogo[l.producto_id]?.unidades_por_contenedor,
+        })),
+      ),
+    [lineas, catalogo],
+  );
 
   async function seleccionarCliente(id: string) {
     setClienteId(id);
+    setRetiradosEnvases({});
+    setSaldosEnvases(null);
     const peticion = ++peticionPrecios.current;
     if (!id) {
       setCargandoPrecios(false);
+      setCargandoSaldos(false);
       return;
     }
+    setCargandoSaldos(true);
+    void obtenerSaldosEnvasesClienteAction(id).then((res) => {
+      if (peticion !== peticionPrecios.current) return;
+      setCargandoSaldos(false);
+      setSaldosEnvases(res.success && res.data ? res.data : {});
+    });
     setCargandoPrecios(true);
     const res = await listarProductosAction(".F.", id);
     if (peticion !== peticionPrecios.current) return;
@@ -138,6 +173,9 @@ export function VentaDirectaForm({
       cliente_id: clienteId,
       lineas,
       tasa_cambio: tasaActual?.tasa_cambio ?? null,
+      retirados: Object.entries(retiradosEnvases)
+        .map(([contenedor_id, v]) => ({ contenedor_id, cantidad_retirada: Number(v) || 0 }))
+        .filter((r) => r.cantidad_retirada > 0),
     });
     setPending(false);
     setConfirmando(false);
@@ -153,6 +191,8 @@ export function VentaDirectaForm({
     setVenta(null);
     setLineas([]);
     setClienteId("");
+    setRetiradosEnvases({});
+    setSaldosEnvases(null);
     setCatalogoProductos(productos);
     setCatalogo(Object.fromEntries(productos.map((p) => [p.id, p])));
   }
@@ -173,6 +213,12 @@ export function VentaDirectaForm({
               el cobro en Cobranzas.
             </p>
           </div>
+          {venta.contenedores.length ? (
+            <div className="mt-4 space-y-1">
+              <h3 className="text-sm font-semibold text-lt-text">Resumen de envases</h3>
+              <EnvasesResumenTabla filas={venta.contenedores} />
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-3">
             <Link href={`/ordenes/${venta.orden_id}/imprimir`}>
               <Button type="button">Imprimir</Button>
@@ -318,6 +364,20 @@ export function VentaDirectaForm({
           <p className="mt-4 text-sm text-lt-text-muted">
             Total (USD): <span className="font-medium text-lt-text">${formatNumber(total)}</span>
           </p>
+        </Card>
+
+        <Card>
+          <EnvasesVentaFields
+            tipos={tiposEnvase}
+            clienteSeleccionado={Boolean(clienteId)}
+            cargandoSaldos={cargandoSaldos}
+            saldos={saldosEnvases}
+            entregados={envasesEntregados}
+            retirados={retiradosEnvases}
+            onRetiradosChange={(id, valor) =>
+              setRetiradosEnvases((prev) => ({ ...prev, [id]: valor }))
+            }
+          />
         </Card>
 
         {error && <p className="lt-alert-error">{error}</p>}

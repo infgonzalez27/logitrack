@@ -8,6 +8,15 @@ import { Input } from "@/components/ui/input";
 import { LogiImage } from "@/components/media/logi-image";
 import { ProductoCatalogo } from "@/components/productos/producto-catalogo";
 import { ClienteCombobox } from "@/components/clientes/cliente-combobox";
+import {
+  EnvasesResumenTabla,
+  EnvasesVentaFields,
+} from "@/components/contenedores/envases-venta";
+import {
+  calcularEnvasesEntregados,
+  parseEnvasesResumen,
+  type EnvaseResumenVenta,
+} from "@/lib/contenedores/envases-venta";
 import { resolveProductoImage } from "@/lib/product-images";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
@@ -83,12 +92,6 @@ type LineaVenta = {
   precio_unitario: number;
 };
 
-type EnvaseInput = { entregados: string; retirados: string };
-
-function soloEnteros(raw: string): string {
-  return raw.replace(/\D/g, "").slice(0, 6);
-}
-
 type Props = {
   camiones: CamionItem[];
   clientes: ClienteItem[];
@@ -129,13 +132,14 @@ export function AutoVentasClient({
   const [clienteId, setClienteId] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [lineasVenta, setLineasVenta] = useState<LineaVenta[]>([]);
-  const [envases, setEnvases] = useState<Record<string, EnvaseInput>>({});
+  const [retiradosEnvases, setRetiradosEnvases] = useState<Record<string, string>>({});
   const [saldosEnvases, setSaldosEnvases] = useState<Record<
     string,
     number
   > | null>(null);
   const [cargandoSaldos, setCargandoSaldos] = useState(false);
   const [ultimaVentaId, setUltimaVentaId] = useState<string | null>(null);
+  const [ultimaVentaEnvases, setUltimaVentaEnvases] = useState<EnvaseResumenVenta[]>([]);
   const [ultimaCarga, setUltimaCarga] = useState<CargaTicketData | null>(null);
   const [ultimaDescarga, setUltimaDescarga] = useState<CargaTicketData | null>(
     null,
@@ -169,7 +173,7 @@ export function AutoVentasClient({
 
   function seleccionarCliente(id: string) {
     setClienteId(id);
-    setEnvases({});
+    setRetiradosEnvases({});
     setSaldosEnvases(null);
     clienteSolicitado.current = id;
     if (!id) {
@@ -184,34 +188,18 @@ export function AutoVentasClient({
     });
   }
 
-  function envaseValor(contenedorId: string) {
-    const e = envases[contenedorId];
-    const saldo = saldosEnvases?.[contenedorId] ?? 0;
-    const entregados = Number(e?.entregados) || 0;
-    const retirados = Number(e?.retirados) || 0;
-    return {
-      saldo,
-      entregados,
-      retirados,
-      final: Math.max(0, saldo + entregados - retirados),
-      excede: retirados > saldo + entregados,
-    };
-  }
-
-  function editarEnvase(
-    contenedorId: string,
-    campo: keyof EnvaseInput,
-    raw: string,
-  ) {
-    setEnvases((prev) => ({
-      ...prev,
-      [contenedorId]: {
-        entregados: prev[contenedorId]?.entregados ?? "",
-        retirados: prev[contenedorId]?.retirados ?? "",
-        [campo]: soloEnteros(raw),
-      },
-    }));
-  }
+  const envasesEntregados = useMemo(
+    () =>
+      calcularEnvasesEntregados(
+        lineasVenta.map((l) => ({
+          cantidad: l.cantidad,
+          contenedor_id: catalogo[l.producto_id]?.contenedor_id,
+          unidades_por_contenedor:
+            catalogo[l.producto_id]?.unidades_por_contenedor,
+        })),
+      ),
+    [lineasVenta, catalogo],
+  );
 
   /** Catálogo para venta: stock = disponible en el camión seleccionado. */
   const productosParaVenta = useMemo((): ProductoListaRpc[] => {
@@ -363,7 +351,18 @@ export function AutoVentasClient({
     }
 
     const contenedoresJson = contenedores
-      .map((c) => ({ id: c.id, nombre: c.nombre, ...envaseValor(c.id) }))
+      .map((c) => {
+        const saldo = saldosEnvases?.[c.id] ?? 0;
+        const entregados = envasesEntregados[c.id] ?? 0;
+        const retirados = Number(retiradosEnvases[c.id]) || 0;
+        return {
+          id: c.id,
+          nombre: c.nombre,
+          entregados,
+          retirados,
+          excede: retirados > saldo + entregados,
+        };
+      })
       .filter((c) => c.entregados > 0 || c.retirados > 0);
     const excedidos = contenedoresJson.filter((c) => c.excede);
     if (
@@ -402,6 +401,7 @@ export function AutoVentasClient({
           texto: res.message || "Venta registrada.",
         });
         setUltimaVentaId(res.data?.orden_id ?? null);
+        setUltimaVentaEnvases(parseEnvasesResumen(res.data?.contenedores));
         setLineasVenta([]);
         seleccionarCliente("");
         setObservaciones("");
@@ -523,7 +523,8 @@ export function AutoVentasClient({
       ) : null}
 
       {ultimaVentaId ? (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <Card className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-lt-text">
             Venta registrada. Puedes imprimir el ticket con el balance de
             envases.
@@ -543,6 +544,15 @@ export function AutoVentasClient({
               Listo
             </Button>
           </div>
+          </div>
+          {ultimaVentaEnvases.length ? (
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-lt-text">
+                Resumen de envases
+              </h3>
+              <EnvasesResumenTabla filas={ultimaVentaEnvases} />
+            </div>
+          ) : null}
         </Card>
       ) : null}
 
@@ -1126,89 +1136,18 @@ export function AutoVentasClient({
               {formatNumber(totalVentaUsd * tasaOficial)} Bs
             </p>
 
-            <div className="mt-4 space-y-3 border-t border-lt-border-light pt-4">
-              <div>
-                <h3 className="text-sm font-semibold text-lt-text">
-                  Envases (opcional)
-                </h3>
-                <p className="text-xs text-lt-text-muted">
-                  Saldo final = saldo actual + entregados − retirados
-                </p>
-              </div>
-              {!clienteId ? (
-                <p className="text-sm text-lt-text-muted">
-                  Selecciona un cliente para ver su saldo de envases.
-                </p>
-              ) : cargandoSaldos ? (
-                <p className="text-sm text-lt-text-muted">
-                  Consultando saldo de envases…
-                </p>
-              ) : !contenedores.length ? (
-                <p className="text-sm text-lt-text-muted">
-                  No hay tipos de envase registrados.
-                </p>
-              ) : (
-                contenedores.map((c) => {
-                  const v = envaseValor(c.id);
-                  return (
-                    <div
-                      key={c.id}
-                      className="grid gap-2 rounded-xl border border-lt-border p-3 sm:grid-cols-12 sm:items-end"
-                    >
-                      <div className="sm:col-span-4">
-                        <p className="text-sm font-medium text-lt-text">
-                          {c.codigo ? `${c.codigo} — ` : ""}
-                          {c.nombre}
-                        </p>
-                        <p className="text-xs text-lt-text-muted">
-                          Saldo actual:{" "}
-                          <span className="font-semibold text-lt-text">
-                            {formatNumber(v.saldo)}
-                          </span>
-                        </p>
-                      </div>
-                      <div className="sm:col-span-3">
-                        <Input
-                          label="Entregados"
-                          inputMode="numeric"
-                          placeholder="0"
-                          value={envases[c.id]?.entregados ?? ""}
-                          onChange={(e) =>
-                            editarEnvase(c.id, "entregados", e.target.value)
-                          }
-                        />
-                      </div>
-                      <div className="sm:col-span-3">
-                        <Input
-                          label="Retirados"
-                          inputMode="numeric"
-                          placeholder="0"
-                          value={envases[c.id]?.retirados ?? ""}
-                          onChange={(e) =>
-                            editarEnvase(c.id, "retirados", e.target.value)
-                          }
-                        />
-                      </div>
-                      <div className="sm:col-span-2 sm:text-right">
-                        <p className="text-xs text-lt-text-muted">Saldo final</p>
-                        <p
-                          className={`text-lg font-bold tabular-nums ${
-                            v.excede ? "text-lt-danger-text" : "text-lt-text"
-                          }`}
-                        >
-                          {formatNumber(v.final)}
-                        </p>
-                      </div>
-                      {v.excede ? (
-                        <p className="text-xs text-lt-danger-text sm:col-span-12">
-                          Los retirados superan el saldo del cliente más lo
-                          entregado.
-                        </p>
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
+            <div className="mt-4 border-t border-lt-border-light pt-4">
+              <EnvasesVentaFields
+                tipos={contenedores}
+                clienteSeleccionado={Boolean(clienteId)}
+                cargandoSaldos={cargandoSaldos}
+                saldos={saldosEnvases}
+                entregados={envasesEntregados}
+                retirados={retiradosEnvases}
+                onRetiradosChange={(id, valor) =>
+                  setRetiradosEnvases((prev) => ({ ...prev, [id]: valor }))
+                }
+              />
             </div>
 
             <div className="mt-4 flex flex-wrap justify-end gap-2">

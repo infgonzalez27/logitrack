@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { isRpcSuccess, rpcFailMessage, unwrapRpcData } from "./rpc";
+import { parseEnvasesResumen, type EnvaseResumenVenta } from "./envases-venta";
 
 export type ResumenAutoVentaItem = {
   producto_id: string;
@@ -41,6 +42,8 @@ export type InventarioMovilRow = {
     codigo_producto: string | null;
     nombre: string;
     precio_lista1: number | null;
+    contenedor_id?: string | null;
+    unidades_por_contenedor?: number | null;
   } | null;
 };
 
@@ -119,7 +122,7 @@ export async function listarInventarioMovil(
   let q = supabase
     .from("inventario_movil")
     .select(
-      "id, camion_id, producto_id, cantidad_cargada, cantidad_entregada, productos(codigo_producto, nombre, precio_lista1)",
+      "id, camion_id, producto_id, cantidad_cargada, cantidad_entregada, productos(codigo_producto, nombre, precio_lista1, contenedor_id, unidades_por_contenedor)",
     )
     .order("producto_id");
 
@@ -161,7 +164,13 @@ export async function registrarVentaEnRuta(input: {
   observaciones?: string;
   tasaCambio?: number | null;
 }): Promise<
-  | { ok: true; ordenId: string; correlativo?: number; total?: number }
+  | {
+      ok: true;
+      ordenId: string;
+      correlativo?: number;
+      total?: number;
+      contenedores: EnvaseResumenVenta[];
+    }
   | { ok: false; error: string }
 > {
   if (!input.productos.length) {
@@ -224,6 +233,7 @@ export async function registrarVentaEnRuta(input: {
       total:
         Number(env.total_recaudar_usd ?? env.data?.total_recaudar_usd) ||
         undefined,
+      contenedores: [],
     };
   }
 
@@ -232,6 +242,7 @@ export async function registrarVentaEnRuta(input: {
     ordenId,
     correlativo: Number((payload as { correlativo?: number })?.correlativo) || undefined,
     total: Number((payload as { total_recaudar_usd?: number })?.total_recaudar_usd) || undefined,
+    contenedores: parseEnvasesResumen(payload?.contenedores),
   };
 }
 

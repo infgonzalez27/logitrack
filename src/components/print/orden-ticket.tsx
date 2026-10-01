@@ -95,14 +95,14 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
   lines.push(`TOTAL: ${moneyThermal(data.totalRecaudar)}`);
 
   lines.push(LINE);
-  lines.push("ESTADO DE CUENTA - VACIOS");
+  lines.push("RESUMEN DE CONTENEDORES");
   if (data.estadoCuentaVacios && data.estadoCuentaVacios.length > 0) {
     for (const v of data.estadoCuentaVacios) {
       lines.push(v.nombre);
       lines.push(filaVacios("Saldo anterior", v.saldo_anterior));
       lines.push(filaVacios("Entregados", v.entregado));
       lines.push(filaVacios("Retirados", v.retirado));
-      lines.push(filaVacios("Saldo final", v.saldo_nuevo));
+      lines.push(filaVacios("Saldo actual", v.saldo_nuevo));
     }
     if (data.estadoCuentaProvisional) {
       lines.push("(provisional hasta aprobar radar)");
@@ -207,7 +207,7 @@ export function OrdenTicket(data: OrdenTicketData) {
 
       <div className="lt-ticket__rule" />
       <section className="lt-ticket__block">
-        <p className="lt-ticket__label">ESTADO DE CUENTA — VACÍOS</p>
+        <p className="lt-ticket__label">RESUMEN DE CONTENEDORES</p>
         {estadoCuentaVacios && estadoCuentaVacios.length > 0 ? (
           estadoCuentaVacios.map((v) => (
             <div key={v.contenedor_id} className="lt-ticket__item">
@@ -225,7 +225,7 @@ export function OrdenTicket(data: OrdenTicketData) {
                 <span>{formatNumber(v.retirado)}</span>
               </p>
               <p className="lt-ticket__row">
-                <span>Saldo final</span>
+                <span>Saldo actual</span>
                 <span className="lt-ticket__strong">
                   {formatNumber(v.saldo_nuevo)}
                 </span>

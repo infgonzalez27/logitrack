@@ -22,11 +22,13 @@ export default async function VentaDirectaPage() {
     clientesQuery = clientesQuery.eq("vendedor_id", user.id);
   }
 
-  const [{ data: clientes }, productosResult, tasaResult] = await Promise.all([
-    clientesQuery,
-    listarProductosAction(),
-    retornaUltimaTasaCambioAction(),
-  ]);
+  const [{ data: clientes }, productosResult, tasaResult, { data: tiposEnvase }] =
+    await Promise.all([
+      clientesQuery,
+      listarProductosAction(),
+      retornaUltimaTasaCambioAction(),
+      supabase.from("tipos_contenedores").select("id, codigo, nombre").order("nombre"),
+    ]);
 
   return (
     <VentaDirectaForm
@@ -38,6 +40,11 @@ export default async function VentaDirectaPage() {
       productos={productosResult.ok ? productosResult.productos : []}
       productosError={productosResult.ok ? null : productosResult.error}
       tasaActual={tasaResult.ok ? tasaResult.tasa : null}
+      tiposEnvase={(tiposEnvase ?? []).map((t) => ({
+        id: String(t.id),
+        codigo: t.codigo ?? null,
+        nombre: String(t.nombre ?? "Envase"),
+      }))}
     />
   );
 }

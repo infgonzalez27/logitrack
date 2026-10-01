@@ -12,6 +12,8 @@ export type ProductoLista = {
   precio_final_usd?: number;
   stock_disponible: number;
   imagen_path?: string | null;
+  contenedor_id?: string | null;
+  unidades_por_contenedor?: number | null;
 };
 
 export type ProductoMaestro = {
@@ -52,7 +54,9 @@ export async function listarProductos(
 
   const { data: extra } = await supabase
     .from("productos")
-    .select("id, codigo_producto, codigo_barras, precio_lista1, imagen_path")
+    .select(
+      "id, codigo_producto, codigo_barras, precio_lista1, imagen_path, contenedor_id, unidades_por_contenedor",
+    )
     .in("id", ids);
 
   const byId = new Map((extra ?? []).map((r) => [r.id, r]));
@@ -70,6 +74,9 @@ export async function listarProductos(
         porcentaje_descuento: Number(p.porcentaje_descuento ?? 0),
         precio_final_usd: p.precio_final_usd ?? p.precio,
         imagen_path: p.imagen_path ?? row?.imagen_path ?? null,
+        contenedor_id: p.contenedor_id ?? row?.contenedor_id ?? null,
+        unidades_por_contenedor:
+          p.unidades_por_contenedor ?? row?.unidades_por_contenedor ?? null,
         stock_disponible: Number(p.stock_disponible ?? 0),
         precio: Number(p.precio ?? 0),
       };
@@ -97,8 +104,9 @@ export async function listProductosMaestros(
       precio_lista1: Number(p.precio_lista1 ?? p.precio ?? 0),
       precio_lista2: 0,
       precio_lista3: 0,
-      contenedor_id: null,
-      unidades_por_contenedor: null,
+      contenedor_id: p.contenedor_id ?? null,
+      unidades_por_contenedor:
+        p.unidades_por_contenedor != null ? Number(p.unidades_por_contenedor) : null,
       imagen_path: p.imagen_path ?? null,
     })),
   };

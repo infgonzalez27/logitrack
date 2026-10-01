@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { joinOne } from "@/lib/supabase/join";
+import { resolverEmpresaAsignada } from "@/lib/supabase/empresa-asignada";
 import {
   createTenantDataClient,
   tenantFromEmpresa,
@@ -100,13 +100,7 @@ export async function POST(request: Request) {
     let redirectTo = "/";
     const userId = data.user?.id;
     if (userId) {
-      const { data: asignacion } = await supabase
-        .from("usuarios_empresas")
-        .select("empresas(id, activo, supabase_url, supabase_anon_key)")
-        .eq("user_id", userId)
-        .limit(1)
-        .maybeSingle();
-      const tenant = tenantFromEmpresa(joinOne(asignacion?.empresas));
+      const tenant = tenantFromEmpresa(await resolverEmpresaAsignada(supabase, userId));
       const dataClient = tenant
         ? createTenantDataClient(tenant, async () => tokenJson.access_token ?? null)
         : supabase;

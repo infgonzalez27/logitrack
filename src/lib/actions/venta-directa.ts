@@ -5,6 +5,10 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { canCreateOrden } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
+import {
+  parseEnvasesResumen,
+  type EnvaseResumenVenta,
+} from "@/lib/contenedores/envases-venta";
 
 export type VentaDirectaLineaInput = {
   producto_id: string;
@@ -16,6 +20,12 @@ export type VentaDirectaResultado = {
   orden_id: string;
   correlativo: number | null;
   total_recaudar_usd: number;
+  contenedores: EnvaseResumenVenta[];
+};
+
+export type VentaDirectaRetiroInput = {
+  contenedor_id: string;
+  cantidad_retirada: number;
 };
 
 /** `crear_venta_directa_almacen` (§2.1.1): venta en mostrador que descuenta del almacén. */
@@ -23,6 +33,7 @@ export async function crearVentaDirectaAlmacenAction(input: {
   cliente_id: string;
   lineas: VentaDirectaLineaInput[];
   tasa_cambio?: number | null;
+  retirados?: VentaDirectaRetiroInput[];
 }): Promise<{ ok: true; venta: VentaDirectaResultado } | { ok: false; error: string }> {
   const [profile, user] = await Promise.all([getCurrentProfile(), getSessionUser()]);
   const rol = getRoleNameFromProfile(profile);
@@ -49,11 +60,16 @@ export async function crearVentaDirectaAlmacenAction(input: {
       ? input.tasa_cambio
       : null;
 
-  const response = await callDbProcedure<{
-    orden_id?: string;
-    correlativo?: number;
-    total_recaudar_usd?: number;
-  }>("crear_venta_directa_almacen", {
+  const retirados = (input.retirados ?? []).filter(
+    (r) => r.contenedor_id && r.cantidad_retirada > 0,
+  );
+  for (const r of retirados) {
+    if (!Number.isInteger(r.cantidad_retirada)) {
+      return { ok: false, error: "Los envases retirados deben ser cantidades enteras." };
+    }
+  }
+
+  const params: Record<string, unknown> = {
     p_cliente_id: clienteId,
     p_vendedor_id: user.id,
     p_tipo_venta: "credito",
@@ -63,14 +79,25 @@ export async function crearVentaDirectaAlmacenAction(input: {
       cantidad: l.cantidad,
       valor_unitario_usd: l.valor_unitario_usd,
     })),
-  });
+  };
+  // Sin retirados se omite el parámetro: así la llamada también funciona con la versión de 5 argumentos.
+  if (retirados.length) params.p_contenedores_json = retirados;
+
+  const response = await callDbProcedure<{
+    orden_id?: string;
+    correlativo?: number;
+    total_recaudar_usd?: number;
+    contenedores?: unknown;
+  }>("crear_venta_directa_almacen", params);
 
   if (!response.success || !response.data?.orden_id) {
     const mensaje = rpcErrorMessage(response, "No se pudo registrar la venta.");
     if (/could not find the function/i.test(mensaje)) {
       return {
         ok: false,
-        error: "La venta directa aún no está disponible en la base de datos de esta empresa.",
+        error: retirados.length
+          ? "El retiro de envases en venta directa aún no está disponible en la base de datos de esta empresa."
+          : "La venta directa aún no está disponible en la base de datos de esta empresa.",
       };
     }
     return { ok: false, error: mensaje };
@@ -85,6 +112,7 @@ export async function crearVentaDirectaAlmacenAction(input: {
       orden_id: response.data.orden_id,
       correlativo: response.data.correlativo ?? null,
       total_recaudar_usd: Number(response.data.total_recaudar_usd ?? 0),
+      contenedores: parseEnvasesResumen(response.data.contenedores),
     },
   };
 }

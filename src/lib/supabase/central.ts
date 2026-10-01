@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { resolverEmpresaAsignada } from "@/lib/supabase/empresa-asignada";
 import type { Empresa } from "@/types/database";
 
 /**
@@ -41,19 +42,5 @@ export async function createCentralClient() {
  * Resuelve la empresa (tenant lt_*) asignada a un usuario desde la BD Central.
  */
 export async function resolveUserEmpresa(userId: string): Promise<Empresa | null> {
-  const centralClient = await createCentralClient();
-
-  const { data, error } = await centralClient
-    .from("usuarios_empresas")
-    .select("empresa_id, empresas(*)")
-    .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data || !data.empresas) {
-    return null;
-  }
-
-  const empresa = Array.isArray(data.empresas) ? data.empresas[0] : data.empresas;
-  return empresa as unknown as Empresa;
+  return resolverEmpresaAsignada(await createCentralClient(), userId);
 }

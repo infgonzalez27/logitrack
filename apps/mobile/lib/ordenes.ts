@@ -260,22 +260,65 @@ export async function fetchEstadoCuentaVacios(orden: OrdenDetalle): Promise<{
   const ordenId = orden.id?.trim();
   if (!clienteId || !ordenId) return { lineas: [], provisional: false };
 
-  const { data: movs } = await supabase
+  type MovimientoOrden = {
+    contenedor_id: string | null;
+    cantidad_entregada: number | null;
+    cantidad_retirada: number | null;
+    created_at: string | null;
+    saldo_anterior?: number | null;
+    saldo_actual?: number | null;
+  };
+  const columnas = "contenedor_id, cantidad_entregada, cantidad_retirada, created_at";
+  // saldo_anterior / saldo_actual solo existen tras el parche 20261001190000.
+  const conSaldos = await supabase
     .from("movimientos_contenedores")
-    .select("contenedor_id, cantidad_entregada, cantidad_retirada, created_at")
+    .select(`${columnas}, saldo_anterior, saldo_actual`)
     .eq("cliente_id", clienteId)
-    .eq("orden_id", ordenId);
+    .eq("orden_id", ordenId)
+    .order("created_at")
+    .returns<MovimientoOrden[]>();
+  let movs = conSaldos.data;
+  if (conSaldos.error) {
+    ({ data: movs } = await supabase
+      .from("movimientos_contenedores")
+      .select(columnas)
+      .eq("cliente_id", clienteId)
+      .eq("orden_id", ordenId)
+      .order("created_at")
+      .returns<MovimientoOrden[]>());
+  }
 
   if (!movs?.length) return { lineas: [], provisional: false };
 
-  const byId = new Map<string, { entregado: number; retirado: number }>();
+  const byId = new Map<
+    string,
+    {
+      entregado: number;
+      retirado: number;
+      saldoAnterior: number | null;
+      saldoActual: number | null;
+      saldosCompletos: boolean;
+    }
+  >();
   let ultimoMovimiento = "";
   for (const m of movs) {
     const cid = String(m.contenedor_id ?? "").trim();
     if (!cid) continue;
-    const prev = byId.get(cid) ?? { entregado: 0, retirado: 0 };
+    const prev = byId.get(cid) ?? {
+      entregado: 0,
+      retirado: 0,
+      saldoAnterior: null,
+      saldoActual: null,
+      saldosCompletos: true,
+    };
     prev.entregado += Number(m.cantidad_entregada) || 0;
     prev.retirado += Number(m.cantidad_retirada) || 0;
+    if (m.saldo_anterior == null || m.saldo_actual == null) {
+      prev.saldosCompletos = false;
+    } else {
+      prev.saldoAnterior ??= Number(m.saldo_anterior);
+      prev.saldoActual = Number(m.saldo_actual);
+    }
     byId.set(cid, prev);
     const ts = String(m.created_at ?? "");
     if (ts > ultimoMovimiento) ultimoMovimiento = ts;
@@ -338,6 +381,16 @@ export async function fetchEstadoCuentaVacios(orden: OrdenDetalle): Promise<{
 
   const lineas = [...byId.entries()]
     .map(([contenedor_id, v]) => {
+      if (v.saldosCompletos && v.saldoAnterior != null && v.saldoActual != null) {
+        return {
+          contenedor_id,
+          nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
+          saldo_anterior: Math.max(0, v.saldoAnterior),
+          entregado: v.entregado,
+          retirado: v.retirado,
+          saldo_nuevo: Math.max(0, v.saldoActual),
+        };
+      }
       const saldoNuevo = Math.max(
         0,
         saldoTabla.get(contenedor_id) ??

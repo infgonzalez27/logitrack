@@ -282,25 +282,65 @@ export async function lineasDesdeMovimientosOrden(input: {
   ordenId: string;
 }): Promise<EstadoCuentaVacioLinea[]> {
   const db = await dbClient();
-  const { data: movimientos } = await db
+  type MovimientoOrden = {
+    contenedor_id: string | null;
+    cantidad_entregada: number | null;
+    cantidad_retirada: number | null;
+    created_at: string | null;
+    saldo_anterior?: number | null;
+    saldo_actual?: number | null;
+  };
+  const columnas = "contenedor_id, cantidad_entregada, cantidad_retirada, created_at";
+  // saldo_anterior / saldo_actual solo existen tras el parche 20261001190000.
+  const conSaldos = await db
     .from("movimientos_contenedores")
-    .select("contenedor_id, cantidad_entregada, cantidad_retirada, created_at")
+    .select(`${columnas}, saldo_anterior, saldo_actual`)
     .eq("cliente_id", input.clienteId)
-    .eq("orden_id", input.ordenId);
+    .eq("orden_id", input.ordenId)
+    .order("created_at")
+    .returns<MovimientoOrden[]>();
+  let movimientos = conSaldos.data;
+  if (conSaldos.error) {
+    ({ data: movimientos } = await db
+      .from("movimientos_contenedores")
+      .select(columnas)
+      .eq("cliente_id", input.clienteId)
+      .eq("orden_id", input.ordenId)
+      .order("created_at")
+      .returns<MovimientoOrden[]>());
+  }
 
   if (!movimientos?.length) return [];
 
   const byId = new Map<
     string,
-    { entregado: number; retirado: number }
+    {
+      entregado: number;
+      retirado: number;
+      saldoAnterior: number | null;
+      saldoActual: number | null;
+      saldosCompletos: boolean;
+    }
   >();
   let ultimoMovimiento = "";
   for (const m of movimientos) {
     const id = String(m.contenedor_id ?? "").trim();
     if (!id) continue;
-    const prev = byId.get(id) ?? { entregado: 0, retirado: 0 };
+    const prev = byId.get(id) ?? {
+      entregado: 0,
+      retirado: 0,
+      saldoAnterior: null,
+      saldoActual: null,
+      saldosCompletos: true,
+    };
     prev.entregado += Number(m.cantidad_entregada) || 0;
     prev.retirado += Number(m.cantidad_retirada) || 0;
+    if (m.saldo_anterior == null || m.saldo_actual == null) {
+      prev.saldosCompletos = false;
+    } else {
+      prev.saldoAnterior ??= Number(m.saldo_anterior);
+      prev.saldoActual = Number(m.saldo_actual);
+    }
     byId.set(id, prev);
     const creado = String(m.created_at ?? "");
     if (creado > ultimoMovimiento) ultimoMovimiento = creado;
@@ -359,6 +399,17 @@ export async function lineasDesdeMovimientosOrden(input: {
 
   return [...byId.entries()]
     .map(([contenedor_id, v]) => {
+      const nombre = nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8);
+      if (v.saldosCompletos && v.saldoAnterior != null && v.saldoActual != null) {
+        return {
+          contenedor_id,
+          nombre,
+          entregado: v.entregado,
+          saldo_anterior: Math.max(0, v.saldoAnterior),
+          retirado: v.retirado,
+          saldo_nuevo: Math.max(0, v.saldoActual),
+        };
+      }
       const saldoHoy = saldoTabla.get(contenedor_id);
       const saldo_nuevo = Math.max(
         0,
@@ -369,7 +420,7 @@ export async function lineasDesdeMovimientosOrden(input: {
       const saldo_anterior = Math.max(0, saldo_nuevo - v.entregado + v.retirado);
       return {
         contenedor_id,
-        nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
+        nombre,
         entregado: v.entregado,
         saldo_anterior,
         retirado: v.retirado,

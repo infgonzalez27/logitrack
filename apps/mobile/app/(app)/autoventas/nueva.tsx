@@ -23,6 +23,7 @@ import {
   type SaldoEnvaseCliente,
 } from "@/lib/contenedores";
 import { formatMoney } from "@/lib/format";
+import { calcularEnvasesEntregados, textoResumenEnvases } from "@/lib/envases-venta";
 
 type Linea = {
   producto_id: string;
@@ -30,9 +31,11 @@ type Linea = {
   cantidad: number;
   precio: number;
   disponible: number;
+  contenedor_id: string | null;
+  unidades_por_contenedor: number | null;
 };
 
-type Envase = SaldoEnvaseCliente & { entregados: string; retirados: string };
+type Envase = SaldoEnvaseCliente & { retirados: string };
 
 function soloEnteros(texto: string): string {
   return texto.replace(/[^0-9]/g, "");
@@ -140,21 +143,19 @@ export default function AutoventaNuevaScreen() {
       return;
     }
     setEnvases(
-      res.envases.map((e) => ({ ...e, entregados: "", retirados: "" })),
+      res.envases.map((e) => ({ ...e, retirados: "" })),
     );
   };
 
-  const actualizarEnvase = (
-    contenedorId: string,
-    campo: "entregados" | "retirados",
-    valor: string,
-  ) => {
+  const actualizarRetirados = (contenedorId: string, valor: string) => {
     setEnvases((prev) =>
       prev.map((e) =>
-        e.contenedor_id === contenedorId ? { ...e, [campo]: soloEnteros(valor) } : e,
+        e.contenedor_id === contenedorId ? { ...e, retirados: soloEnteros(valor) } : e,
       ),
     );
   };
+
+  const entregados = useMemo(() => calcularEnvasesEntregados(lineas), [lineas]);
 
   const disponible = useMemo(() => {
     return inventario
@@ -198,6 +199,11 @@ export default function AutoventaNuevaScreen() {
           cantidad: 1,
           precio,
           disponible: row.disponible,
+          contenedor_id: row.productos?.contenedor_id ?? null,
+          unidades_por_contenedor:
+            row.productos?.unidades_por_contenedor != null
+              ? Number(row.productos.unidades_por_contenedor)
+              : null,
         },
       ];
     });
@@ -222,7 +228,7 @@ export default function AutoventaNuevaScreen() {
       contenedores: envases
         .map((e) => ({
           contenedor_id: e.contenedor_id,
-          cantidad_entregada: aEntero(e.entregados),
+          cantidad_entregada: entregados[e.contenedor_id] ?? 0,
           cantidad_retirada: aEntero(e.retirados),
         }))
         .filter((e) => e.cantidad_entregada > 0 || e.cantidad_retirada > 0),
@@ -234,7 +240,12 @@ export default function AutoventaNuevaScreen() {
     }
     Alert.alert(
       "Venta registrada",
-      `Orden ${res.correlativo != null ? `#${res.correlativo}` : ""} creada. Lista para rendición.`,
+      [
+        `Orden ${res.correlativo != null ? `#${res.correlativo}` : ""} creada. Lista para rendición.`,
+        textoResumenEnvases(res.contenedores),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       [
         {
           text: "Listo",
@@ -264,7 +275,7 @@ export default function AutoventaNuevaScreen() {
       return;
     }
     const excedidos = envases.filter(
-      (e) => aEntero(e.retirados) > e.saldo + aEntero(e.entregados),
+      (e) => aEntero(e.retirados) > e.saldo + (entregados[e.contenedor_id] ?? 0),
     );
     if (excedidos.length) {
       const detalle = excedidos
@@ -507,31 +518,19 @@ export default function AutoventaNuevaScreen() {
                 <Text style={styles.meta}>No hay tipos de envase registrados.</Text>
               ) : (
                 envases.map((e) => {
-                  const saldoFinal = Math.max(
-                    0,
-                    e.saldo + aEntero(e.entregados) - aEntero(e.retirados),
-                  );
+                  const ent = entregados[e.contenedor_id] ?? 0;
+                  const saldoFinal = Math.max(0, e.saldo + ent - aEntero(e.retirados));
                   return (
                     <View key={e.contenedor_id} style={styles.card}>
                       <Text style={styles.name}>
                         {e.codigo ? `${e.codigo} · ` : ""}
                         {e.nombre}
                       </Text>
-                      <Text style={styles.meta}>
-                        Saldo actual del cliente: {e.saldo}
-                      </Text>
+                      <Text style={styles.meta}>Saldo anterior: {e.saldo}</Text>
                       <View style={styles.envaseRow}>
                         <View style={styles.envaseCol}>
                           <Text style={styles.label}>Entregados</Text>
-                          <TextInput
-                            style={styles.input}
-                            keyboardType="number-pad"
-                            placeholder="0"
-                            value={e.entregados}
-                            onChangeText={(t) =>
-                              actualizarEnvase(e.contenedor_id, "entregados", t)
-                            }
-                          />
+                          <Text style={styles.envaseAuto}>{ent}</Text>
                         </View>
                         <View style={styles.envaseCol}>
                           <Text style={styles.label}>Retirados</Text>
@@ -540,15 +539,11 @@ export default function AutoventaNuevaScreen() {
                             keyboardType="number-pad"
                             placeholder="0"
                             value={e.retirados}
-                            onChangeText={(t) =>
-                              actualizarEnvase(e.contenedor_id, "retirados", t)
-                            }
+                            onChangeText={(t) => actualizarRetirados(e.contenedor_id, t)}
                           />
                         </View>
                       </View>
-                      <Text style={styles.saldoFinal}>
-                        Saldo final: {saldoFinal}
-                      </Text>
+                      <Text style={styles.saldoFinal}>Saldo actual: {saldoFinal}</Text>
                     </View>
                   );
                 })
@@ -606,6 +601,7 @@ const styles = StyleSheet.create({
   meta: { fontSize: 13, color: "#5B6B7C", marginTop: 2 },
   envaseRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   envaseCol: { flex: 1, gap: 4 },
+  envaseAuto: { fontSize: 20, fontWeight: "700", color: "#0B3A5C", paddingVertical: 10 },
   saldoFinal: { marginTop: 10, fontWeight: "700", color: "#0B3A5C" },
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },
   qtyBtn: {

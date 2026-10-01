@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +15,8 @@ import { buscarClientesForProfile, type ClienteListaItem } from "@/lib/clientes"
 import { retornaUltimaTasa } from "@/lib/catalogos";
 import { listarProductos, precioNeto, type ProductoLista } from "@/lib/productos";
 import { crearVentaDirectaAlmacen, puedeVentaDirecta } from "@/lib/venta-directa";
+import { obtenerSaldosEnvasesCliente, type SaldoEnvaseCliente } from "@/lib/contenedores";
+import { calcularEnvasesEntregados, textoResumenEnvases } from "@/lib/envases-venta";
 import { formatMoney, formatNumber } from "@/lib/format";
 import { EmptyState, ErrorText, PrimaryButton, SectionTitle } from "@/components/ui";
 
@@ -39,6 +41,39 @@ export default function VentaDirectaScreen() {
   const [productos, setProductos] = useState<ProductoLista[]>([]);
   const [buscandoProductos, setBuscandoProductos] = useState(false);
   const [lineas, setLineas] = useState<Linea[]>([]);
+  const [envases, setEnvases] = useState<SaldoEnvaseCliente[]>([]);
+  const [envasesLoading, setEnvasesLoading] = useState(false);
+  const [retirados, setRetirados] = useState<Record<string, string>>({});
+
+  const entregados = useMemo(
+    () =>
+      calcularEnvasesEntregados(
+        lineas.map((l) => ({
+          cantidad: Number(l.cantidad) || 0,
+          contenedor_id: l.producto.contenedor_id,
+          unidades_por_contenedor: l.producto.unidades_por_contenedor,
+        })),
+      ),
+    [lineas],
+  );
+
+  useEffect(() => {
+    if (!cliente) {
+      setEnvases([]);
+      return;
+    }
+    let cancelled = false;
+    setEnvasesLoading(true);
+    void obtenerSaldosEnvasesCliente(cliente.id).then((res) => {
+      if (cancelled) return;
+      setEnvasesLoading(false);
+      if (res.ok) setEnvases(res.envases);
+      else setError(res.error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cliente]);
 
   useEffect(() => {
     void retornaUltimaTasa().then((res) => {
@@ -80,6 +115,7 @@ export default function VentaDirectaScreen() {
     setClientes([]);
     setLineas([]);
     setBusquedaProducto("");
+    setRetirados({});
   }
 
   function editarCantidad(index: number, valor: string) {
@@ -102,6 +138,10 @@ export default function VentaDirectaScreen() {
         cantidad: Number(l.cantidad),
         valor_unitario_usd: l.precio,
       })),
+      retirados: Object.entries(retirados).map(([contenedor_id, v]) => ({
+        contenedor_id,
+        cantidad_retirada: Number(v) || 0,
+      })),
     });
     setSaving(false);
     if (!res.ok) {
@@ -110,7 +150,12 @@ export default function VentaDirectaScreen() {
     }
     Alert.alert(
       "Venta registrada",
-      `Orden #${res.venta.correlativo ?? "—"} por $${formatMoney(res.venta.totalUsd)}. Queda por liquidar hasta registrar el cobro.`,
+      [
+        `Orden #${res.venta.correlativo ?? "—"} por $${formatMoney(res.venta.totalUsd)}. Queda por liquidar hasta registrar el cobro.`,
+        textoResumenEnvases(res.venta.contenedores),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       [
         {
           text: "Ver orden",
@@ -134,9 +179,16 @@ export default function VentaDirectaScreen() {
         );
       }
     }
+    const excedidos = envases.filter(
+      (e) => (Number(retirados[e.contenedor_id]) || 0) > e.saldo + (entregados[e.contenedor_id] ?? 0),
+    );
     Alert.alert(
       "Registrar venta",
-      `${cliente.razon_social} por $${formatMoney(total)}. Se descontará del almacén. ¿Continuar?`,
+      `${cliente.razon_social} por $${formatMoney(total)}. Se descontará del almacén.${
+        excedidos.length
+          ? `\n\nLos retirados superan el saldo en: ${excedidos.map((e) => e.nombre).join(", ")}. El saldo quedará en 0.`
+          : ""
+      }\n\n¿Continuar?`,
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Registrar", onPress: () => void registrar() },
@@ -258,6 +310,57 @@ export default function VentaDirectaScreen() {
             );
           })}
           {lineas.length ? <Text style={styles.total}>Total ${formatMoney(total)}</Text> : null}
+
+          <SectionTitle>Envases</SectionTitle>
+          <Text style={styles.hint}>
+            Los entregados se calculan con los productos. Indica solo los vacíos que devuelve el
+            cliente.
+          </Text>
+          {envasesLoading ? (
+            <ActivityIndicator color="#0B3A5C" />
+          ) : envases.length === 0 ? (
+            <Text style={styles.hint}>No hay tipos de envase registrados.</Text>
+          ) : (
+            envases.map((e) => {
+              const ent = entregados[e.contenedor_id] ?? 0;
+              const ret = Number(retirados[e.contenedor_id]) || 0;
+              const saldoActual = Math.max(0, e.saldo + ent - ret);
+              return (
+                <View key={e.contenedor_id} style={styles.linea}>
+                  <Text style={styles.lineaTitulo}>
+                    {e.codigo ? `${e.codigo} · ` : ""}
+                    {e.nombre}
+                  </Text>
+                  <Text style={styles.hint}>Saldo anterior: {formatNumber(e.saldo)}</Text>
+                  <View style={styles.lineaCampos}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.campoLabel}>Entregados</Text>
+                      <Text style={styles.subtotal}>{formatNumber(ent)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.campoLabel}>Retirados</Text>
+                      <TextInput
+                        style={styles.input}
+                        keyboardType="number-pad"
+                        placeholder="0"
+                        placeholderTextColor="#9AA6B2"
+                        value={retirados[e.contenedor_id] ?? ""}
+                        onChangeText={(v) =>
+                          setRetirados((prev) => ({
+                            ...prev,
+                            [e.contenedor_id]: v.replace(/\D/g, "").slice(0, 6),
+                          }))
+                        }
+                      />
+                    </View>
+                  </View>
+                  <Text style={[styles.subtotal, ret > e.saldo + ent && styles.excede]}>
+                    Saldo actual: {formatNumber(saldoActual)}
+                  </Text>
+                </View>
+              );
+            })
+          )}
         </>
       ) : null}
 

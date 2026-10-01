@@ -58,12 +58,26 @@ export async function resolveEmpresa(
 ): Promise<{ ok: true; empresa: EmpresaActual | null } | { ok: false; error: string }> {
   if (resueltoPara === userId) return { ok: true, empresa: empresaActual };
 
-  const { data, error } = await central
-    .from("usuarios_empresas")
-    .select("empresas(id, nombre_empresa, activo, supabase_url, supabase_anon_key)")
-    .eq("user_id", userId)
-    .limit(1)
+  // Un admin con perfil en Central es el superadmin: se queda en Central aunque tenga empresas asignadas.
+  const { data: perfilCentral } = await central
+    .from("perfiles_usuario")
+    .select("roles(nombre)")
+    .eq("id", userId)
     .maybeSingle();
+  const esSuperadmin =
+    joinOne(
+      perfilCentral?.roles as { nombre?: string } | { nombre?: string }[] | null | undefined,
+    )?.nombre === "admin";
+
+  const { data, error } = esSuperadmin
+    ? { data: null, error: null }
+    : await central
+        .from("usuarios_empresas")
+        .select("empresas(id, nombre_empresa, activo, supabase_url, supabase_anon_key)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
   if (error) {
     return { ok: false, error: `No se pudo leer tu empresa: ${error.message}` };
   }

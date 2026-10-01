@@ -1,4 +1,5 @@
 import { normalizeRolNombre } from "./auth";
+import { parseEnvasesResumen, type EnvaseResumenVenta } from "./envases-venta";
 import { supabase } from "./supabase";
 
 export type LineaVentaDirecta = {
@@ -11,6 +12,7 @@ export type VentaDirectaResultado = {
   ordenId: string;
   correlativo: number | null;
   totalUsd: number;
+  contenedores: EnvaseResumenVenta[];
 };
 
 export function puedeVentaDirecta(rol: string | null | undefined): boolean {
@@ -24,20 +26,28 @@ export async function crearVentaDirectaAlmacen(input: {
   clienteId: string;
   tasaCambio: number | null;
   lineas: LineaVentaDirecta[];
+  retirados?: Array<{ contenedor_id: string; cantidad_retirada: number }>;
 }): Promise<{ ok: true; venta: VentaDirectaResultado } | { ok: false; error: string }> {
-  const { data, error } = await supabase.rpc("crear_venta_directa_almacen", {
+  const retirados = (input.retirados ?? []).filter((r) => r.cantidad_retirada > 0);
+  const params: Record<string, unknown> = {
     p_cliente_id: input.clienteId,
     p_vendedor_id: input.vendedorId,
     p_tipo_venta: "credito",
     p_tasa_cambio: input.tasaCambio && input.tasaCambio > 0 ? input.tasaCambio : null,
     p_productos_json: input.lineas,
-  });
+  };
+  // Sin retirados se omite el parámetro: así la llamada también funciona con la versión de 5 argumentos.
+  if (retirados.length) params.p_contenedores_json = retirados;
+
+  const { data, error } = await supabase.rpc("crear_venta_directa_almacen", params);
 
   if (error) {
     if (/could not find the function/i.test(error.message)) {
       return {
         ok: false,
-        error: "La venta directa aún no está disponible en la base de datos de esta empresa.",
+        error: retirados.length
+          ? "El retiro de envases en venta directa aún no está disponible en la base de datos de esta empresa."
+          : "La venta directa aún no está disponible en la base de datos de esta empresa.",
       };
     }
     return { ok: false, error: error.message };
@@ -47,7 +57,12 @@ export async function crearVentaDirectaAlmacen(input: {
     success?: boolean;
     message?: string;
     error?: { message?: string } | null;
-    data?: { orden_id?: string; correlativo?: number; total_recaudar_usd?: number } | null;
+    data?: {
+      orden_id?: string;
+      correlativo?: number;
+      total_recaudar_usd?: number;
+      contenedores?: unknown;
+    } | null;
   } | null;
 
   if (!env?.success || !env.data?.orden_id) {
@@ -63,6 +78,7 @@ export async function crearVentaDirectaAlmacen(input: {
       ordenId: env.data.orden_id,
       correlativo: env.data.correlativo ?? null,
       totalUsd: Number(env.data.total_recaudar_usd ?? 0),
+      contenedores: parseEnvasesResumen(env.data.contenedores),
     },
   };
 }
