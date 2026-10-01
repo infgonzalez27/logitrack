@@ -75,12 +75,6 @@ interface LineaVenta {
   precio_unitario: number;
 }
 
-interface LineaContenedor {
-  contenedor_id: string;
-  cantidad_entregada: number;
-  cantidad_retirada: number;
-}
-
 export function AutoVentasClient({
   camiones,
   clientes,
@@ -155,38 +149,6 @@ export function AutoVentasClient({
   };
 
   // Manejo de Líneas de Contenedor
-  const agregarLineaContenedor = () => {
-    if (contenedores.length === 0) return;
-    const contDef = contenedores[0];
-    setLineasContenedor((prev) => [
-      ...prev,
-      {
-        contenedor_id: contDef.id,
-        cantidad_entregada: 0,
-        cantidad_retirada: 0,
-      },
-    ]);
-  };
-
-  const actualizarLineaContenedor = (
-    index: number,
-    campo: keyof LineaContenedor,
-    valor: string | number
-  ) => {
-    setLineasContenedor((prev) => {
-      const next = [...prev];
-      next[index] = {
-        ...next[index],
-        [campo]: campo === "contenedor_id" ? String(valor) : Number(valor),
-      };
-      return next;
-    });
-  };
-
-  const eliminarLineaContenedor = (index: number) => {
-    setLineasContenedor((prev) => prev.filter((_, i) => i !== index));
-  };
-
   // Totales de la venta en edición
   const totalVentaUsd = lineasVenta.reduce(
     (sum, l) => sum + (l.cantidad || 0) * (l.precio_unitario || 0),
@@ -831,5 +793,7 @@ export function AutoVentasClient({
     </div>
   );
 }
+
+
 
 
