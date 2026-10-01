@@ -188,9 +188,12 @@ CREATE TABLE rendiciones_cuentas (
 CREATE TABLE detalle_rendicion_ordenes (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,	
     rendicion_id UUID REFERENCES rendiciones_cuentas(id) ON DELETE CASCADE,
-	orden_distribucion_id UUID REFERENCES ordenes_distribucion(id) ON DELETE RESTRICT UNIQUE,
+	orden_distribucion_id UUID REFERENCES ordenes_distribucion(id) ON DELETE RESTRICT,
 	recaudado NUMERIC(14,2) DEFAULT 0.00
 );
+-- Nota: NO UNIQUE en orden_distribucion_id — se permiten varios abonos parciales por orden.
+CREATE INDEX IF NOT EXISTS detalle_rendicion_ordenes_orden_distribucion_id_idx
+  ON detalle_rendicion_ordenes (orden_distribucion_id);
 
 -- Detalle 2: Reporte Financiero de Cobranzas realizadas en la ruta (Sellers/Collectors)
 CREATE TABLE detalle_rendicion_pagos (
