@@ -18,7 +18,7 @@ export type ActionResult<T = unknown> = {
  * Registra una venta en caliente en la ruta (AutoVenta sin radar)
  */
 export async function registrarVentaEnRutaAction(
-  params: VentaAutoVentaParams
+  params: VentaAutoVentaParams & { contenedores_retirados?: number }
 ): Promise<ActionResult> {
   try {
     const profile = await getCurrentProfile();
@@ -29,13 +29,13 @@ export async function registrarVentaEnRutaAction(
     const supabase = await createClient();
 
     const { data, error } = await supabase.rpc(
-      "registrar_venta_en_ruta_autoventa" as never,
+      "rpc_create_od_and_process_containers" as never,
       {
         p_vendedor_id: params.vendedor_id || profile.id,
         p_cliente_id: params.cliente_id,
         p_camion_id: params.camion_id,
         p_productos_json: params.productos_json,
-        p_contenedores_json: params.contenedores_json || [],
+        p_contenedores_retirados: params.contenedores_retirados || 0,
         p_observaciones: params.observaciones || null,
         p_tasa_cambio: params.tasa_cambio || null,
       } as never

@@ -104,7 +104,7 @@ export function AutoVentasClient({
   const [clienteId, setClienteId] = useState<string>("");
   const [observaciones, setObservaciones] = useState<string>("");
   const [lineasVenta, setLineasVenta] = useState<LineaVenta[]>([]);
-  const [lineasContenedor, setLineasContenedor] = useState<LineaContenedor[]>([]);
+  const [contenedoresRetirados, setContenedoresRetirados] = useState<number>(0);
 
   // Formulario Cargar Camión
   const [lineasCarga, setLineasCarga] = useState<{ producto_id: string; cantidad: number }[]>([]);
@@ -220,11 +220,7 @@ export function AutoVentasClient({
           cantidad: l.cantidad,
           precio_unitario: l.precio_unitario,
         })),
-        contenedores_json: lineasContenedor.map((c) => ({
-          contenedor_id: c.contenedor_id,
-          cantidad_entregada: c.cantidad_entregada,
-          cantidad_retirada: c.cantidad_retirada,
-        })),
+        contenedores_retirados: contenedoresRetirados,
         observaciones,
         tasa_cambio: tasaOficial,
       });
@@ -232,7 +228,7 @@ export function AutoVentasClient({
       if (res.success) {
         setMensaje({ tipo: "success", texto: res.message || "¡Venta registrada con éxito!" });
         setLineasVenta([]);
-        setLineasContenedor([]);
+        setContenedoresRetirados(0);
         setObservaciones("");
         setTabActiva("resumen");
         router.refresh();
@@ -664,76 +660,18 @@ export function AutoVentasClient({
           </div>
 
           {/* Sección de Envases / Contenedores */}
-          <div className="space-y-3 pt-2 border-t border-slate-800">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-slate-200">Envases / Contenedores Prestados y Retirados</h4>
-              <Button variant="secondary" onClick={agregarLineaContenedor} className="text-xs px-2.5 py-1">
-                + Agregar Contenedor
-              </Button>
+          <div className="space-y-3 pt-2 border-t border-slate-800 pb-4">
+            <h4 className="text-sm font-semibold text-slate-200">Envases / Contenedores</h4>
+            <div className="flex items-center space-x-4 bg-slate-800/60 p-3 rounded-lg border border-slate-700/60">
+              <label className="text-sm text-slate-300">Contenedores Retirados (Devueltos por cliente):</label>
+              <input
+                type="number"
+                min="0"
+                value={contenedoresRetirados}
+                onChange={(e) => setContenedoresRetirados(Number(e.target.value))}
+                className="w-24 bg-slate-900 border border-slate-700 text-slate-100 rounded-md px-2 py-1 text-right"
+              />
             </div>
-
-            {lineasContenedor.length > 0 && (
-              <div className="space-y-2">
-                {lineasContenedor.map((cont, idx) => (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-800/60 p-3 rounded-lg border border-slate-700/60"
-                  >
-                    <div className="sm:col-span-5">
-                      <select
-                        value={cont.contenedor_id}
-                        onChange={(e) =>
-                          actualizarLineaContenedor(idx, "contenedor_id", e.target.value)
-                        }
-                        className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-md px-2 py-1.5 text-xs"
-                      >
-                        {contenedores.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.tipo} {c.capacidad ? `(${c.capacidad})` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-3">
-                      <label className="text-[10px] text-slate-400 block">Entregados (Prestados)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={cont.cantidad_entregada}
-                        onChange={(e) =>
-                          actualizarLineaContenedor(idx, "cantidad_entregada", e.target.value)
-                        }
-                        className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-md px-2 py-1 text-xs text-right"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-3">
-                      <label className="text-[10px] text-slate-400 block">Retirados (Devueltos por cliente)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={cont.cantidad_retirada}
-                        onChange={(e) =>
-                          actualizarLineaContenedor(idx, "cantidad_retirada", e.target.value)
-                        }
-                        className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-md px-2 py-1 text-xs text-right"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-1 text-center">
-                      <button
-                        type="button"
-                        onClick={() => eliminarLineaContenedor(idx)}
-                        className="text-red-400 hover:text-red-300 text-xs font-bold"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Observaciones y Totales */}
@@ -893,3 +831,5 @@ export function AutoVentasClient({
     </div>
   );
 }
+
+
