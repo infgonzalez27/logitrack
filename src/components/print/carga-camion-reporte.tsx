@@ -1,13 +1,87 @@
 import { formatDate, formatNumber } from "@/lib/format";
 import type { CargaTicketData } from "@/lib/autoventas/carga-ticket";
+import type { VaciosPorOrdenData } from "@/lib/autoventas/vacios-por-orden";
+
+function VaciosPorOrden({ data }: { data: VaciosPorOrdenData }) {
+  const { tipos, ordenes } = data;
+  const totalPorTipo = (tipoId: string) =>
+    ordenes.reduce((s, o) => s + (o.retirados[tipoId] ?? 0), 0);
+  const totalGeneral = ordenes.reduce((s, o) => s + o.total, 0);
+
+  return (
+    <section className="lt-print-allow-break mt-8">
+      <h2 className="border-b border-black pb-1 text-base font-semibold">
+        Vacíos retirados por orden
+      </h2>
+      {ordenes.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-600">
+          Sin órdenes de AutoVenta para este camión en el día.
+        </p>
+      ) : (
+        <table className="mt-2 w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-black text-left">
+              <th className="w-20 py-2 pr-2 font-semibold">Orden</th>
+              <th className="py-2 pr-2 font-semibold">Cliente</th>
+              {tipos.map((t) => (
+                <th key={t.id} className="w-24 py-2 pr-2 text-right font-semibold">
+                  {t.nombre}
+                </th>
+              ))}
+              <th className="w-24 py-2 text-right font-semibold">
+                {tipos.length ? "Total" : "Retirados"}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {ordenes.map((o) => (
+              <tr key={o.orden_id} className="border-b border-gray-300">
+                <td className="py-1.5 pr-2 tabular-nums">#{o.correlativo}</td>
+                <td className="py-1.5 pr-2">{o.cliente}</td>
+                {tipos.map((t) => (
+                  <td key={t.id} className="py-1.5 pr-2 text-right tabular-nums">
+                    {formatNumber(o.retirados[t.id] ?? 0)}
+                  </td>
+                ))}
+                <td className="py-1.5 text-right font-semibold tabular-nums">
+                  {formatNumber(o.total)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-black font-semibold">
+              <td colSpan={2} className="py-2 pr-2">
+                Total ({formatNumber(ordenes.length)} orden
+                {ordenes.length === 1 ? "" : "es"})
+              </td>
+              {tipos.map((t) => (
+                <td key={t.id} className="py-2 pr-2 text-right tabular-nums">
+                  {formatNumber(totalPorTipo(t.id))}
+                </td>
+              ))}
+              <td className="py-2 text-right tabular-nums">
+                {formatNumber(totalGeneral)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </section>
+  );
+}
 
 export function CargaCamionReporte({
   empresaNombre,
+  vaciosPorOrden,
   camion,
   fecha,
   lineas,
   tipo,
-}: CargaTicketData & { empresaNombre: string | null }) {
+}: CargaTicketData & {
+  empresaNombre: string | null;
+  vaciosPorOrden?: VaciosPorOrdenData | null;
+}) {
   const total = lineas.reduce((s, l) => s + l.cantidad, 0);
   const descarga = tipo === "descarga";
   const titulo = descarga ? "Descarga de camión" : "Carga de camión";
@@ -76,6 +150,8 @@ export function CargaCamionReporte({
           </tr>
         </tfoot>
       </table>
+
+      {vaciosPorOrden ? <VaciosPorOrden data={vaciosPorOrden} /> : null}
 
       <div className="lt-print-keep-together mt-16 grid grid-cols-2 gap-12 text-center text-sm">
         <div>

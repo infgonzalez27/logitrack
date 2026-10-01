@@ -271,6 +271,7 @@ export function AutoVentasClient({
     ? {
         tipo: "carga",
         camion: camiones.find((c) => c.id === camionId)?.placa ?? "—",
+        camionId,
         fecha: new Date().toISOString(),
         lineas: inventarioResumen.map((item) => ({
           codigo: item.codigo ?? "",
@@ -439,6 +440,7 @@ export function AutoVentasClient({
         });
         setUltimaCarga({
           camion: camiones.find((c) => c.id === camionId)?.placa ?? "—",
+          camionId,
           fecha: new Date().toISOString(),
           lineas: lineasCarga.map((l) => ({
             codigo: catalogo[l.producto_id]?.codigo_producto ?? "",
@@ -482,6 +484,7 @@ export function AutoVentasClient({
                 tipo: "descarga",
                 camion:
                   camiones.find((c) => c.id === camionId)?.placa ?? "—",
+                camionId,
                 fecha: new Date().toISOString(),
                 lineas: detalle.map((d) => ({
                   codigo: d.codigo ?? "",

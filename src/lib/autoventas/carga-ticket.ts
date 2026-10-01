@@ -6,6 +6,8 @@ export type CargaTicketLinea = {
 
 export type CargaTicketData = {
   camion: string;
+  /** Para consultar las órdenes AutoVenta del día (vacíos retirados). */
+  camionId?: string;
   fecha: string;
   lineas: CargaTicketLinea[];
   /** `descarga`: sobrante devuelto al almacén. */
@@ -29,6 +31,7 @@ export function decodeCargaTicket(raw: string | undefined): CargaTicketData | nu
     if (!Array.isArray(parsed.lineas)) return null;
     return {
       camion: String(parsed.camion ?? "—"),
+      camionId: parsed.camionId ? String(parsed.camionId) : undefined,
       fecha: String(parsed.fecha ?? ""),
       lineas: parsed.lineas.map((l) => ({
         codigo: String(l?.codigo ?? ""),
