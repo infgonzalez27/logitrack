@@ -54,5 +54,6 @@ export async function resolveUserEmpresa(userId: string): Promise<Empresa | null
     return null;
   }
 
-  return data.empresas as unknown as Empresa;
+  const empresa = Array.isArray(data.empresas) ? data.empresas[0] : data.empresas;
+  return empresa as unknown as Empresa;
 }
