@@ -24,6 +24,7 @@ import {
 } from "@/lib/contenedores";
 import { formatMoney } from "@/lib/format";
 import { calcularEnvasesEntregados, textoResumenEnvases } from "@/lib/envases-venta";
+import { obtenerDescuentosCliente, type DescuentoConProducto } from "@/lib/descuentos";
 
 type Linea = {
   producto_id: string;
@@ -33,6 +34,7 @@ type Linea = {
   disponible: number;
   contenedor_id: string | null;
   unidades_por_contenedor: number | null;
+  pctDescuento: number;
 };
 
 type Envase = SaldoEnvaseCliente & { retirados: string };
@@ -64,6 +66,7 @@ export default function AutoventaNuevaScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [descuentosCliente, setDescuentosCliente] = useState<DescuentoConProducto[]>([]);
   const [picker, setPicker] = useState<"cliente" | "camion" | "producto" | null>(
     null,
   );
@@ -135,9 +138,20 @@ export default function AutoventaNuevaScreen() {
     setClienteQ("");
     setClienteResultados([]);
     setEnvases([]);
+    setLineas([]);
     setEnvasesLoading(true);
-    const res = await obtenerSaldosEnvasesCliente(cliente.id);
+    const [res, descRes] = await Promise.all([
+      obtenerSaldosEnvasesCliente(cliente.id),
+      obtenerDescuentosCliente(cliente.id),
+    ]);
     setEnvasesLoading(false);
+    
+    if (descRes.ok) {
+      setDescuentosCliente(descRes.descuentos);
+    } else {
+      setDescuentosCliente([]);
+    }
+
     if (!res.ok) {
       setError(res.error);
       return;
@@ -178,7 +192,24 @@ export default function AutoventaNuevaScreen() {
   );
 
   const addProducto = (row: InventarioMovilRow & { disponible: number }) => {
-    const precio = Number(row.productos?.precio_lista1) || 0;
+    const precioBase = Number(row.productos?.precio_lista1) || 0;
+    const desc = descuentosCliente.find((d) => d.producto_id === row.producto_id);
+    
+    let precio = precioBase;
+    let pctDescuento = 0;
+    
+    if (desc) {
+      if (desc.precio_pactado_usd != null) {
+        precio = desc.precio_pactado_usd;
+        if (precioBase > 0 && precio < precioBase) {
+           pctDescuento = Math.round((1 - precio / precioBase) * 100);
+        }
+      } else if (desc.porcentaje_descuento > 0) {
+        pctDescuento = desc.porcentaje_descuento;
+        precio = Number((precioBase * (1 - pctDescuento / 100)).toFixed(2));
+      }
+    }
+
     setLineas((prev) => {
       const existing = prev.find((l) => l.producto_id === row.producto_id);
       if (existing) {
@@ -198,6 +229,7 @@ export default function AutoventaNuevaScreen() {
           nombre: row.productos?.nombre ?? "Producto",
           cantidad: 1,
           precio,
+          pctDescuento,
           disponible: row.disponible,
           contenedor_id: row.productos?.contenedor_id ?? null,
           unidades_por_contenedor:
@@ -464,6 +496,9 @@ export default function AutoventaNuevaScreen() {
       renderItem={({ item }) => (
         <View style={styles.card}>
           <Text style={styles.name}>{item.nombre}</Text>
+          {item.pctDescuento > 0 ? (
+            <Text style={styles.discount}>Descuento {item.pctDescuento}%</Text>
+          ) : null}
           <View style={styles.qtyRow}>
             <Pressable
               style={styles.qtyBtn}
@@ -616,6 +651,7 @@ const styles = StyleSheet.create({
   qty: { fontSize: 16, fontWeight: "600", minWidth: 24, textAlign: "center" },
   lineTotal: { marginLeft: "auto", fontWeight: "700", color: "#0B3A5C" },
   total: { fontSize: 20, fontWeight: "700", color: "#0B3A5C", textAlign: "right" },
+  discount: { color: "#067647", fontSize: 12, marginTop: 2 },
   btn: {
     backgroundColor: "#0B3A5C",
     borderRadius: 12,
