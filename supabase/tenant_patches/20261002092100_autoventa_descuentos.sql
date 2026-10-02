@@ -345,7 +345,7 @@ BEGIN
     -- 7. Respuesta exitosa
     RETURN jsonb_build_object(
         'success', true,
-        'message', 'Venta en ruta (AutoVenta) registrada exitosamente con descuentos aplicados.',
+        'message', 'Venta en ruta (AutoVenta) registrada exitosamente con descuentos.',
         'data', jsonb_build_object(
             'orden_id', v_orden_id,
             'correlativo', v_correlativo,

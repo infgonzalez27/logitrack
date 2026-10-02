@@ -81,3 +81,7 @@ A continuaciÃ³n se muestra un ejemplo de la nueva estructura que devuelve la fun
    - Este bloque agrupa la actividad de contenedores por cliente.
    - `entregado`: Total de contenedores dejados al cliente (calculado segÃºn el producto).
    - `retirado`: Total de contenedores devueltos por el cliente en esa orden.
+
+### Auto-Venta (Actualizado)
+
+La función `registrar_venta_en_ruta_autoventa` ahora soporta y calcula automáticamente el descuento de la tabla `descuentos_cliente_producto`, detallando en el response y en BD los campos `precio_lista_usd`, `porcentaje_descuento`, y `monto_descuento_usd`. La app móvil ya no necesita enviarlos como el único source of truth (aunque si envía `valor_unitario_usd` y no hay descuento explícito en BD, lo utilizará).

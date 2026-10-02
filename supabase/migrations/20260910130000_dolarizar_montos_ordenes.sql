@@ -10,7 +10,6 @@ SET valor_unitario_usd = ROUND(
     NULLIF(d.valor_unitario_usd, 0),
     NULLIF(d.valor_unitario_recaudar, 0),
     NULLIF(p.precio_lista1, 0),
-    NULLIF(p.precio, 0),
     0
   )::numeric,
   2
