@@ -85,3 +85,17 @@ A continuaciÃ³n se muestra un ejemplo de la nueva estructura que devuelve la fun
 ### Auto-Venta (Actualizado)
 
 La función `registrar_venta_en_ruta_autoventa` ahora soporta y calcula automáticamente el descuento de la tabla `descuentos_cliente_producto`, detallando en el response y en BD los campos `precio_lista_usd`, `porcentaje_descuento`, y `monto_descuento_usd`. La app móvil ya no necesita enviarlos como el único source of truth (aunque si envía `valor_unitario_usd` y no hay descuento explícito en BD, lo utilizará).
+
+### Consulta de Descuentos en Vivo
+
+Para darle retroalimentación en tiempo real al usuario de la aplicación cuando selecciona un producto (si tiene internet), pueden usar el nuevo RPC `consultar_descuento_producto_cliente`.
+
+- **Firma SQL:** `consultar_descuento_producto_cliente(p_cliente_id UUID, p_producto_id UUID)`
+- **Uso en Frontend (TypeScript):**
+``typescript
+const { data, error } = await supabase.rpc('consultar_descuento_producto_cliente', {
+  p_cliente_id: 'UUID-DEL-CLIENTE',
+  p_producto_id: 'UUID-DEL-PRODUCTO'
+});
+``
+Este RPC retorna un objeto JSON con los campos `aplica_descuento`, `precio_lista_usd`, `precio_final_usd`, `porcentaje_descuento` y `monto_descuento_usd`.
