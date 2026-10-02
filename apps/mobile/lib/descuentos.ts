@@ -127,3 +127,30 @@ export async function eliminarDescuentoCliente(
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
+
+export async function consultarDescuentoRPC(
+  clienteId: string,
+  productoId: string,
+): Promise<{
+  ok: true;
+  data: {
+    producto_id: string;
+    cliente_id: string;
+    aplica_descuento: boolean;
+    precio_lista_usd: number;
+    precio_final_usd: number;
+    porcentaje_descuento: number;
+    monto_descuento_usd: number;
+  };
+} | { ok: false; error: string }> {
+  const { data, error } = await supabase.rpc("consultar_descuento_producto_cliente", {
+    p_cliente_id: clienteId,
+    p_producto_id: productoId,
+  });
+
+  if (error) return { ok: false, error: error.message };
+  if (data && typeof data === "object" && data.success && data.data) {
+    return { ok: true, data: data.data };
+  }
+  return { ok: false, error: "Error consultando descuento" };
+}

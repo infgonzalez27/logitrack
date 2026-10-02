@@ -24,7 +24,7 @@ import {
 } from "@/lib/contenedores";
 import { formatMoney } from "@/lib/format";
 import { calcularEnvasesEntregados, textoResumenEnvases } from "@/lib/envases-venta";
-import { obtenerDescuentosCliente, type DescuentoConProducto } from "@/lib/descuentos";
+import { consultarDescuentoRPC } from "@/lib/descuentos";
 
 type Linea = {
   producto_id: string;
@@ -34,6 +34,10 @@ type Linea = {
   disponible: number;
   contenedor_id: string | null;
   unidades_por_contenedor: number | null;
+  precio_lista_usd: number;
+  precio_final_usd: number;
+  monto_descuento_usd: number;
+  aplica_descuento: boolean;
   pctDescuento: number;
 };
 
@@ -66,7 +70,7 @@ export default function AutoventaNuevaScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [descuentosCliente, setDescuentosCliente] = useState<DescuentoConProducto[]>([]);
+  const [addingProduct, setAddingProduct] = useState(false);
   const [picker, setPicker] = useState<"cliente" | "camion" | "producto" | null>(
     null,
   );
@@ -140,18 +144,9 @@ export default function AutoventaNuevaScreen() {
     setEnvases([]);
     setLineas([]);
     setEnvasesLoading(true);
-    const [res, descRes] = await Promise.all([
-      obtenerSaldosEnvasesCliente(cliente.id),
-      obtenerDescuentosCliente(cliente.id),
-    ]);
+    const res = await obtenerSaldosEnvasesCliente(cliente.id);
     setEnvasesLoading(false);
     
-    if (descRes.ok) {
-      setDescuentosCliente(descRes.descuentos);
-    } else {
-      setDescuentosCliente([]);
-    }
-
     if (!res.ok) {
       setError(res.error);
       return;
@@ -191,45 +186,53 @@ export default function AutoventaNuevaScreen() {
     [lineas],
   );
 
-  const addProducto = (row: InventarioMovilRow & { disponible: number }) => {
-    const precioBase = Number(row.productos?.precio_lista1) || 0;
-    const desc = descuentosCliente.find((d) => d.producto_id === row.producto_id);
+  const addProducto = async (row: InventarioMovilRow & { disponible: number }) => {
+    if (!clienteId) return;
     
-    let precio = precioBase;
-    let pctDescuento = 0;
-    
-    if (desc) {
-      if (desc.precio_pactado_usd != null) {
-        precio = desc.precio_pactado_usd;
-        if (precioBase > 0 && precio < precioBase) {
-           pctDescuento = Math.round((1 - precio / precioBase) * 100);
-        }
-      } else if (desc.porcentaje_descuento > 0) {
-        pctDescuento = desc.porcentaje_descuento;
-        precio = Number((precioBase * (1 - pctDescuento / 100)).toFixed(2));
-      }
+    const existing = lineas.find((l) => l.producto_id === row.producto_id);
+    if (existing) {
+      setLineas((prev) =>
+        prev.map((l) =>
+          l.producto_id === row.producto_id
+            ? { ...l, cantidad: Math.min(l.cantidad + 1, row.disponible) }
+            : l,
+        ),
+      );
+      setPicker(null);
+      return;
+    }
+
+    setAddingProduct(true);
+    const descRes = await consultarDescuentoRPC(clienteId, row.producto_id);
+    setAddingProduct(false);
+
+    let precio_lista_usd = Number(row.productos?.precio_lista1) || 0;
+    let precio_final_usd = precio_lista_usd;
+    let porcentaje_descuento = 0;
+    let monto_descuento_usd = 0;
+    let aplica_descuento = false;
+
+    if (descRes.ok) {
+      precio_lista_usd = descRes.data.precio_lista_usd;
+      precio_final_usd = descRes.data.precio_final_usd;
+      porcentaje_descuento = descRes.data.porcentaje_descuento;
+      monto_descuento_usd = descRes.data.monto_descuento_usd;
+      aplica_descuento = descRes.data.aplica_descuento;
     }
 
     setLineas((prev) => {
-      const existing = prev.find((l) => l.producto_id === row.producto_id);
-      if (existing) {
-        return prev.map((l) =>
-          l.producto_id === row.producto_id
-            ? {
-                ...l,
-                cantidad: Math.min(l.cantidad + 1, row.disponible),
-              }
-            : l,
-        );
-      }
       return [
         ...prev,
         {
           producto_id: row.producto_id,
           nombre: row.productos?.nombre ?? "Producto",
           cantidad: 1,
-          precio,
-          pctDescuento,
+          precio: precio_final_usd,
+          precio_lista_usd,
+          precio_final_usd,
+          monto_descuento_usd,
+          aplica_descuento,
+          pctDescuento: porcentaje_descuento,
           disponible: row.disponible,
           contenedor_id: row.productos?.contenedor_id ?? null,
           unidades_por_contenedor:
@@ -418,13 +421,17 @@ export default function AutoventaNuevaScreen() {
           keyExtractor={(r) => r.producto_id}
           contentContainerStyle={{ padding: 16 }}
           ListEmptyComponent={
-            <Text style={styles.meta}>
-              No hay stock disponible en este camión. Carga inventario desde la
-              web o AutoVentas.
-            </Text>
+            addingProduct ? (
+               <ActivityIndicator color="#0B3A5C" style={{ marginTop: 16 }} />
+            ) : (
+              <Text style={styles.meta}>
+                No hay stock disponible en este camión. Carga inventario desde la
+                web o AutoVentas.
+              </Text>
+            )
           }
           renderItem={({ item }) => (
-            <Pressable style={styles.card} onPress={() => addProducto(item)}>
+            <Pressable style={styles.card} onPress={() => void addProducto(item)} disabled={addingProduct}>
               <Text style={styles.name}>
                 {item.productos?.nombre ?? "Producto"}
               </Text>
@@ -496,9 +503,20 @@ export default function AutoventaNuevaScreen() {
       renderItem={({ item }) => (
         <View style={styles.card}>
           <Text style={styles.name}>{item.nombre}</Text>
-          {item.pctDescuento > 0 ? (
-            <Text style={styles.discount}>Descuento {item.pctDescuento}%</Text>
-          ) : null}
+          
+          <View style={{ marginTop: 6, marginBottom: 4 }}>
+            {item.aplica_descuento ? (
+              <>
+                <Text style={styles.meta}>Precio USD {formatMoney(item.precio_lista_usd)}</Text>
+                {item.pctDescuento > 0 && <Text style={styles.meta}>Desc. {item.pctDescuento}%</Text>}
+                {item.monto_descuento_usd > 0 && <Text style={styles.meta}>Desc USD {formatMoney(item.monto_descuento_usd)}</Text>}
+                <Text style={styles.metaBold}>Total USD {formatMoney(item.precio)}</Text>
+              </>
+            ) : (
+              <Text style={styles.meta}>Precio USD {formatMoney(item.precio)}</Text>
+            )}
+          </View>
+
           <View style={styles.qtyRow}>
             <Pressable
               style={styles.qtyBtn}
@@ -534,9 +552,14 @@ export default function AutoventaNuevaScreen() {
             >
               <Text style={styles.qtyBtnText}>+</Text>
             </Pressable>
-            <Text style={styles.lineTotal}>
-              ${formatMoney(item.cantidad * item.precio)}
-            </Text>
+            <View style={styles.lineTotalBlock}>
+              <Text style={styles.lineSubTotal}>
+                {item.cantidad} × USD {formatMoney(item.precio)}
+              </Text>
+              <Text style={styles.lineTotal}>
+                USD {formatMoney(item.cantidad * item.precio)}
+              </Text>
+            </View>
           </View>
         </View>
       )}
@@ -634,6 +657,7 @@ const styles = StyleSheet.create({
   },
   name: { fontWeight: "600", color: "#0B3A5C" },
   meta: { fontSize: 13, color: "#5B6B7C", marginTop: 2 },
+  metaBold: { fontSize: 13, color: "#0B3A5C", marginTop: 2, fontWeight: "600" },
   envaseRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   envaseCol: { flex: 1, gap: 4 },
   envaseAuto: { fontSize: 20, fontWeight: "700", color: "#0B3A5C", paddingVertical: 10 },
@@ -649,7 +673,9 @@ const styles = StyleSheet.create({
   },
   qtyBtnText: { fontSize: 20, color: "#0B3A5C", fontWeight: "600" },
   qty: { fontSize: 16, fontWeight: "600", minWidth: 24, textAlign: "center" },
-  lineTotal: { marginLeft: "auto", fontWeight: "700", color: "#0B3A5C" },
+  lineTotalBlock: { marginLeft: "auto", alignItems: "flex-end" },
+  lineSubTotal: { fontSize: 12, color: "#5B6B7C", marginBottom: 2 },
+  lineTotal: { fontWeight: "700", color: "#0B3A5C" },
   total: { fontSize: 20, fontWeight: "700", color: "#0B3A5C", textAlign: "right" },
   discount: { color: "#067647", fontSize: 12, marginTop: 2 },
   btn: {
