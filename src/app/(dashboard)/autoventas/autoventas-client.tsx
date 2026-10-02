@@ -29,6 +29,7 @@ import {
   obtenerSaldosEnvasesClienteAction,
   registrarVentaEnRutaAction,
   reversarInventarioMovilAutoVentasAction,
+  consultarDescuentoProductoClienteAction,
 } from "@/lib/actions/autoventas";
 import type {
   ProductoListaRpc,
@@ -90,6 +91,10 @@ type LineaVenta = {
   producto_id: string;
   cantidad: number;
   precio_unitario: number;
+  precio_lista_usd?: number;
+  porcentaje_descuento?: number;
+  monto_descuento_usd?: number;
+  aplica_descuento?: boolean;
 };
 
 type Props = {
@@ -128,6 +133,7 @@ export function AutoVentasClient({
     null,
   );
   const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [agregandoProducto, setAgregandoProducto] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
   const [observaciones, setObservaciones] = useState("");
@@ -309,10 +315,32 @@ export function AutoVentasClient({
     });
   }
 
-  function agregarVenta(producto: ProductoListaRpc, cantidad: number) {
+  async function agregarVenta(producto: ProductoListaRpc, cantidad: number) {
+    if (!clienteId) {
+      setMensaje({ tipo: "error", texto: "Debes seleccionar un cliente primero para calcular descuentos." });
+      return;
+    }
     const qty = Math.max(1, Math.floor(cantidad) || 1);
     registrarEnCatalogo(producto);
-    const precio = Number(producto.precio_lista1 ?? producto.precio ?? 0);
+    
+    setAgregandoProducto(true);
+    const res = await consultarDescuentoProductoClienteAction(clienteId, producto.id);
+    setAgregandoProducto(false);
+
+    let precio_lista_usd = Number(producto.precio_lista1 ?? producto.precio ?? 0);
+    let precio_unitario = precio_lista_usd;
+    let porcentaje_descuento = 0;
+    let monto_descuento_usd = 0;
+    let aplica_descuento = false;
+
+    if (res.success && res.data) {
+      precio_lista_usd = res.data.precio_lista_usd;
+      precio_unitario = res.data.precio_final_usd;
+      porcentaje_descuento = res.data.porcentaje_descuento;
+      monto_descuento_usd = res.data.monto_descuento_usd;
+      aplica_descuento = res.data.aplica_descuento;
+    }
+
     setLineasVenta((prev) => {
       const idx = prev.findIndex((l) => l.producto_id === producto.id);
       if (idx >= 0) {
@@ -328,7 +356,11 @@ export function AutoVentasClient({
         {
           producto_id: producto.id,
           cantidad: qty,
-          precio_unitario: precio,
+          precio_unitario,
+          precio_lista_usd,
+          porcentaje_descuento,
+          monto_descuento_usd,
+          aplica_descuento,
         },
       ];
     });
@@ -1025,6 +1057,10 @@ export function AutoVentasClient({
               <p className="rounded-xl border border-dashed border-lt-border px-4 py-8 text-center text-sm text-lt-text-muted">
                 No hay stock en este camión. Carga el almacén móvil primero.
               </p>
+            ) : agregandoProducto ? (
+              <p className="rounded-xl border border-dashed border-lt-border px-4 py-8 text-center text-sm text-lt-text-muted">
+                Calculando descuento...
+              </p>
             ) : (
               <ProductoCatalogo
                 productos={productosParaVenta}
@@ -1066,7 +1102,17 @@ export function AutoVentasClient({
                         <p className="truncate text-sm font-medium text-lt-text">
                           {producto?.nombre ?? "Producto"}
                         </p>
-                        <div className="grid grid-cols-2 gap-2">
+                        {linea.aplica_descuento && linea.precio_lista_usd != null && (
+                          <div className="flex flex-col text-xs text-lt-text-muted mt-0.5">
+                            <p>Precio base: {formatCurrency(linea.precio_lista_usd)}</p>
+                            {(linea.porcentaje_descuento ?? 0) > 0 && (
+                              <p className="text-lt-success-text font-medium">
+                                Desc. {linea.porcentaje_descuento}% ({formatCurrency(linea.monto_descuento_usd ?? 0)} · {formatNumber((linea.monto_descuento_usd ?? 0) * tasaOficial)} Bs)
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
                           <Input
                             label="Cantidad"
                             type="number"

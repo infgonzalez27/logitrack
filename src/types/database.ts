@@ -676,8 +676,9 @@ export type RadarReporteProducto = {
   codigo_producto: string | null;
   nombre_producto: string;
   imagen_path?: string | null;
-  cantidad_solicitada: number;
-  cantidad_despachada: number;
+  cargado: number;
+  despachado: number;
+  sobrante: number;
 };
 
 export type RadarReporteDespachador = {
@@ -695,6 +696,18 @@ export type RadarDetalleReporte = {
   };
   despachador: RadarReporteDespachador;
   resumen_productos: RadarReporteProducto[];
+  resumen_vacios: Array<{
+    cliente_id: string;
+    razon_social: string;
+    rif_nit: string;
+    detalles: Array<{
+      contenedor_id: string;
+      codigo_producto: string;
+      nombre_producto: string;
+      entregado: number;
+      retirado: number;
+    }>;
+  }>;
   ordenes: Array<{
     orden_id?: string;
     id?: string;

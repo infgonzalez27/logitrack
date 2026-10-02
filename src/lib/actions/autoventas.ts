@@ -123,6 +123,38 @@ export async function obtenerSaldosEnvasesClienteAction(
   return { success: true, data: saldos };
 }
 
+/** Consultar descuento de producto para un cliente (`consultar_descuento_producto_cliente`). */
+export async function consultarDescuentoProductoClienteAction(
+  clienteId: string,
+  productoId: string,
+): Promise<ActionResult<{
+  producto_id: string;
+  cliente_id: string;
+  aplica_descuento: boolean;
+  precio_lista_usd: number;
+  precio_final_usd: number;
+  porcentaje_descuento: number;
+  monto_descuento_usd: number;
+}>> {
+  const access = await requireAutoVentaAccess();
+  if (!access.ok) return { success: false, message: access.message };
+  if (!clienteId?.trim() || !productoId?.trim()) {
+    return { success: false, message: "Cliente y producto requeridos." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("consultar_descuento_producto_cliente", {
+    p_cliente_id: clienteId,
+    p_producto_id: productoId,
+  });
+
+  if (error) return { success: false, message: error.message };
+  if (data && typeof data === "object" && data.success && data.data) {
+    return { success: true, data: data.data };
+  }
+  return { success: false, message: "Error al consultar descuento." };
+}
+
 /** Resumen de jornada (`retorna_resumen_autoventas_jornada`). */
 export async function obtenerResumenAutoVentasJornada(
   camionId: string,
