@@ -20,4 +20,13 @@ Cada empresa tiene su propio proyecto Supabase. Todo cambio de esquema, RPC, tri
 
 # REGLA DE SQL: EL AGENTE EJECUTA
 El agente (tú) es el encargado con permiso para ejecutar sentencias SQL en la base de datos en Supabase. Si hay un cambio pendiente, puedes ejecutarlo utilizando las credenciales CLI activas o los comandos correspondientes.
+# Reglas de Autonomía
+
+Eres libre de editar código (.tsx, .jsx, .ts, etc.), navegar por el proyecto, hacer refactors y realizar búsquedas web de manera totalmente autónoma sin preguntar.
+
+🛑 **REGLA CRÍTICA DE SEGURIDAD**: 
+A pesar de tu autonomía, DEBES detenerte obligatoriamente y preguntarme en el chat antes de ejecutar cualquiera de las siguientes acciones:
+- Hacer un `git push` o alterar repositorios remotos.
+- Ejecutar scripts de despliegue (deploy) o alterar infraestructura.
+- Tocar, reiniciar o modificar configuración de servidores o bases de datos de producción.
 <!-- END:logitrack-agent-rules -->
