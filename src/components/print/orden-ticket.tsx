@@ -11,6 +11,9 @@ export type TicketLinea = {
   cantidad: number;
   unitario: number;
   subtotal: number;
+  precio_lista_usd?: number | null;
+  porcentaje_descuento?: number | null;
+  monto_descuento_usd?: number | null;
 };
 
 export type OrdenTicketData = {
@@ -84,6 +87,11 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
     lines.push(
       `   ${formatNumber(linea.cantidad)} x ${moneyThermal(linea.unitario)}`,
     );
+    if (linea.porcentaje_descuento && linea.porcentaje_descuento > 0 && linea.precio_lista_usd) {
+      lines.push(
+        `   Desc: ${linea.porcentaje_descuento}% de ${moneyThermal(linea.precio_lista_usd)} (-${moneyThermal(linea.monto_descuento_usd ?? 0)})`
+      );
+    }
     lines.push(`   ${moneyThermal(linea.subtotal)}`);
   }
 
@@ -191,6 +199,12 @@ export function OrdenTicket(data: OrdenTicketData) {
               </span>
               <span>{formatCurrency(linea.subtotal)}</span>
             </p>
+            {linea.porcentaje_descuento && linea.porcentaje_descuento > 0 && linea.precio_lista_usd ? (
+              <p className="lt-ticket__row lt-ticket__muted" style={{ fontSize: '0.85em', marginTop: '-2px' }}>
+                <span>Desc {linea.porcentaje_descuento}% (Base: {formatCurrency(linea.precio_lista_usd)})</span>
+                <span>-{formatCurrency(linea.monto_descuento_usd ?? 0)}</span>
+              </p>
+            ) : null}
           </div>
         ))}
         {lineas.length === 0 ? (

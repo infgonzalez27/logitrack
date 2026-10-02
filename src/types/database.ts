@@ -343,6 +343,9 @@ export interface DetalleDistribucion {
   subtotal_recaudar: number | null;
   valor_unitario_usd?: number | null;
   subtotal_recaudar_usd?: number | null;
+  precio_lista_usd?: number | null;
+  porcentaje_descuento?: number | null;
+  monto_descuento_usd?: number | null;
   secuencia_entrega: number | null;
   estado_entrega: EstadoEntrega;
   motivo_rechazo: string | null;

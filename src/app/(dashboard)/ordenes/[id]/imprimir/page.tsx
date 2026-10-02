@@ -114,6 +114,9 @@ export default async function OrdenImprimirPage({
       cantidad: linea.cantidad_solicitada,
       unitario: unitarioUsd,
       subtotal: subtotalUsd,
+      precio_lista_usd: linea.precio_lista_usd ?? null,
+      porcentaje_descuento: linea.porcentaje_descuento ?? null,
+      monto_descuento_usd: linea.monto_descuento_usd ?? null,
     };
   });
 
