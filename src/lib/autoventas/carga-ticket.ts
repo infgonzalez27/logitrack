@@ -2,6 +2,8 @@ export type CargaTicketLinea = {
   codigo: string;
   producto: string;
   cantidad: number;
+  entregado?: number;
+  disponible?: number;
 };
 
 export type CargaTicketData = {
@@ -37,6 +39,8 @@ export function decodeCargaTicket(raw: string | undefined): CargaTicketData | nu
         codigo: String(l?.codigo ?? ""),
         producto: String(l?.producto ?? ""),
         cantidad: Number(l?.cantidad) || 0,
+        entregado: l?.entregado !== undefined ? Number(l.entregado) : undefined,
+        disponible: l?.disponible !== undefined ? Number(l.disponible) : undefined,
       })),
       tipo: parsed.tipo === "descarga" ? "descarga" : "carga",
     };

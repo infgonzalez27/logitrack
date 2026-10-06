@@ -83,6 +83,9 @@ export function CargaCamionReporte({
   vaciosPorOrden?: VaciosPorOrdenData | null;
 }) {
   const total = lineas.reduce((s, l) => s + l.cantidad, 0);
+  const totalEntregado = lineas.reduce((s, l) => s + (l.entregado ?? 0), 0);
+  const totalDisponible = lineas.reduce((s, l) => s + (l.disponible ?? 0), 0);
+  const hasEntregado = lineas.some((l) => l.entregado !== undefined);
   const descarga = tipo === "descarga";
   const titulo = descarga ? "Descarga de camión" : "Carga de camión";
 
@@ -116,9 +119,15 @@ export function CargaCamionReporte({
             <th className="w-10 py-2 pr-2 font-semibold">#</th>
             <th className="w-28 py-2 pr-2 font-semibold">Código</th>
             <th className="py-2 pr-2 font-semibold">Producto</th>
-            <th className="w-28 py-2 text-right font-semibold">
+            <th className="w-24 py-2 text-right font-semibold">
               {descarga ? "Devuelto" : "Cargado"}
             </th>
+            {hasEntregado && !descarga && (
+              <>
+                <th className="w-24 py-2 text-right font-semibold">Entregado</th>
+                <th className="w-24 py-2 text-right font-semibold">Disponible</th>
+              </>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -130,11 +139,21 @@ export function CargaCamionReporte({
               <td className="py-1.5 text-right tabular-nums">
                 {formatNumber(l.cantidad)}
               </td>
+              {hasEntregado && !descarga && (
+                <>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {formatNumber(l.entregado ?? 0)}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {formatNumber(l.disponible ?? 0)}
+                  </td>
+                </>
+              )}
             </tr>
           ))}
           {lineas.length === 0 ? (
             <tr>
-              <td colSpan={4} className="py-4 text-center text-gray-600">
+              <td colSpan={hasEntregado && !descarga ? 6 : 4} className="py-4 text-center text-gray-600">
                 Sin productos
               </td>
             </tr>
@@ -147,6 +166,12 @@ export function CargaCamionReporte({
               {lineas.length === 1 ? "" : "s"})
             </td>
             <td className="py-2 text-right tabular-nums">{formatNumber(total)}</td>
+            {hasEntregado && !descarga && (
+              <>
+                <td className="py-2 text-right tabular-nums">{formatNumber(totalEntregado)}</td>
+                <td className="py-2 text-right tabular-nums">{formatNumber(totalDisponible)}</td>
+              </>
+            )}
           </tr>
         </tfoot>
       </table>

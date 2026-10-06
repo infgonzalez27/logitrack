@@ -271,6 +271,8 @@ export function AutoVentasClient({
           codigo: item.codigo ?? "",
           producto: item.nombre ?? "Producto",
           cantidad: Number(item.cantidad_cargada) || 0,
+          entregado: Number(item.cantidad_entregada) || 0,
+          disponible: Number(item.cantidad_disponible) || 0,
         })),
       }
     : null;
