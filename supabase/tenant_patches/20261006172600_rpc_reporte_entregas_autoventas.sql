@@ -28,7 +28,7 @@ BEGIN
     SELECT jsonb_agg(
         jsonb_build_object(
             'producto_id', p.id,
-            'codigo', p.codigo,
+            'codigo', p.codigo_producto,
             'nombre', p.nombre,
             'cantidad_cargada', COALESCE(im.cantidad_cargada, 0),
             'cantidad_entregada', COALESCE(im.cantidad_entregada, 0),
@@ -63,7 +63,7 @@ BEGIN
                 SELECT jsonb_agg(
                     jsonb_build_object(
                         'producto_id', p.id,
-                        'codigo', p.codigo,
+                        'codigo', p.codigo_producto,
                         'nombre', p.nombre,
                         'cantidad_cargada', odd.cantidad_solicitada,
                         'cantidad_entregada', odd.cantidad_despachada,
