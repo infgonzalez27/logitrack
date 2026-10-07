@@ -49,7 +49,9 @@ BEGIN
                         'producto_id', p.id,
                         'codigo', p.codigo,
                         'nombre', p.nombre,
+                        'cantidad_cargada', odd.cantidad_solicitada,
                         'cantidad_entregada', odd.cantidad_despachada,
+                        'devolucion', COALESCE(odd.cantidad_solicitada, 0) - COALESCE(odd.cantidad_despachada, 0),
                         'precio_unitario_usd', odd.valor_unitario_usd,
                         'subtotal_usd', odd.subtotal_recaudar_usd
                     ) ORDER BY p.nombre ASC

@@ -613,7 +613,7 @@ async function buildResumenCargaDesdeRadar(
   const resumen = (response.data.resumen_productos ?? [])
     .map((p) => ({
       producto_id: String(p.producto_id ?? "").trim(),
-      cantidad_solicitada: Number(p.cantidad_solicitada ?? 0),
+      cantidad_solicitada: Number(p.cargado ?? 0),
     }))
     .filter(
       (p) =>

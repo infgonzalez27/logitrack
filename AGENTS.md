@@ -18,8 +18,8 @@ Los builds de EAS cuestan dinero. NUNCA lances `eas build` sin autorización exp
 # REGLA DE CAMBIOS DE BD PARA EMPRESAS (TENANTS lt_*)
 Cada empresa tiene su propio proyecto Supabase. Todo cambio de esquema, RPC, trigger o política RLS que deba existir en las empresas va como archivo **idempotente** en `supabase/tenant_patches/AAAAMMDDHHMMSS_descripcion.sql` (`CREATE OR REPLACE`, `DROP ... IF EXISTS` antes de `CREATE`, `IF NOT EXISTS`).
 
-# REGLA DE SQL: EL AGENTE EJECUTA
-El agente (tú) es el encargado con permiso para ejecutar sentencias SQL en la base de datos en Supabase. Si hay un cambio pendiente, puedes ejecutarlo utilizando las credenciales CLI activas o los comandos correspondientes.
+# REGLA DE BASE DE DATOS Y ENFOQUE FRONTEND
+El agente (tú) debe enfocarse EXCLUSIVAMENTE en el desarrollo Frontend. Hay un administrador de base de datos (DBA) externo encargado de Supabase. El agente tiene ESTRICTAMENTE PROHIBIDO ejecutar, alterar o realizar push de sentencias SQL, migraciones o configuraciones directamente a la base de datos de producción. En cada Pull Request o actualización, el agente debe guiarse únicamente por los contratos JSON documentados en `docs/INTEGRACION-RPC.md`. Si se requiere data faltante, se debe solicitar al usuario para que el DBA lo agregue.
 # Reglas de Autonomía
 
 Eres libre de editar código (.tsx, .jsx, .ts, etc.), navegar por el proyecto, hacer refactors y realizar búsquedas web de manera totalmente autónoma sin preguntar.

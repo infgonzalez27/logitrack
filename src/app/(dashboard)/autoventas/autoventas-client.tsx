@@ -767,6 +767,14 @@ export function AutoVentasClient({
                     Imprimir carga
                   </Button>
                 ) : null}
+                {camionId && inventarioResumen.length > 0 ? (
+                  <Button
+                    href={`/autoventas/entregas/imprimir?camionId=${camionId}`}
+                    variant="primary"
+                  >
+                    Imprimir Entregas
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="secondary"
