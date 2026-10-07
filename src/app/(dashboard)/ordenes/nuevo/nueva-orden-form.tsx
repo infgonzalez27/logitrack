@@ -72,6 +72,7 @@ export function NuevaOrdenForm({
   const [clienteId, setClienteId] = useState(initialClienteId ?? "");
   const [camionId, setCamionId] = useState("");
   const [fechaDespacho, setFechaDespacho] = useState(defaultFechaDespachoLocal);
+  const [esCortesia, setEsCortesia] = useState(false);
   const [catalogoProductos, setCatalogoProductos] =
     useState<ProductoListaRpc[]>(productos);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
@@ -186,6 +187,7 @@ export function NuevaOrdenForm({
       fecha_despacho: fechaDespacho,
       lineas,
       tasa_cambio: tasaActual?.tasa_cambio ?? null,
+      es_cortesia: esCortesia,
     });
 
     if (result?.error) {
@@ -199,11 +201,13 @@ export function NuevaOrdenForm({
     }
   }
 
-  const totalRecaudar = lineas.reduce(
-    (total, linea) =>
-      total + linea.cantidad_solicitada * linea.valor_unitario_usd,
-    0,
-  );
+  const totalRecaudar = esCortesia
+    ? 0
+    : lineas.reduce(
+        (total, linea) =>
+          total + linea.cantidad_solicitada * linea.valor_unitario_usd,
+        0,
+      );
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -248,6 +252,17 @@ export function NuevaOrdenForm({
               value={fechaDespacho}
               onChange={setFechaDespacho}
             />
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={esCortesia}
+                  onChange={(e) => setEsCortesia(e.target.checked)}
+                  className="w-4 h-4 text-lt-primary rounded border-lt-border focus:ring-lt-primary"
+                />
+                Es orden de cortesía
+              </label>
+            </div>
             <Input
               label="Despachador del cliente"
               readOnly
@@ -363,7 +378,8 @@ export function NuevaOrdenForm({
                           min={0}
                           step="0.01"
                           required
-                          value={linea.valor_unitario_usd}
+                          value={esCortesia ? 0 : linea.valor_unitario_usd}
+                          disabled={esCortesia}
                           onChange={(e) =>
                             updateLinea(linea.producto_id, {
                               valor_unitario_usd: Number(e.target.value),

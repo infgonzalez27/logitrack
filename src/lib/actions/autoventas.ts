@@ -77,6 +77,7 @@ export async function registrarVentaEnRutaAction(
     p_contenedores_json: params.contenedores_json ?? [],
     p_observaciones: params.observaciones ?? null,
     p_tasa_cambio: params.tasa_cambio ?? null,
+    p_es_cortesia: params.es_cortesia ?? false,
   });
 
   if (!response.success) {

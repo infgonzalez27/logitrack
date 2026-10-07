@@ -142,6 +142,7 @@ export function AutoVentasClient({
 
   const [clienteId, setClienteId] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [esCortesia, setEsCortesia] = useState(false);
   const [lineasVenta, setLineasVenta] = useState<LineaVenta[]>([]);
   const [retiradosEnvases, setRetiradosEnvases] = useState<Record<string, string>>({});
   const [saldosEnvases, setSaldosEnvases] = useState<Record<
@@ -295,10 +296,12 @@ export function AutoVentasClient({
           created_at: o.created_at,
         }));
 
-  const totalVentaUsd = lineasVenta.reduce(
-    (s, l) => s + l.cantidad * l.precio_unitario,
-    0,
-  );
+  const totalVentaUsd = esCortesia
+    ? 0
+    : lineasVenta.reduce(
+        (s, l) => s + l.cantidad * l.precio_unitario,
+        0,
+      );
   const totalCargaUnidades = lineasCarga.reduce((s, l) => s + l.cantidad, 0);
 
   function registrarEnCatalogo(producto: ProductoListaRpc) {
@@ -432,6 +435,7 @@ export function AutoVentasClient({
         })),
         observaciones: observaciones || undefined,
         tasa_cambio: tasaOficial > 0 ? tasaOficial : undefined,
+        es_cortesia: esCortesia,
       });
 
       if (res.success) {
@@ -444,6 +448,7 @@ export function AutoVentasClient({
         setLineasVenta([]);
         seleccionarCliente("");
         setObservaciones("");
+        setEsCortesia(false);
         setTab("resumen");
         router.refresh();
       } else {
@@ -1078,6 +1083,17 @@ export function AutoVentasClient({
               onChange={(e) => setObservaciones(e.target.value)}
               placeholder="Opcional"
             />
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={esCortesia}
+                  onChange={(e) => setEsCortesia(e.target.checked)}
+                  className="w-4 h-4 text-lt-primary rounded border-lt-border focus:ring-lt-primary"
+                />
+                Es orden de cortesía
+              </label>
+            </div>
           </Card>
 
           <Card title="Catálogo en camión">
@@ -1167,7 +1183,8 @@ export function AutoVentasClient({
                             type="number"
                             min={0}
                             step="0.01"
-                            value={linea.precio_unitario}
+                            value={esCortesia ? 0 : linea.precio_unitario}
+                            disabled={esCortesia}
                             onChange={(e) =>
                               setLineasVenta((prev) =>
                                 prev.map((l) =>

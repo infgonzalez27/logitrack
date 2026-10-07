@@ -183,6 +183,7 @@ export async function createOrdenAction(input: {
   fecha_despacho: string;
   lineas: LineaOrdenInput[];
   tasa_cambio?: number | null;
+  es_cortesia?: boolean;
 }) {
   const supabase = await createClient();
   const user = await getSessionUser();
@@ -239,6 +240,7 @@ export async function createOrdenAction(input: {
     p_productos_json: productosJson,
     p_despachador_id: clienteFields.despachador_id,
     p_id_ruta: clienteFields.id_ruta,
+    p_es_cortesia: input.es_cortesia ?? false,
   });
 
   if (error) {

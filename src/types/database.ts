@@ -254,6 +254,7 @@ export type VentaAutoVentaParams = {
   contenedores_json?: VentaAutoVentaContenedorPayload[];
   observaciones?: string;
   tasa_cambio?: number;
+  es_cortesia?: boolean;
 };
 
 export type ResumenAutoVentaItem = {
@@ -830,6 +831,7 @@ export interface Database {
           p_productos_json?: ProductoOrdenRpc[];
           p_despachador_id?: string | null;
           p_id_ruta?: string | null;
+          p_es_cortesia?: boolean;
         };
         Returns: {
           success: boolean;
