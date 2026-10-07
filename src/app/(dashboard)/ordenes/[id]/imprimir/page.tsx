@@ -3,6 +3,7 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { getOrdenDistribucionDetalle } from "@/lib/data/ordenes";
 import { getNombresPerfilByIds } from "@/lib/data/perfiles";
+import { resolveUserEmpresa } from "@/lib/supabase/central";
 import {
   lineasDesdeContenedoresResumen,
   lineasDesdeMovimientosOrden,
@@ -66,6 +67,7 @@ export default async function OrdenImprimirPage({
     getCurrentProfile(),
   ]);
   const rol = getRoleNameFromProfile(profile);
+  const empresa = profile ? await resolveUserEmpresa(profile.id) : null;
 
   const orden = await getOrdenDistribucionDetalle(id, {
     userId: user?.id,
@@ -187,6 +189,7 @@ export default async function OrdenImprimirPage({
             totalRecaudar={totalRecaudar}
             estadoCuentaVacios={estadoCuentaVacios}
             estadoCuentaProvisional={estadoCuentaProvisional}
+            empresaNombre={empresa?.nombre_empresa ?? null}
           />
         </div>
       ))}

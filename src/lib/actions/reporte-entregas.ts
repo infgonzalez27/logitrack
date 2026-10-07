@@ -41,6 +41,7 @@ export async function obtenerReporteEntregasAction(
   );
 
   if (error || !data?.success) {
+    console.error("Error en reporte de entregas:", error || data?.message);
     return null;
   }
 

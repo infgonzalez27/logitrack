@@ -31,6 +31,7 @@ export type OrdenTicketData = {
   totalRecaudar: number;
   estadoCuentaVacios?: EstadoCuentaVacioLinea[];
   estadoCuentaProvisional?: boolean;
+  empresaNombre?: string | null;
 };
 
 const LINE = "--------------------------------";
@@ -60,7 +61,7 @@ function toThermalText(value: string): string {
 /** Texto plano para impresora térmica ESC/POS (RawBT / Bluetooth). */
 export function buildOrdenTicketText(data: OrdenTicketData): string {
   const lines: string[] = [
-    "LogiTrack",
+    data.empresaNombre || "LogiTrack",
     "ORDEN DE DISTRIBUCION",
     `#${data.correlativo}`,
     data.facturaOrigen,
@@ -143,12 +144,13 @@ export function OrdenTicket(data: OrdenTicketData) {
     totalRecaudar,
     estadoCuentaVacios,
     estadoCuentaProvisional,
+    empresaNombre,
   } = data;
 
   return (
     <article className="lt-ticket" aria-label={`Ticket orden ${correlativo}`}>
       <header className="lt-ticket__header">
-        <p className="lt-ticket__brand">LogiTrack</p>
+        <p className="lt-ticket__brand">{empresaNombre || "LogiTrack"}</p>
         <h1 className="lt-ticket__title">ORDEN DE DISTRIBUCIÓN</h1>
         <p className="lt-ticket__big">#{correlativo}</p>
         <p className="lt-ticket__muted">{facturaOrigen}</p>
