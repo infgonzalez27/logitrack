@@ -21,7 +21,7 @@ BEGIN
     FROM public.ordenes_distribucion od
     WHERE od.camion_id = p_camion_id
       AND od.es_autoventa = TRUE
-      AND DATE(od.created_at) = COALESCE(p_fecha, CURRENT_DATE)
+      AND DATE(od.fecha_despacho) = COALESCE(p_fecha, CURRENT_DATE)
       AND od.estado != 'anulada';
 
     -- Calcular el inventario cargado, entregado y devolución
@@ -80,7 +80,7 @@ BEGIN
         JOIN public.clientes c ON od.cliente_id = c.id
         WHERE od.camion_id = p_camion_id
           AND od.es_autoventa = TRUE
-          AND DATE(od.created_at) = COALESCE(p_fecha, CURRENT_DATE)
+          AND DATE(od.fecha_despacho) = COALESCE(p_fecha, CURRENT_DATE)
           AND od.estado != 'anulada'
     ) t;
 
