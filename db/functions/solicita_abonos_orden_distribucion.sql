@@ -92,7 +92,8 @@ BEGIN
           AND rc.estado = 'aprobada'
     ) abonos ON TRUE
     WHERE od.cliente_id = p_cliente_id
-      AND od.estado IN ('despachada', 'por_liquidar');
+      AND od.estado IN ('despachada', 'por_liquidar')
+      AND (od.es_cortesia IS NULL OR od.es_cortesia = false);
 
     RETURN json_build_object(
         'success', true,

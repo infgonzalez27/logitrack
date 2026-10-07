@@ -5,7 +5,8 @@ CREATE OR REPLACE FUNCTION public.registrar_venta_en_ruta_autoventa(
     p_productos_json JSONB DEFAULT '[]'::jsonb,
     p_contenedores_json JSONB DEFAULT '[]'::jsonb,
     p_observaciones TEXT DEFAULT NULL,
-    p_tasa_cambio NUMERIC DEFAULT NULL
+    p_tasa_cambio NUMERIC DEFAULT NULL,
+    p_es_cortesia BOOLEAN DEFAULT FALSE
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -154,7 +155,11 @@ BEGIN
         FROM public.descuentos_cliente_producto
         WHERE cliente_id = p_cliente_id AND producto_id = v_producto_id AND activo = true;
 
-        IF v_desc_rec.id IS NOT NULL THEN
+        IF p_es_cortesia = TRUE THEN
+            v_val_usd := 0.00;
+            v_pct_desc := 0.00;
+            v_monto_desc_unit := 0.00;
+        ELSIF v_desc_rec.id IS NOT NULL THEN
             v_pct_desc := COALESCE(v_desc_rec.porcentaje_descuento, 0.00);
             IF v_desc_rec.precio_pactado_usd IS NOT NULL THEN
                 v_val_usd := v_desc_rec.precio_pactado_usd;
@@ -172,7 +177,7 @@ BEGIN
             v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, v_val_usd_prod);
         END IF;
 
-        IF v_val_usd <= 0 OR (v_val_usd < 1.00 AND v_val_usd_prod >= 1.00) THEN
+        IF p_es_cortesia = FALSE AND (v_val_usd <= 0 OR (v_val_usd < 1.00 AND v_val_usd_prod >= 1.00)) THEN
             v_val_usd := v_val_usd_prod;
         END IF;
 
@@ -202,7 +207,8 @@ BEGIN
         created_at,
         tasa_cambio,
         total_recaudar_usd,
-        total_recaudar_bs
+        total_recaudar_bs,
+        es_cortesia
     ) VALUES (
         v_orden_id,
         v_correlativo,
@@ -221,7 +227,8 @@ BEGIN
         NOW(),
         v_tasa_cambio,
         v_total_recaudar_usd,
-        v_total_recaudar_bs
+        v_total_recaudar_bs,
+        p_es_cortesia
     );
 
     -- 5. Insertar detalles y actualizar inventario_movil (cantidad_entregada += v_cantidad)
@@ -236,7 +243,11 @@ BEGIN
         FROM public.descuentos_cliente_producto
         WHERE cliente_id = p_cliente_id AND producto_id = v_producto_id AND activo = true;
 
-        IF v_desc_rec.id IS NOT NULL THEN
+        IF p_es_cortesia = TRUE THEN
+            v_pct_desc := 0.00;
+            v_monto_desc_unit := 0.00;
+            v_val_usd := 0.00;
+        ELSIF v_desc_rec.id IS NOT NULL THEN
             v_pct_desc := COALESCE(v_desc_rec.porcentaje_descuento, 0.00);
             IF v_desc_rec.precio_pactado_usd IS NOT NULL THEN
                 v_val_usd := v_desc_rec.precio_pactado_usd;
@@ -254,7 +265,7 @@ BEGIN
             v_val_usd := COALESCE((v_item->>'valor_unitario_usd')::NUMERIC, (v_item->>'precio_unitario')::NUMERIC, v_val_usd_prod);
         END IF;
 
-        IF v_val_usd <= 0 OR (v_val_usd < 1.00 AND v_val_usd_prod >= 1.00) THEN
+        IF p_es_cortesia = FALSE AND (v_val_usd <= 0 OR (v_val_usd < 1.00 AND v_val_usd_prod >= 1.00)) THEN
             v_val_usd := v_val_usd_prod;
         END IF;
 

@@ -1,0 +1,5 @@
+La empresa algunas veces otorga productos sin costro a clientes, esto genera Órdenes de Distribución por cortesía.
+para esto pienso que podría modificar la tabla de ordenes_distribución agregando un campo booleano y agregar el estado 'cortesia'
+Afectan el inventario y no entran en la rendición de cuentas.
+No sería por productos porque todos los productos que entren en una misma Orden de Distribución por cortesía no llevan precio ni costo.
+Analiza la solicitud, estás autorizado para sugerir según lo que conoces y preséntame un IMPLEMENTATION-PLAN antes de proceder 

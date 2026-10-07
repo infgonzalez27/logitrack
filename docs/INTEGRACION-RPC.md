@@ -158,3 +158,27 @@ const { data, error } = await supabase.rpc('retorna_reporte_autoventas_entregas_
   }
 }
 ```
+
+### Órdenes de Distribución por Cortesía (Ventas y AutoVentas)
+
+A partir del parche `20261007161348`, se ha implementado la funcionalidad para registrar entregas de productos como cortesía, afectando el inventario normalmente, pero asumiendo los montos de cobro y registro como `$0.00` para no generar falsas cuentas por cobrar ni descuadrar los reportes financieros.
+
+**Cambios aplicados:**
+1. **`crear_orden_distribucion`**: Recibe ahora el parámetro opcional `p_es_cortesia BOOLEAN DEFAULT FALSE`.
+2. **`registrar_venta_en_ruta_autoventa`**: Recibe ahora el parámetro opcional `p_es_cortesia BOOLEAN DEFAULT FALSE`.
+
+Si se envía `p_es_cortesia: true` desde la App Móvil o panel Web, el sistema automáticamente:
+- Marca la orden con `es_cortesia = true`.
+- Fija `valor_unitario_usd` y los `subtotales` en `0.00` (ignorando incluso los descuentos de clientes).
+- Excluye estas órdenes de la lista que retorna `solicita_abonos_orden_distribucion`, lo que impide cobrar dinero sobre ellas.
+
+**Uso en Frontend (TypeScript):**
+```typescript
+const { data, error } = await supabase.rpc('crear_orden_distribucion', {
+  p_vendedor_id: '...',
+  p_cliente_id: '...',
+  p_camion_id: '...',
+  p_productos_json: [...],
+  p_es_cortesia: true // NUEVO: Enviar en true si es de cortesía
+});
+```
