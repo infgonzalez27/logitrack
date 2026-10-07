@@ -9,7 +9,7 @@ import { CargaPrintControls } from "../../carga/imprimir/carga-print-controls";
 export default async function EntregasReporteImprimirPage({
   searchParams,
 }: {
-  searchParams: Promise<{ camionId?: string }>;
+  searchParams: Promise<{ camionId?: string; fecha?: string }>;
 }) {
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
@@ -22,7 +22,7 @@ export default async function EntregasReporteImprimirPage({
     redirect("/");
   }
 
-  const { camionId } = await searchParams;
+  const { camionId, fecha } = await searchParams;
   if (!camionId) {
     return (
       <div className="lt-carta-page mx-auto max-w-4xl space-y-4 px-2 py-4">
@@ -33,7 +33,7 @@ export default async function EntregasReporteImprimirPage({
 
   const [empresa, data] = await Promise.all([
     profile ? resolveUserEmpresa(profile.id) : null,
-    obtenerReporteEntregasAction(camionId),
+    obtenerReporteEntregasAction(camionId, fecha),
   ]);
 
   return (

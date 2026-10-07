@@ -134,6 +134,11 @@ export function AutoVentasClient({
   );
   const [cargandoResumen, setCargandoResumen] = useState(false);
   const [agregandoProducto, setAgregandoProducto] = useState(false);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(() => {
+    const today = new Date();
+    // Ajustar a zona horaria local o simple YYYY-MM-DD
+    return today.toISOString().split("T")[0];
+  });
 
   const [clienteId, setClienteId] = useState("");
   const [observaciones, setObservaciones] = useState("");
@@ -663,30 +668,43 @@ export function AutoVentasClient({
 
       <Card className="space-y-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-[14rem] flex-1 space-y-1.5">
-            <label className="block text-sm font-medium text-lt-text">
-              Camión
-            </label>
-            <select
-              value={camionId}
-              onChange={(e) => {
-                setCamionId(e.target.value);
-                setUltimaCarga(null);
-                setUltimaDescarga(null);
-              }}
-              className={inputClass}
-            >
-              {camiones.length === 0 ? (
-                <option value="">Sin camiones</option>
-              ) : (
-                camiones.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.placa}
-                    {c.modelo ? ` — ${c.modelo}` : ""} ({c.estado})
-                  </option>
-                ))
-              )}
-            </select>
+          <div className="flex flex-1 flex-wrap gap-3">
+            <div className="min-w-[14rem] space-y-1.5">
+              <label className="block text-sm font-medium text-lt-text">
+                Camión
+              </label>
+              <select
+                value={camionId}
+                onChange={(e) => {
+                  setCamionId(e.target.value);
+                  setUltimaCarga(null);
+                  setUltimaDescarga(null);
+                }}
+                className={inputClass}
+              >
+                {camiones.length === 0 ? (
+                  <option value="">Sin camiones</option>
+                ) : (
+                  camiones.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.placa}
+                      {c.modelo ? ` — ${c.modelo}` : ""} ({c.estado})
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+            <div className="min-w-[10rem] space-y-1.5">
+              <label className="block text-sm font-medium text-lt-text">
+                Fecha
+              </label>
+              <input
+                type="date"
+                value={fechaSeleccionada}
+                onChange={(e) => setFechaSeleccionada(e.target.value)}
+                className={inputClass}
+              />
+            </div>
           </div>
           <p className="text-sm text-lt-text-muted">
             Tasa BCV:{" "}
@@ -769,7 +787,7 @@ export function AutoVentasClient({
                 ) : null}
                 {camionId && inventarioResumen.length > 0 ? (
                   <Button
-                    href={`/autoventas/entregas/imprimir?camionId=${camionId}`}
+                    href={`/autoventas/entregas/imprimir?camionId=${camionId}&fecha=${fechaSeleccionada}`}
                     variant="primary"
                   >
                     Imprimir Entregas
