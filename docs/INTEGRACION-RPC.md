@@ -125,6 +125,16 @@ const { data, error } = await supabase.rpc('retorna_reporte_autoventas_entregas_
     "camion_id": "42618991-...",
     "fecha": "2026-10-06",
     "total_general_usd": 350.00,
+    "inventario": [
+      {
+        "producto_id": "3333-444...",
+        "codigo": "B20L",
+        "nombre": "Botellón 20L",
+        "cantidad_cargada": 100,
+        "cantidad_entregada": 20,
+        "devolucion": 80
+      }
+    ],
     "entregas": [
       {
         "cliente_id": "1111-222...",

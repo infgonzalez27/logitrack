@@ -9,6 +9,7 @@ AS $$
 DECLARE
     v_total_general_usd NUMERIC(14,2) := 0.00;
     v_entregas JSONB;
+    v_inventario JSONB;
 BEGIN
     IF p_camion_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'El ID del camión es requerido.');
@@ -22,6 +23,21 @@ BEGIN
       AND od.es_autoventa = TRUE
       AND DATE(od.created_at) = COALESCE(p_fecha, CURRENT_DATE)
       AND od.estado != 'anulada';
+
+    -- Calcular el inventario cargado, entregado y devolución
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'producto_id', p.id,
+            'codigo', p.codigo,
+            'nombre', p.nombre,
+            'cantidad_cargada', COALESCE(im.cantidad_cargada, 0),
+            'cantidad_entregada', COALESCE(im.cantidad_entregada, 0),
+            'devolucion', GREATEST(0, COALESCE(im.cantidad_cargada, 0) - COALESCE(im.cantidad_entregada, 0))
+        ) ORDER BY p.nombre ASC
+    ) INTO v_inventario
+    FROM public.inventario_movil im
+    JOIN public.productos p ON im.producto_id = p.id
+    WHERE im.camion_id = p_camion_id;
 
     -- Construir el JSON de entregas agrupado por cliente
     SELECT jsonb_agg(
@@ -74,6 +90,7 @@ BEGIN
             'camion_id', p_camion_id,
             'fecha', COALESCE(p_fecha, CURRENT_DATE),
             'total_general_usd', v_total_general_usd,
+            'inventario', COALESCE(v_inventario, '[]'::jsonb),
             'entregas', COALESCE(v_entregas, '[]'::jsonb)
         ),
         'error', NULL
