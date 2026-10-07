@@ -21,7 +21,7 @@ BEGIN
     FROM public.ordenes_distribucion od
     WHERE od.camion_id = p_camion_id
       AND od.es_autoventa = TRUE
-      AND (od.fecha_despacho AT TIME ZONE 'UTC' AT TIME ZONE 'America/Caracas')::DATE = COALESCE(p_fecha, (CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AT TIME ZONE 'America/Caracas')::DATE)
+      AND (od.fecha_despacho AT TIME ZONE 'America/Caracas')::DATE = COALESCE(p_fecha, (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::DATE)
       AND od.estado != 'anulada';
 
     -- Calcular el inventario cargado, entregado y devolución
@@ -80,7 +80,7 @@ BEGIN
         JOIN public.clientes c ON od.cliente_id = c.id
         WHERE od.camion_id = p_camion_id
           AND od.es_autoventa = TRUE
-          AND (od.fecha_despacho AT TIME ZONE 'UTC' AT TIME ZONE 'America/Caracas')::DATE = COALESCE(p_fecha, (CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AT TIME ZONE 'America/Caracas')::DATE)
+          AND (od.fecha_despacho AT TIME ZONE 'America/Caracas')::DATE = COALESCE(p_fecha, (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::DATE)
           AND od.estado != 'anulada'
     ) t;
 
