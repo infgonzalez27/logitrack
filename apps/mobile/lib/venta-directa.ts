@@ -25,6 +25,7 @@ export async function crearVentaDirectaAlmacen(input: {
   vendedorId: string;
   clienteId: string;
   tasaCambio: number | null;
+  esCortesia?: boolean;
   lineas: LineaVentaDirecta[];
   retirados?: Array<{ contenedor_id: string; cantidad_retirada: number }>;
 }): Promise<{ ok: true; venta: VentaDirectaResultado } | { ok: false; error: string }> {
@@ -34,7 +35,12 @@ export async function crearVentaDirectaAlmacen(input: {
     p_vendedor_id: input.vendedorId,
     p_tipo_venta: "credito",
     p_tasa_cambio: input.tasaCambio && input.tasaCambio > 0 ? input.tasaCambio : null,
-    p_productos_json: input.lineas,
+    p_productos_json: input.lineas.map((l) => ({
+      producto_id: l.producto_id,
+      cantidad: l.cantidad,
+      valor_unitario_usd: input.esCortesia ? 0 : l.valor_unitario_usd,
+    })),
+    ...(input.esCortesia !== undefined && { p_es_cortesia: input.esCortesia }),
   };
   // Sin retirados se omite el parámetro: así la llamada también funciona con la versión de 5 argumentos.
   if (retirados.length) params.p_contenedores_json = retirados;

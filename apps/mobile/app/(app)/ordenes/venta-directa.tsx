@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -31,6 +32,7 @@ export default function VentaDirectaScreen() {
   const { profile } = useAuth();
   const [tasa, setTasa] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [esCortesia, setEsCortesia] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [busquedaCliente, setBusquedaCliente] = useState("");
@@ -124,7 +126,7 @@ export default function VentaDirectaScreen() {
     );
   }
 
-  const total = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * l.precio, 0);
+  const total = esCortesia ? 0 : lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * l.precio, 0);
 
   async function registrar() {
     if (!profile || !cliente) return;
@@ -133,6 +135,7 @@ export default function VentaDirectaScreen() {
       vendedorId: profile.id,
       clienteId: cliente.id,
       tasaCambio: tasa,
+      esCortesia,
       lineas: lineas.map((l) => ({
         producto_id: l.producto.id,
         cantidad: Number(l.cantidad),
@@ -242,6 +245,18 @@ export default function VentaDirectaScreen() {
       )}
 
       {cliente ? (
+        <View style={styles.switchContainer}>
+          <Text style={styles.switchLabel}>Marcar como orden de cortesía ($0.00)</Text>
+          <Switch
+            value={esCortesia}
+            onValueChange={setEsCortesia}
+            trackColor={{ false: "#D0D7DE", true: "#34C759" }}
+            thumbColor="#fff"
+          />
+        </View>
+      ) : null}
+
+      {cliente ? (
         <>
           <SectionTitle>Productos</SectionTitle>
           <TextInput
@@ -289,7 +304,7 @@ export default function VentaDirectaScreen() {
                   </Pressable>
                 </View>
                 <Text style={[styles.hint, excede && styles.excede]}>
-                  Disponible: {formatNumber(l.producto.stock_disponible)} · ${formatMoney(l.precio)} c/u
+                  Disponible: {formatNumber(l.producto.stock_disponible)} · ${formatMoney(esCortesia ? 0 : l.precio)} c/u
                 </Text>
                 <View style={styles.lineaCampos}>
                   <View style={{ flex: 1 }}>
@@ -303,7 +318,7 @@ export default function VentaDirectaScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.campoLabel}>Subtotal</Text>
-                    <Text style={styles.subtotal}>${formatMoney(cant * l.precio)}</Text>
+                    <Text style={styles.subtotal}>${formatMoney(esCortesia ? 0 : cant * l.precio)}</Text>
                   </View>
                 </View>
               </View>
@@ -433,4 +448,17 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginVertical: 10,
   },
+  switchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5EAF0",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  switchLabel: { color: "#0B3A5C", fontWeight: "600", flex: 1, marginRight: 8 },
 });

@@ -34,7 +34,7 @@ export async function crearVentaDirectaAlmacenAction(input: {
   lineas: VentaDirectaLineaInput[];
   tasa_cambio?: number | null;
   retirados?: VentaDirectaRetiroInput[];
-}): Promise<{ ok: true; venta: VentaDirectaResultado } | { ok: false; error: string }> {
+} & { es_cortesia?: boolean }): Promise<{ ok: true; venta: VentaDirectaResultado } | { ok: false; error: string }> {
   const [profile, user] = await Promise.all([getCurrentProfile(), getSessionUser()]);
   const rol = getRoleNameFromProfile(profile);
   if (!user || !canCreateOrden(rol)) {
@@ -77,8 +77,9 @@ export async function crearVentaDirectaAlmacenAction(input: {
     p_productos_json: lineas.map((l) => ({
       producto_id: l.producto_id,
       cantidad: l.cantidad,
-      valor_unitario_usd: l.valor_unitario_usd,
+      valor_unitario_usd: input.es_cortesia ? 0 : l.valor_unitario_usd,
     })),
+    ...(input.es_cortesia !== undefined && { p_es_cortesia: input.es_cortesia }),
   };
   // Sin retirados se omite el parámetro: así la llamada también funciona con la versión de 5 argumentos.
   if (retirados.length) params.p_contenedores_json = retirados;

@@ -62,6 +62,7 @@ export function VentaDirectaForm({
   const [cargandoPrecios, setCargandoPrecios] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [pending, setPending] = useState(false);
+  const [esCortesia, setEsCortesia] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [venta, setVenta] = useState<VentaDirectaResultado | null>(null);
   const peticionPrecios = useRef(0);
@@ -117,7 +118,7 @@ export function VentaDirectaForm({
     [clientes, clienteId],
   );
 
-  const total = lineas.reduce((acc, l) => acc + l.cantidad * l.valor_unitario_usd, 0);
+  const total = esCortesia ? 0 : lineas.reduce((acc, l) => acc + l.cantidad * l.valor_unitario_usd, 0);
 
   function agregarProducto(producto: ProductoListaRpc, cantidad: number) {
     const qty = Math.max(1, Math.floor(cantidad) || 1);
@@ -176,6 +177,7 @@ export function VentaDirectaForm({
       retirados: Object.entries(retiradosEnvases)
         .map(([contenedor_id, v]) => ({ contenedor_id, cantidad_retirada: Number(v) || 0 }))
         .filter((r) => r.cantidad_retirada > 0),
+      es_cortesia: esCortesia,
     });
     setPending(false);
     setConfirmando(false);
@@ -274,6 +276,18 @@ export function VentaDirectaForm({
               No hay tasa registrada. Regístrala en Tasas de cambio.
             </p>
           ) : null}
+          <div className="mt-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="cortesia-check"
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              checked={esCortesia}
+              onChange={(e) => setEsCortesia(e.target.checked)}
+            />
+            <label htmlFor="cortesia-check" className="text-sm font-medium text-lt-text">
+              Marcar como orden de cortesía (Precio final $0.00)
+            </label>
+          </div>
         </Card>
 
         <Card title="Catálogo de productos">
@@ -331,9 +345,10 @@ export function VentaDirectaForm({
                           min={0}
                           step="0.01"
                           required
-                          value={linea.valor_unitario_usd}
+                          readOnly={esCortesia}
+                          value={esCortesia ? 0 : linea.valor_unitario_usd}
                           onChange={(e) =>
-                            updateLinea(linea.producto_id, {
+                            !esCortesia && updateLinea(linea.producto_id, {
                               valor_unitario_usd: Number(e.target.value),
                             })
                           }
@@ -341,7 +356,7 @@ export function VentaDirectaForm({
                         <Input
                           label="Subtotal (USD)"
                           readOnly
-                          value={formatNumber(linea.cantidad * linea.valor_unitario_usd)}
+                          value={formatNumber(esCortesia ? 0 : linea.cantidad * linea.valor_unitario_usd)}
                         />
                       </div>
                     </div>
