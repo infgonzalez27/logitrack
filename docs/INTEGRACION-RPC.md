@@ -166,11 +166,14 @@ A partir del parche `20261007161348`, se ha implementado la funcionalidad para r
 **Cambios aplicados:**
 1. **`crear_orden_distribucion`**: Recibe ahora el parámetro opcional `p_es_cortesia BOOLEAN DEFAULT FALSE`.
 2. **`registrar_venta_en_ruta_autoventa`**: Recibe ahora el parámetro opcional `p_es_cortesia BOOLEAN DEFAULT FALSE`.
+3. **`crear_venta_directa_almacen`**: Recibe ahora el parámetro opcional `p_es_cortesia BOOLEAN DEFAULT FALSE`.
 
 Si se envía `p_es_cortesia: true` desde la App Móvil o panel Web, el sistema automáticamente:
 - Marca la orden con `es_cortesia = true`.
 - Fija `valor_unitario_usd` y los `subtotales` en `0.00` (ignorando incluso los descuentos de clientes).
 - Excluye estas órdenes de la lista que retorna `solicita_abonos_orden_distribucion`, lo que impide cobrar dinero sobre ellas.
+
+*Nota del Frontend*: Ya se implementó el Checkbox / Switch visual en el formulario de Venta Directa (tanto en el Dashboard Web (`venta-directa-form.tsx`) como en la App Móvil (`venta-directa.tsx`)). Al marcarse la opción de cortesía, la interfaz visualiza automáticamente los montos y totales en `$0.00` de forma simultánea, enviando el booleano `p_es_cortesia` a este RPC.
 
 **Uso en Frontend (TypeScript):**
 ```typescript
