@@ -163,6 +163,7 @@ export async function registrarVentaEnRuta(input: {
   }>;
   observaciones?: string;
   tasaCambio?: number | null;
+  esCortesia?: boolean;
 }): Promise<
   | {
       ok: true;
@@ -192,6 +193,7 @@ export async function registrarVentaEnRuta(input: {
       p_contenedores_json: input.contenedores ?? [],
       p_observaciones: input.observaciones ?? null,
       p_tasa_cambio: input.tasaCambio ?? null,
+      p_es_cortesia: input.esCortesia ?? false,
     },
   );
 

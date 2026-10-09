@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  Switch,
 } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
@@ -66,6 +67,7 @@ export default function AutoventaNuevaScreen() {
   const [envases, setEnvases] = useState<Envase[]>([]);
   const [envasesLoading, setEnvasesLoading] = useState(false);
   const [obs, setObs] = useState("");
+  const [esCortesia, setEsCortesia] = useState(false);
   const [tasa, setTasa] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -182,8 +184,8 @@ export default function AutoventaNuevaScreen() {
   }, [inventario]);
 
   const total = useMemo(
-    () => lineas.reduce((a, l) => a + l.cantidad * l.precio, 0),
-    [lineas],
+    () => (esCortesia ? 0 : lineas.reduce((a, l) => a + l.cantidad * l.precio, 0)),
+    [lineas, esCortesia],
   );
 
   const addProducto = async (row: InventarioMovilRow & { disponible: number }) => {
@@ -254,6 +256,7 @@ export default function AutoventaNuevaScreen() {
       clienteId,
       camionId,
       tasaCambio: tasa,
+      esCortesia,
       observaciones: obs || undefined,
       productos: lineas.map((l) => ({
         producto_id: l.producto_id,
@@ -482,6 +485,15 @@ export default function AutoventaNuevaScreen() {
             onChangeText={setObs}
             placeholder="Opcional"
           />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <Switch
+              value={esCortesia}
+              onValueChange={setEsCortesia}
+              trackColor={{ false: "#d1d5db", true: "#0B3A5C" }}
+              thumbColor={esCortesia ? "#ffffff" : "#f3f4f6"}
+            />
+            <Text style={styles.metaBold}>Es orden de cortesía</Text>
+          </View>
           <Pressable
             style={styles.btnGhost}
             onPress={() => {
@@ -507,13 +519,13 @@ export default function AutoventaNuevaScreen() {
           <View style={{ marginTop: 6, marginBottom: 4 }}>
             {item.aplica_descuento ? (
               <>
-                <Text style={styles.meta}>Precio USD {formatMoney(item.precio_lista_usd)}</Text>
-                {item.pctDescuento > 0 && <Text style={styles.meta}>Desc. {item.pctDescuento}%</Text>}
-                {item.monto_descuento_usd > 0 && <Text style={styles.meta}>Desc USD {formatMoney(item.monto_descuento_usd)}</Text>}
-                <Text style={styles.metaBold}>Total USD {formatMoney(item.precio)}</Text>
+                <Text style={styles.meta}>Precio USD {formatMoney(esCortesia ? 0 : item.precio_lista_usd)}</Text>
+                {item.pctDescuento > 0 && !esCortesia && <Text style={styles.meta}>Desc. {item.pctDescuento}%</Text>}
+                {item.monto_descuento_usd > 0 && !esCortesia && <Text style={styles.meta}>Desc USD {formatMoney(item.monto_descuento_usd)}</Text>}
+                <Text style={styles.metaBold}>Total USD {formatMoney(esCortesia ? 0 : item.precio)}</Text>
               </>
             ) : (
-              <Text style={styles.meta}>Precio USD {formatMoney(item.precio)}</Text>
+              <Text style={styles.meta}>Precio USD {formatMoney(esCortesia ? 0 : item.precio)}</Text>
             )}
           </View>
 
