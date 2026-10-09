@@ -1,6 +1,6 @@
 import { ReporteEntregasResponse } from "@/lib/actions/reporte-entregas";
 import { formatNumber } from "@/lib/format";
-import { LogiImage } from "../media/logi-image";
+import Image from "next/image";
 
 type Props = {
   data: ReporteEntregasResponse;
@@ -15,7 +15,7 @@ export function EntregasReporte({ data, empresaNombre }: Props) {
   return (
     <div className="mx-auto w-full max-w-[800px] bg-white p-8 text-black">
       <div className="mb-6 flex flex-col items-center">
-        <LogiImage
+        <Image
           src="/logo-dark.png"
           alt="LogiTrack"
           width={180}
