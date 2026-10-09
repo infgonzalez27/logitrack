@@ -32,7 +32,7 @@ export function ProductoCatalogo({
   const [q, setQ] = useState("");
   const [marca, setMarca] = useState<string>("");
   const [activoId, setActivoId] = useState<string | null>(null);
-  const [cantidades, setCantidades] = useState<Record<string, number>>({});
+  const [cantidades, setCantidades] = useState<Record<string, number | "">>({});
 
   const filtrados = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -53,17 +53,22 @@ export function ProductoCatalogo({
 
   const selected = new Set(selectedIds);
 
-  function qtyOf(id: string) {
+  function qtyOf(id: string): number | "" {
     return cantidades[id] ?? QTY_DEFAULT;
   }
 
-  function setQty(id: string, value: number) {
-    const next = Math.max(1, Math.floor(value) || 1);
-    setCantidades((prev) => ({ ...prev, [id]: next }));
+  function setQty(id: string, value: number | "") {
+    if (value === "") {
+      setCantidades((prev) => ({ ...prev, [id]: "" }));
+    } else {
+      const next = Math.max(1, Math.floor(value));
+      setCantidades((prev) => ({ ...prev, [id]: next }));
+    }
   }
 
   function añadir(producto: ProductoListaRpc) {
-    const cantidad = qtyOf(producto.id);
+    const val = qtyOf(producto.id);
+    const cantidad = val === "" || val < 1 ? 1 : val;
     onAdd(producto, cantidad);
     setCantidades((prev) => ({ ...prev, [producto.id]: QTY_DEFAULT }));
   }
@@ -205,7 +210,7 @@ export function ProductoCatalogo({
                           type="button"
                           aria-label="Disminuir cantidad"
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lt-surface-muted text-lg font-medium text-lt-text hover:bg-lt-primary-muted"
-                          onClick={() => setQty(p.id, qty - 1)}
+                          onClick={() => setQty(p.id, typeof qty === "number" ? qty - 1 : 1)}
                         >
                           −
                         </button>
@@ -215,7 +220,7 @@ export function ProductoCatalogo({
                           max={p.stock_disponible}
                           value={qty}
                           onChange={(e) =>
-                            setQty(p.id, Number(e.target.value))
+                            setQty(p.id, e.target.value === "" ? "" : Number(e.target.value))
                           }
                           className="w-14 rounded-lg border border-lt-border bg-lt-surface px-1 py-1.5 text-center text-sm font-semibold tabular-nums outline-none focus:border-lt-primary focus:ring-2 focus:ring-lt-primary/25"
                         />
@@ -226,7 +231,7 @@ export function ProductoCatalogo({
                           onClick={() =>
                             setQty(
                               p.id,
-                              Math.min(p.stock_disponible, qty + 1),
+                              Math.min(p.stock_disponible, (typeof qty === "number" ? qty : 0) + 1),
                             )
                           }
                         >
