@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, type InputHTMLAttributes } from "react";
 
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
