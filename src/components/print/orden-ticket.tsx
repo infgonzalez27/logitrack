@@ -88,9 +88,19 @@ export function buildOrdenTicketText(data: OrdenTicketData): string {
     lines.push(
       `   ${formatNumber(linea.cantidad)} x ${moneyThermal(linea.unitario)}`,
     );
-    if (linea.porcentaje_descuento && linea.porcentaje_descuento > 0 && linea.precio_lista_usd) {
+    const precioLista = linea.precio_lista_usd ?? linea.unitario;
+    const pctCalculado = linea.porcentaje_descuento && linea.porcentaje_descuento > 0
+      ? linea.porcentaje_descuento
+      : (precioLista > 0 && precioLista > linea.unitario)
+        ? ((precioLista - linea.unitario) / precioLista) * 100
+        : 0;
+    const montoDesc = linea.monto_descuento_usd && linea.monto_descuento_usd > 0
+      ? linea.monto_descuento_usd
+      : (precioLista > linea.unitario ? (precioLista - linea.unitario) * linea.cantidad : 0);
+
+    if (pctCalculado > 0 && precioLista > 0) {
       lines.push(
-        `   Desc: ${linea.porcentaje_descuento}% de ${moneyThermal(linea.precio_lista_usd)} (-${moneyThermal(linea.monto_descuento_usd ?? 0)})`
+        `   Desc: ${formatNumber(pctCalculado)}% de ${moneyThermal(precioLista)} (-${moneyThermal(montoDesc)})`
       );
     }
     lines.push(`   ${moneyThermal(linea.subtotal)}`);
@@ -201,12 +211,27 @@ export function OrdenTicket(data: OrdenTicketData) {
               </span>
               <span>{formatCurrency(linea.subtotal)}</span>
             </p>
-            {linea.porcentaje_descuento && linea.porcentaje_descuento > 0 && linea.precio_lista_usd ? (
-              <p className="lt-ticket__row lt-ticket__muted" style={{ fontSize: '0.85em', marginTop: '-2px' }}>
-                <span>Desc {linea.porcentaje_descuento}% (Base: {formatCurrency(linea.precio_lista_usd)})</span>
-                <span>-{formatCurrency(linea.monto_descuento_usd ?? 0)}</span>
-              </p>
-            ) : null}
+            {(() => {
+              const precioLista = linea.precio_lista_usd ?? linea.unitario;
+              const pctCalculado = linea.porcentaje_descuento && linea.porcentaje_descuento > 0
+                ? linea.porcentaje_descuento
+                : (precioLista > 0 && precioLista > linea.unitario)
+                  ? ((precioLista - linea.unitario) / precioLista) * 100
+                  : 0;
+              const montoDesc = linea.monto_descuento_usd && linea.monto_descuento_usd > 0
+                ? linea.monto_descuento_usd
+                : (precioLista > linea.unitario ? (precioLista - linea.unitario) * linea.cantidad : 0);
+              
+              if (pctCalculado > 0 && precioLista > 0) {
+                return (
+                  <p className="lt-ticket__row lt-ticket__muted" style={{ fontSize: '0.85em', marginTop: '-2px' }}>
+                    <span>Desc {formatNumber(pctCalculado)}% (Base: {formatCurrency(precioLista)})</span>
+                    <span>-{formatCurrency(montoDesc)}</span>
+                  </p>
+                );
+              }
+              return null;
+            })()}
           </div>
         ))}
         {lineas.length === 0 ? (
