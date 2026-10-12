@@ -1,4 +1,5 @@
 import { formatDate, formatNumber } from "@/lib/format";
+import { getEmpresaLogo } from "@/lib/empresa-logo";
 import type { CargaTicketData } from "@/lib/autoventas/carga-ticket";
 import type { VaciosPorOrdenData } from "@/lib/autoventas/vacios-por-orden";
 
@@ -73,6 +74,7 @@ function VaciosPorOrden({ data }: { data: VaciosPorOrdenData }) {
 
 export function CargaCamionReporte({
   empresaNombre,
+  empresaCodigo,
   vaciosPorOrden,
   camion,
   fecha,
@@ -80,6 +82,7 @@ export function CargaCamionReporte({
   tipo,
 }: CargaTicketData & {
   empresaNombre: string | null;
+  empresaCodigo?: string | null;
   vaciosPorOrden?: VaciosPorOrdenData | null;
 }) {
   const total = lineas.reduce((s, l) => s + l.cantidad, 0);
@@ -88,6 +91,7 @@ export function CargaCamionReporte({
   const hasEntregado = lineas.some((l) => l.entregado !== undefined);
   const descarga = tipo === "descarga";
   const titulo = descarga ? "Descarga de camión" : "Carga de camión";
+  const logoSrc = getEmpresaLogo(empresaCodigo);
 
   return (
     <article
@@ -95,11 +99,20 @@ export function CargaCamionReporte({
       aria-label={`${titulo} ${camion}`}
     >
       <header className="flex items-start justify-between gap-6 border-b-2 border-black pb-4">
-        <div>
-          <p className="text-xl font-bold uppercase tracking-wide">
-            {empresaNombre || "LogiTrack"}
-          </p>
-          <h1 className="mt-1 text-lg font-semibold">{titulo}</h1>
+        <div className="flex items-center gap-4">
+          {logoSrc ? (
+            <img
+              src={logoSrc}
+              alt={empresaNombre || "Logo"}
+              className="h-16 w-auto max-w-[100px] object-contain rounded-md"
+            />
+          ) : null}
+          <div>
+            <p className="text-xl font-bold uppercase tracking-wide">
+              {empresaNombre || "LogiTrack"}
+            </p>
+            <h1 className="mt-1 text-lg font-semibold">{titulo}</h1>
+          </div>
         </div>
         <dl className="text-right text-sm">
           <div>

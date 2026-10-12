@@ -1,26 +1,30 @@
 import { ReporteEntregasResponse } from "@/lib/actions/reporte-entregas";
 import { formatNumber } from "@/lib/format";
+import { getEmpresaLogo } from "@/lib/empresa-logo";
 import Image from "next/image";
 
 type Props = {
   data: ReporteEntregasResponse;
   empresaNombre: string | null;
+  empresaCodigo?: string | null;
 };
 
-export function EntregasReporte({ data, empresaNombre }: Props) {
+export function EntregasReporte({ data, empresaNombre, empresaCodigo }: Props) {
   let totalCargados = 0;
   let totalEntregados = 0;
   let totalDevolucion = 0;
+
+  const logoSrc = getEmpresaLogo(empresaCodigo) ?? "/icons/icon-192.png";
 
   return (
     <div className="mx-auto w-full max-w-[800px] bg-white p-8 text-black">
       <div className="mb-6 flex flex-col items-center">
         <Image
-          src="/logo-dark.png"
-          alt="LogiTrack"
+          src={logoSrc}
+          alt={empresaNombre ?? "LogiTrack"}
           width={180}
           height={60}
-          className="mb-4 h-12 w-auto object-contain"
+          className="mb-4 h-16 w-auto object-contain rounded-lg"
         />
         <h1 className="text-xl font-bold uppercase tracking-wide">
           {empresaNombre ?? "EMPRESA"}

@@ -37,6 +37,7 @@ export default async function CargaCamionImprimirPage({
         <CargaCamionReporte
           {...data}
           empresaNombre={empresa?.nombre_empresa ?? null}
+          empresaCodigo={empresa?.codigo_empresa ?? null}
           vaciosPorOrden={vaciosPorOrden}
         />
       ) : (

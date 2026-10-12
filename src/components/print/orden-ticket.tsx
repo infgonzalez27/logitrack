@@ -1,5 +1,6 @@
 import { labelOrdenEstado } from "@/lib/constants";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { getEmpresaLogo } from "@/lib/empresa-logo";
 import type { EstadoCuentaVacioLinea } from "@/lib/ordenes/estado-cuenta-vacios";
 import type { OrdenEstado } from "@/types/database";
 
@@ -32,6 +33,8 @@ export type OrdenTicketData = {
   estadoCuentaVacios?: EstadoCuentaVacioLinea[];
   estadoCuentaProvisional?: boolean;
   empresaNombre?: string | null;
+  empresaCodigo?: string | null;
+  empresaLogoUrl?: string | null;
 };
 
 const LINE = "--------------------------------";
@@ -155,11 +158,22 @@ export function OrdenTicket(data: OrdenTicketData) {
     estadoCuentaVacios,
     estadoCuentaProvisional,
     empresaNombre,
+    empresaCodigo,
+    empresaLogoUrl,
   } = data;
+
+  const logoSrc = empresaLogoUrl ?? getEmpresaLogo(empresaCodigo);
 
   return (
     <article className="lt-ticket" aria-label={`Ticket orden ${correlativo}`}>
       <header className="lt-ticket__header">
+        {logoSrc ? (
+          <img
+            src={logoSrc}
+            alt={empresaNombre || "Logo"}
+            className="lt-ticket__logo"
+          />
+        ) : null}
         <p className="lt-ticket__brand">{empresaNombre || "LogiTrack"}</p>
         <h1 className="lt-ticket__title">ORDEN DE DISTRIBUCIÓN</h1>
         <p className="lt-ticket__big">#{correlativo}</p>

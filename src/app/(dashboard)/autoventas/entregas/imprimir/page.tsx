@@ -40,7 +40,11 @@ export default async function EntregasReporteImprimirPage({
     <div className="lt-carta-page mx-auto max-w-4xl space-y-4 px-2 py-4">
       <CargaPrintControls descarga={false} />
       {data ? (
-        <EntregasReporte data={data} empresaNombre={empresa?.nombre_empresa ?? null} />
+        <EntregasReporte
+          data={data}
+          empresaNombre={empresa?.nombre_empresa ?? null}
+          empresaCodigo={empresa?.codigo_empresa ?? null}
+        />
       ) : (
         <p className="lt-alert-error">
           No se encontró información de entregas para este camión.

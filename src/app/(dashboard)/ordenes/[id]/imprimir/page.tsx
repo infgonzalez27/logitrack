@@ -190,6 +190,7 @@ export default async function OrdenImprimirPage({
             estadoCuentaVacios={estadoCuentaVacios}
             estadoCuentaProvisional={estadoCuentaProvisional}
             empresaNombre={empresa?.nombre_empresa ?? null}
+            empresaCodigo={empresa?.codigo_empresa ?? null}
           />
         </div>
       ))}

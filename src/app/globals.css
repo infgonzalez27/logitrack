@@ -305,6 +305,17 @@ h4 {
   text-align: center;
 }
 
+.lt-ticket__logo {
+  display: block;
+  margin: 0 auto 0.45rem auto;
+  max-width: 75px;
+  max-height: 75px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 0.5rem;
+}
+
 .lt-ticket__brand {
   font-size: 10px;
   font-weight: 700;
@@ -502,6 +513,14 @@ h4 {
 
   .lt-ticket__big {
     font-size: 16px !important;
+  }
+
+  .lt-ticket__logo {
+    max-width: 55mm !important;
+    max-height: 25mm !important;
+    margin: 0 auto 2mm auto !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* Reportes en hoja carta (impresora convencional) */
