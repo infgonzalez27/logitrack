@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,11 @@ import {
   useRouter,
   type Href,
 } from "expo-router";
-import { getOrdenDetalle, type OrdenDetalle } from "@/lib/ordenes";
+import {
+  anularOrdenDistribucion,
+  getOrdenDetalle,
+  type OrdenDetalle,
+} from "@/lib/ordenes";
 import { buildTicketForOrden } from "@/lib/print-orden";
 import {
   getPreferredPrinterMac,
@@ -38,6 +43,7 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
   const [orden, setOrden] = useState<OrdenDetalle | null>(null);
   const [ticketText, setTicketText] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [anulando, setAnulando] = useState(false);
 
   const load = useCallback(
     async (mode: "initial" | "refresh") => {
@@ -61,6 +67,35 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
     },
     [id],
   );
+
+  const onAnular = useCallback(() => {
+    if (!orden) return;
+    Alert.alert(
+      "¿Anular Orden?",
+      `¿Deseas anular la orden #${orden.correlativo}? Se revertirá el inventario y envases asociados. Si posee rendición de cuentas activa, la operación será rechazada.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sí, anular",
+          style: "destructive",
+          onPress: async () => {
+            setAnulando(true);
+            setError(null);
+            setMessage(null);
+            const res = await anularOrdenDistribucion(orden.id);
+            setAnulando(false);
+            if (!res.ok) {
+              setError(res.error);
+              Alert.alert("No se pudo anular", res.error);
+              return;
+            }
+            setMessage("Orden anulada exitosamente.");
+            void load("refresh");
+          },
+        },
+      ],
+    );
+  }, [orden, load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -307,6 +342,18 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
                   icon: "create-outline" as const,
                   variant: "secondary" as const,
                   onPress: onEdit,
+                },
+              ]
+            : []),
+          ...(orden.estado !== "anulada"
+            ? [
+                {
+                  key: "anular",
+                  label: "Anular",
+                  icon: "close-circle-outline" as const,
+                  variant: "danger" as const,
+                  loading: anulando,
+                  onPress: onAnular,
                 },
               ]
             : []),

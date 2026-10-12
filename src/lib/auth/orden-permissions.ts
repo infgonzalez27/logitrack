@@ -22,13 +22,23 @@ export const ORDEN_ESTADOS_VALIDOS: OrdenEstado[] = [
 const TRANSICIONES_UI: Partial<
   Record<OrdenEstado, { next: OrdenEstado; label: string; rpc: string }[]>
 > = {
-  // Crear orden ya deja aprobada (DB); no exponer Aprobar / Anular en UI.
-  borrador: [],
+  borrador: [
+    {
+      next: "anulada",
+      label: "Anular orden",
+      rpc: "anular_orden_distribucion",
+    },
+  ],
   aprobada: [
     {
       next: "en_transito",
       label: "Cargar y despachar",
       rpc: "cargar_inventario_movil",
+    },
+    {
+      next: "anulada",
+      label: "Anular orden",
+      rpc: "anular_orden_distribucion",
     },
   ],
   // Compatibilidad si la BD aún tiene lista_para_carga
@@ -38,17 +48,39 @@ const TRANSICIONES_UI: Partial<
       label: "Cargar y despachar",
       rpc: "cargar_inventario_movil",
     },
+    {
+      next: "anulada",
+      label: "Anular orden",
+      rpc: "anular_orden_distribucion",
+    },
   ],
-  en_transito: [],
+  en_transito: [
+    {
+      next: "anulada",
+      label: "Anular orden",
+      rpc: "anular_orden_distribucion",
+    },
+  ],
   despachada: [
     {
       next: "por_liquidar",
       label: "Aprobar despacho",
       rpc: "aprobar_despacho_orden_distribucion",
     },
+    {
+      next: "anulada",
+      label: "Anular orden",
+      rpc: "anular_orden_distribucion",
+    },
   ],
   devuelta: [],
-  por_liquidar: [],
+  por_liquidar: [
+    {
+      next: "anulada",
+      label: "Anular orden",
+      rpc: "anular_orden_distribucion",
+    },
+  ],
   liquidada: [],
   anulada: [],
 };
@@ -134,11 +166,12 @@ function puedeEjecutarTransicion(
   }
 
   if (estadoDestino === "anulada") {
+    if (estadoActual === "anulada") return false;
     if (APROBADORES.includes(rol)) {
-      return estadoActual === "borrador" || estadoActual === "aprobada" || estadoActual === "lista_para_carga";
+      return true;
     }
-    if (rol === "vendedor" && opts?.esCreador) {
-      return vendedorPuedeAnular(estadoActual);
+    if ((rol === "vendedor" || rol === "despachador") && opts?.esCreador) {
+      return true;
     }
   }
 

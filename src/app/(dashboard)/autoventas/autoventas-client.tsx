@@ -31,6 +31,7 @@ import {
   reversarInventarioMovilAutoVentasAction,
   consultarDescuentoProductoClienteAction,
 } from "@/lib/actions/autoventas";
+import { anularOrdenAction } from "@/lib/actions/ordenes";
 import type {
   ProductoListaRpc,
   ResumenAutoVentaData,
@@ -160,6 +161,35 @@ export function AutoVentasClient({
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
     () => Object.fromEntries(productos.map((p) => [p.id, p])),
   );
+
+  const [ordenParaAnular, setOrdenParaAnular] = useState<{
+    orden_id: string;
+    correlativo: number;
+    cliente_nombre: string;
+  } | null>(null);
+  const [motivoAnular, setMotivoAnular] = useState("");
+  const [anulandoOrden, setAnulandoOrden] = useState(false);
+  const [errorAnular, setErrorAnular] = useState<string | null>(null);
+
+  async function confirmarAnulacionAutoVenta() {
+    if (!ordenParaAnular) return;
+    setAnulandoOrden(true);
+    setErrorAnular(null);
+    const res = await anularOrdenAction(ordenParaAnular.orden_id, motivoAnular);
+    setAnulandoOrden(false);
+    if (res?.error) {
+      setErrorAnular(res.error);
+      return;
+    }
+    setOrdenParaAnular(null);
+    setMotivoAnular("");
+    router.refresh();
+    if (camionId) {
+      void obtenerResumenAutoVentasJornada(camionId).then((r) => {
+        if (r.success && r.data) setResumenRpc(r.data);
+      });
+    }
+  }
 
   const inventarioCamion = useMemo(
     () => inventarioMovil.filter((i) => i.camion_id === camionId),
@@ -885,13 +915,14 @@ export function AutoVentasClient({
                     <th className="px-2 py-2 font-medium">Estado</th>
                     <th className="px-2 py-2 text-right font-medium">USD</th>
                     <th className="px-2 py-2 text-right font-medium">Hora</th>
+                    <th className="px-2 py-2 text-right font-medium">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ventasResumen.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-2 py-6 text-center text-lt-text-muted"
                       >
                         Aún no hay ventas en ruta para este camión hoy.
@@ -911,7 +942,13 @@ export function AutoVentasClient({
                         </td>
                         <td className="px-2 py-2">{o.cliente_nombre || "—"}</td>
                         <td className="px-2 py-2">
-                          <span className="rounded-lg bg-lt-surface-muted px-2 py-0.5 text-xs font-medium">
+                          <span
+                            className={`rounded-lg px-2 py-0.5 text-xs font-medium ${
+                              o.estado === "anulada"
+                                ? "bg-rose-500/10 text-rose-700 dark:text-rose-400"
+                                : "bg-lt-surface-muted text-lt-text"
+                            }`}
+                          >
                             {o.estado}
                           </span>
                         </td>
@@ -924,6 +961,30 @@ export function AutoVentasClient({
                             minute: "2-digit",
                           })}
                         </td>
+                        <td className="px-2 py-2 text-right">
+                          {o.estado !== "anulada" ? (
+                            <Button
+                              type="button"
+                              variant="danger"
+                              className="px-2.5 py-1 text-xs"
+                              onClick={() => {
+                                setErrorAnular(null);
+                                setMotivoAnular("");
+                                setOrdenParaAnular({
+                                  orden_id: o.orden_id,
+                                  correlativo: o.correlativo,
+                                  cliente_nombre: o.cliente_nombre || "",
+                                });
+                              }}
+                            >
+                              Anular
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-lt-text-subtle">
+                              —
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -931,6 +992,60 @@ export function AutoVentasClient({
               </table>
             </div>
           </Card>
+
+          {/* Modal de confirmación para anulación de venta en ruta */}
+          {ordenParaAnular ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+              <div className="w-full max-w-md space-y-4 rounded-2xl border border-lt-border bg-lt-surface p-6 shadow-xl">
+                <h3 className="text-lg font-bold text-lt-text">
+                  ¿Anular Venta en Ruta #{ordenParaAnular.correlativo}?
+                </h3>
+                <p className="text-sm text-lt-text-muted">
+                  Cliente:{" "}
+                  <strong className="text-lt-text">
+                    {ordenParaAnular.cliente_nombre || "—"}
+                  </strong>
+                  <br />
+                  Esta acción devolverá la mercancía al inventario móvil del
+                  camión y revertirá los envases asociados. Si la orden ya posee
+                  cobros en una rendición activa, la operación será bloqueada.
+                </p>
+
+                {errorAnular ? (
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-400">
+                    <strong>Aviso:</strong> {errorAnular}
+                  </div>
+                ) : null}
+
+                <Input
+                  label="Motivo de anulación (opcional)"
+                  placeholder="Ej: Error en cantidades o cliente canceló"
+                  value={motivoAnular}
+                  onChange={(e) => setMotivoAnular(e.target.value)}
+                  disabled={anulandoOrden}
+                />
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={anulandoOrden}
+                    onClick={() => setOrdenParaAnular(null)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    disabled={anulandoOrden}
+                    onClick={() => void confirmarAnulacionAutoVenta()}
+                  >
+                    {anulandoOrden ? "Anulando..." : "Confirmar anulación"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

@@ -25,6 +25,7 @@ import {
   type InventarioMovilRow,
   type ResumenAutoVentaData,
 } from "@/lib/autoventas";
+import { anularOrdenDistribucion } from "@/lib/ordenes";
 import { listarProductos, type ProductoLista } from "@/lib/productos";
 import { formatMoney } from "@/lib/format";
 import { ErrorText, PrimaryButton, SectionTitle } from "@/components/ui";
@@ -258,6 +259,37 @@ export default function AutoventasScreen() {
     await loadResumen(camionId);
   }
 
+  const onAnularVenta = useCallback(
+    (ordenId: string, correlativo: number, clienteNombre: string) => {
+      Alert.alert(
+        "¿Anular Venta en Ruta?",
+        `¿Deseas anular la orden #${correlativo} de ${clienteNombre || "cliente"}? La mercancía volverá al inventario del camión y se revertirán los envases.`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Sí, anular",
+            style: "destructive",
+            onPress: async () => {
+              setSaving(true);
+              setError(null);
+              setMessage(null);
+              const res = await anularOrdenDistribucion(ordenId);
+              setSaving(false);
+              if (!res.ok) {
+                setError(res.error);
+                Alert.alert("No se pudo anular", res.error);
+                return;
+              }
+              setMessage("Venta anulada y stock devuelto al camión.");
+              await loadResumen(camionId);
+            },
+          },
+        ],
+      );
+    },
+    [camionId, loadResumen],
+  );
+
   if (picking) {
     return (
       <View style={styles.root}>
@@ -390,12 +422,46 @@ export default function AutoventasScreen() {
               ) : (
                 (resumen?.ventas ?? []).map((v) => (
                   <View key={v.orden_id} style={styles.card}>
-                    <Text style={styles.name}>
-                      #{v.correlativo} · {v.cliente_nombre}
-                    </Text>
-                    <Text style={styles.meta}>
-                      ${formatMoney(v.total_recaudar_usd)} · {v.estado}
-                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={styles.name}>
+                          #{v.correlativo} · {v.cliente_nombre}
+                        </Text>
+                        <Text style={styles.meta}>
+                          ${formatMoney(v.total_recaudar_usd)} · {v.estado}
+                        </Text>
+                      </View>
+                      {v.estado !== "anulada" ? (
+                        <Pressable
+                          style={styles.anularBtn}
+                          disabled={saving}
+                          onPress={() =>
+                            onAnularVenta(
+                              v.orden_id,
+                              v.correlativo,
+                              v.cliente_nombre,
+                            )
+                          }
+                        >
+                          <Text style={styles.anularBtnText}>Anular</Text>
+                        </Pressable>
+                      ) : (
+                        <Text
+                          style={[
+                            styles.meta,
+                            { color: "#C62828", fontWeight: "600" },
+                          ]}
+                        >
+                          Anulada
+                        </Text>
+                      )}
+                    </View>
                   </View>
                 ))
               )}
@@ -663,5 +729,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     color: "#0B3A5C",
+  },
+  anularBtn: {
+    backgroundColor: "#FEE4E2",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FECDCA",
+  },
+  anularBtnText: {
+    color: "#D92D20",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

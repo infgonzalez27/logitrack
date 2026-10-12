@@ -559,3 +559,113 @@ export async function aprobarOrdenDistribucion(
   }
   return { ok: true, message: env?.message };
 }
+
+/**
+ * Anula orden vía RPC `anular_orden_distribucion`.
+ * Revierte inventario y contenedores. Falla si ya tiene rendición/cobros.
+ */
+export async function anularOrdenDistribucion(
+  ordenId: string,
+  motivo?: string,
+): Promise<{
+  ok: true;
+  message?: string;
+  data?: unknown;
+} | { ok: false; error: string; code?: string }> {
+  const { data, error } = await supabase.rpc("anular_orden_distribucion", {
+    p_orden_id: ordenId,
+    p_motivo: motivo?.trim() || null,
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  const env = data as {
+    success?: boolean;
+    message?: string;
+    data?: unknown;
+    error?: { code?: string; message?: string } | null;
+  } | null;
+
+  if (env && env.success === false) {
+    return {
+      ok: false,
+      code: env.error?.code,
+      error:
+        env.error?.message ??
+        env.message ??
+        "No se pudo anular la orden de distribución.",
+    };
+  }
+
+  return { ok: true, message: env?.message, data: env?.data };
+}
+
+/**
+ * Consulta el inventario disponible de un camión vía RPC `obtener_inventario_disponible_movil`.
+ */
+export async function obtenerInventarioDisponibleMovil(camionId: string): Promise<
+  | {
+      ok: true;
+      data: {
+        camion_id: string;
+        placa: string;
+        marca_modelo: string;
+        estado_camion: string;
+        inventario: Array<{
+          producto_id: string;
+          codigo: string;
+          nombre: string;
+          imagen_path: string | null;
+          precio_lista1: number;
+          cantidad_cargada: number;
+          cantidad_entregada: number;
+          cantidad_disponible: number;
+        }>;
+      };
+    }
+  | { ok: false; error: string }
+> {
+  const { data, error } = await supabase.rpc(
+    "obtener_inventario_disponible_movil",
+    {
+      p_camion_id: camionId,
+    },
+  );
+
+  if (error) return { ok: false, error: error.message };
+
+  const env = data as {
+    success?: boolean;
+    data?: {
+      camion_id: string;
+      placa: string;
+      marca_modelo: string;
+      estado_camion: string;
+      inventario: Array<{
+        producto_id: string;
+        codigo: string;
+        nombre: string;
+        imagen_path: string | null;
+        precio_lista1: number;
+        cantidad_cargada: number;
+        cantidad_entregada: number;
+        cantidad_disponible: number;
+      }>;
+    };
+    error?: { message?: string } | null;
+  } | null;
+
+  if (env && env.success === false) {
+    return {
+      ok: false,
+      error: env.error?.message ?? "Error consultando inventario disponible",
+    };
+  }
+
+  if (!env?.data) {
+    return { ok: false, error: "Datos de inventario no disponibles" };
+  }
+
+  return { ok: true, data: env.data };
+}
+

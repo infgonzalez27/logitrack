@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { isRpcSuccess, rpcFailMessage, unwrapRpcData } from "./rpc";
 import { parseEnvasesResumen, type EnvaseResumenVenta } from "./envases-venta";
+export { obtenerInventarioDisponibleMovil } from "./ordenes";
 
 export type ResumenAutoVentaItem = {
   producto_id: string;

@@ -278,6 +278,7 @@ export async function createOrdenAction(input: {
 export async function updateOrdenEstadoAction(
   ordenId: string,
   estado: OrdenEstado,
+  motivo?: string,
 ) {
   const ordenIdTrim = ordenId?.trim();
   if (!ordenIdTrim) {
@@ -387,15 +388,21 @@ export async function updateOrdenEstadoAction(
       };
     }
   } else if (estado === "anulada") {
-    // DB-006
+    // DB-006 / Parche 20261012114500
     const response = await callDbProcedure<{
       orden_id: string;
       nuevo_estado: string;
-    }>("anular_orden_distribucion", { p_orden_id: ordenIdTrim });
+    }>("anular_orden_distribucion", {
+      p_orden_id: ordenIdTrim,
+      p_motivo: motivo?.trim() || null,
+    });
 
     if (!response.success) {
       return {
-        error: rpcErrorMessage(response, "No se pudo anular la orden."),
+        error: rpcErrorMessage(
+          response,
+          response.error?.message || "No se pudo anular la orden.",
+        ),
         code: response.error?.code,
       };
     }
@@ -407,6 +414,48 @@ export async function updateOrdenEstadoAction(
 
   revalidatePath("/ordenes");
   revalidatePath(`/ordenes/${ordenIdTrim}`);
+  revalidatePath("/autoventas");
+  return { success: true };
+}
+
+/**
+ * Acción dedicada para anular una orden de distribución con motivo opcional.
+ * Válida reversión atómica de inventario (móvil o almacén) y envases.
+ */
+export async function anularOrdenAction(ordenId: string, motivo?: string) {
+  const ordenIdTrim = ordenId?.trim();
+  if (!ordenIdTrim || !isUuid(ordenIdTrim)) {
+    return { error: "ID de orden inválido." };
+  }
+
+  const user = await getSessionUser();
+  if (!user) {
+    return { error: "No autenticado." };
+  }
+
+  const response = await callDbProcedure<{
+    orden_id: string;
+    correlativo?: number;
+    estado_anterior?: string;
+    estado_nuevo?: string;
+  }>("anular_orden_distribucion", {
+    p_orden_id: ordenIdTrim,
+    p_motivo: motivo?.trim() || null,
+  });
+
+  if (!response.success) {
+    return {
+      error: rpcErrorMessage(
+        response,
+        response.error?.message || "No se pudo anular la orden.",
+      ),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/ordenes");
+  revalidatePath(`/ordenes/${ordenIdTrim}`);
+  revalidatePath("/autoventas");
   return { success: true };
 }
 

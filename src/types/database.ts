@@ -899,8 +899,62 @@ export interface Database {
         Returns: Record<string, unknown>;
       };
       anular_orden_distribucion: {
-        Args: { p_orden_id: string };
-        Returns: Record<string, unknown>;
+        Args: { p_orden_id: string; p_motivo?: string | null };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data?: {
+            orden_id: string;
+            correlativo: number;
+            estado_anterior: string;
+            estado_nuevo: string;
+          } | null;
+          error?: { code: string; message: string } | null;
+        };
+      };
+      editar_orden_distribucion: {
+        Args: {
+          p_orden_id: string;
+          p_productos_json: Array<{
+            producto_id: string;
+            cantidad: number;
+            valor_unitario_usd?: number;
+          }>;
+          p_contenedores_json?: Array<{
+            contenedor_id: string;
+            cantidad_retirada: number;
+          }>;
+          p_observaciones?: string | null;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data?: Record<string, unknown> | null;
+          error?: { code: string; message: string } | null;
+        };
+      };
+      obtener_inventario_disponible_movil: {
+        Args: { p_camion_id: string };
+        Returns: {
+          success: boolean;
+          data?: {
+            camion_id: string;
+            placa: string;
+            marca_modelo: string;
+            estado_camion: string;
+            inventario: Array<{
+              producto_id: string;
+              codigo: string;
+              nombre: string;
+              imagen_path: string | null;
+              precio_lista1: number;
+              cantidad_cargada: number;
+              cantidad_entregada: number;
+              cantidad_disponible: number;
+            }>;
+          } | null;
+          error?: { code: string; message: string } | null;
+        };
       };
       actualizar_estado_orden_distribucion: {
         Args: {
