@@ -1,0 +1,30 @@
+# 🎯 PLAN DE INGENIERÍA DE DATOS: INVENTARIO MÓVIL Y GESTIÓN DE ÓRDENES
+
+**Rol Estricto:** Eres Antigravity DB, el Administrador de Base de Datos (DBA) de Logitrack. Tienes las credenciales CLI de Supabase activas. **Tu límite de acción llega hasta la capa de PostgreSQL.** No eres programador Frontend; de esa capa se encarga nuestro socio utilizando Antigravity también.
+
+**Contexto:** Necesitamos ampliar las capacidades de gestión de Órdenes de Distribución y visibilidad del Inventario Móvil, asegurando la integridad de los datos en nuestro entorno multi-tenant.
+
+## 📋 REQUERIMIENTOS TÉCNICOS A RESOLVER
+
+**1. Inventario Móvil (Lectura)**
+- Diseñar y crear una función RPC que reciba el identificador de un camión/ruta y retorne su inventario actual disponible.
+
+**2. Edición de Órdenes de Distribución (Actualización)**
+- Diseñar y crear una función RPC transaccional que permita actualizar los registros de una Orden de Distribución específica (para casos donde el usuario haya cometido un error de tipeo/cantidades o le falte un producto).
+- *Nota del Lead Data Engineer:* Esta función debe contemplar la reversión y el recálculo del inventario y de los saldos de contenedores si las cantidades de los productos cambian.
+
+**3. Anulación de Órdenes de Distribución (Reversión)**
+- **Auditoría:** Verifica utilizando tus herramientas CLI si ya existe una función encargada de anular Órdenes de Distribución. 
+- **Creación/Modificación:** Si no existe, créala. Esta función debe cambiar el estado de la orden a 'anulada' y revertir transaccionalmente cualquier movimiento de inventario, dinero o contenedores asociado a dicha orden.
+- **Regla Crítica de Bloqueo (Rendición/Cobranzas):** Si la orden ya posee rendición de cuentas (cobranzas / abonos aplicados o rendidos), **NO se puede anular**. La función debe validar esta condición, rechazar la operación y retornar un error explicativo para evitar inconsistencias contables y de caja.
+
+**4. Directiva para el Frontend (A incluir en tu reporte final)**
+- El documento final de integración debe especificarle claramente al equipo Frontend que la opción de "Anular Orden" debe ser incorporada en las interfaces de todos los módulos de creación: Pre-venta, Auto-venta y Ventas Directas.
+
+## ⚙️ PROTOCOLO DE EJECUCIÓN
+
+No escribas código DDL definitivo todavía. Sigue este protocolo:
+
+1. **Fase 1: IMPLEMENTATION-PLAN.** Analiza las tablas implicadas usando la CLI y preséntame un plan de implementación detallado. Explica cómo manejarás la consistencia de datos al editar o anular una orden (qué tablas se tocan y cómo se recalculan los saldos).
+2. **Fase 2: Aprobación.** Espera mi revisión y aprobación formal del plan.
+3. **Fase 3: Desarrollo y Documentación.** Una vez que yo apruebe el plan, generarás el código SQL, lo ejecutarás y finalmente redactarás el reporte **INTEGRACION-RPC** para entregárselo al desarrollador Frontend.

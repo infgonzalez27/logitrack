@@ -1,3 +1,5 @@
+DROP FUNCTION IF EXISTS public.crear_venta_directa_almacen(UUID, UUID, TEXT, NUMERIC, JSONB, JSONB);
+
 CREATE OR REPLACE FUNCTION public.crear_venta_directa_almacen(
       p_cliente_id UUID,
       p_vendedor_id UUID,
@@ -289,10 +291,9 @@ CREATE OR REPLACE FUNCTION public.crear_venta_directa_almacen(
   END;
   $$;
   
-  REVOKE ALL ON FUNCTION public.crear_venta_directa_almacen(UUID, UUID, TEXT, NUMERIC, JSONB, JSONB) FROM PUBLIC;
-  REVOKE ALL ON FUNCTION public.crear_venta_directa_almacen(UUID, UUID, TEXT, NUMERIC, JSONB, JSONB) FROM anon;
-  GRANT EXECUTE ON FUNCTION public.crear_venta_directa_almacen(UUID, UUID, TEXT, NUMERIC, JSONB, JSONB) TO 
-authenticated, service_role;
+  REVOKE ALL ON FUNCTION public.crear_venta_directa_almacen(UUID, UUID, TEXT, NUMERIC, JSONB, JSONB, BOOLEAN) FROM PUBLIC;
+  REVOKE ALL ON FUNCTION public.crear_venta_directa_almacen(UUID, UUID, TEXT, NUMERIC, JSONB, JSONB, BOOLEAN) FROM anon;
+  GRANT EXECUTE ON FUNCTION public.crear_venta_directa_almacen(UUID, UUID, TEXT, NUMERIC, JSONB, JSONB, BOOLEAN) TO authenticated, service_role;
   
   -- La funciÃ³n creada por Antigravity fuera de tenant_patches queda sin uso.
   DROP FUNCTION IF EXISTS public.rpc_create_od_and_process_containers(UUID, UUID, UUID, NUMERIC, JSONB, UUID, UUID, 

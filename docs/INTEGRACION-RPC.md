@@ -185,3 +185,134 @@ const { data, error } = await supabase.rpc('crear_orden_distribucion', {
   p_es_cortesia: true // NUEVO: Enviar en true si es de cortesía
 });
 ```
+
+---
+
+## Nuevas Funciones RPC: Inventario Móvil, Anulación y Edición de Órdenes (Parche `20261012114500`)
+
+### 1. Consulta de Inventario Móvil Disponible (`obtener_inventario_disponible_movil`)
+
+Permite a la aplicación móvil consultar en tiempo real los productos y existencias disponibles en el camión para prevenir ventas de productos agotados.
+
+- **Nombre RPC:** `obtener_inventario_disponible_movil`
+- **Parámetros:**
+  - `p_camion_id` (`UUID`, requerido): Identificador único del camión.
+
+**Ejemplo de llamada en Frontend (TypeScript):**
+```typescript
+const { data, error } = await supabase.rpc('obtener_inventario_disponible_movil', {
+  p_camion_id: 'UUID-DEL-CAMION'
+});
+```
+
+**Estructura de Respuesta JSON (Contrato):**
+```json
+{
+  "success": true,
+  "data": {
+    "camion_id": "42618991-...",
+    "placa": "A12BC34",
+    "marca_modelo": "Iveco Daily",
+    "estado_camion": "en_ruta",
+    "inventario": [
+      {
+        "producto_id": "3333-444...",
+        "codigo": "B20L",
+        "nombre": "Botellón 20L",
+        "imagen_path": "/productos/botellon.webp",
+        "precio_lista1": 5.00,
+        "cantidad_cargada": 100,
+        "cantidad_entregada": 20,
+        "cantidad_disponible": 80
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+---
+
+### 2. Anulación de Órdenes de Distribución (`anular_orden_distribucion`)
+
+Reversión atómica y transaccional de una orden. Restituye el inventario correspondiente (del camión en Auto-Venta / ruta, o del almacén central en Venta Directa), revierte los saldos de envases dejados/retirados al cliente y pasa el estado a `'anulada'`.
+
+- **Nombre RPC:** `anular_orden_distribucion`
+- **Parámetros:**
+  - `p_orden_id` (`UUID`, requerido): Identificador de la orden a anular.
+  - `p_motivo` (`TEXT`, opcional): Razón o justificativo de la anulación.
+
+> [!CAUTION]
+> **REGLA CRÍTICA DE BLOQUEO (Rendición/Cobranzas):**
+> Si la orden ya cuenta con una rendición de cuentas activa (cobro registrado), la función **rechaza la anulación** con el código de error `ORDEN_CON_RENDICION`. Para poder anular la orden, el gerente debe reversar primero la rendición correspondiente.
+
+**Ejemplo de llamada en Frontend (TypeScript):**
+```typescript
+const { data, error } = await supabase.rpc('anular_orden_distribucion', {
+  p_orden_id: 'UUID-DE-LA-ORDEN',
+  p_motivo: 'Cliente canceló el pedido por error en cantidades'
+});
+
+if (error || !data?.success) {
+  // Manejo de error (ej: si tiene cobranzas/rendición activa)
+  alert(data?.error?.message || error?.message);
+}
+```
+
+**Estructura de Respuesta JSON (Contrato):**
+```json
+{
+  "success": true,
+  "message": "Orden de distribución anulada exitosamente y saldos revertidos.",
+  "data": {
+    "orden_id": "uuid-de-la-orden",
+    "correlativo": 1054,
+    "estado_anterior": "por_liquidar",
+    "estado_nuevo": "anulada"
+  },
+  "error": null
+}
+```
+
+---
+
+### 3. Edición de Órdenes de Distribución (`editar_orden_distribucion`)
+
+Permite corregir productos, cantidades o envases de una orden de distribución existente, recalculando de forma transparente y transaccional el inventario disponible y el saldo de envases del cliente.
+
+- **Nombre RPC:** `editar_orden_distribucion`
+- **Parámetros:**
+  - `p_orden_id` (`UUID`, requerido): Identificador de la orden a editar.
+  - `p_productos_json` (`JSONB`, requerido): Lista de productos actualizada `[{ producto_id, cantidad, valor_unitario_usd? }]`.
+  - `p_contenedores_json` (`JSONB`, opcional): Lista de envases retirados `[{ contenedor_id, cantidad_retirada }]`.
+  - `p_observaciones` (`TEXT`, opcional): Notas de la modificación.
+
+> [!WARNING]
+> Al igual que la anulación, **NO se permite editar una orden que ya tenga rendición de cuentas o cobranzas asociadas**, ya que alteraría los importes cobrados en caja.
+
+**Ejemplo de llamada en Frontend (TypeScript):**
+```typescript
+const { data, error } = await supabase.rpc('editar_orden_distribucion', {
+  p_orden_id: 'UUID-DE-LA-ORDEN',
+  p_productos_json: [
+    { producto_id: 'uuid-prod-1', cantidad: 10 }
+  ],
+  p_contenedores_json: [
+    { contenedor_id: 'uuid-tipo-contenedor', cantidad_retirada: 5 }
+  ],
+  p_observaciones: 'Corrección de cantidades solicitadas'
+});
+```
+
+---
+
+### 📢 DIRECTIVA OBLIGATORIA PARA EL EQUIPO FRONTEND
+
+1. **Incorporación del botón "Anular Orden":**
+   - Debe habilitarse e incorporarse la acción interactiva de **"Anular Orden"** en las interfaces y pantallas de consulta/detalle de los tres módulos de emisión:
+     - **Pre-venta** (Web y Móvil)
+     - **Auto-venta** (App Móvil y Web)
+     - **Ventas Directas de Almacén** (Web y Móvil)
+2. **Validación de UI:**
+   - Si la orden está en estado `'anulada'`, el botón debe estar deshabilitado o no mostrarse.
+   - Si la API responde con error `ORDEN_CON_RENDICION`, la UI debe mostrar claramente el mensaje indicándole al usuario que la orden ya posee cobros registrados y no puede anularse sin reversar la rendición.
