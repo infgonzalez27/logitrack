@@ -26,6 +26,7 @@ import {
   type ResumenAutoVentaData,
 } from "@/lib/autoventas";
 import { anularOrdenDistribucion } from "@/lib/ordenes";
+import { getEmpresaActual } from "@/lib/supabase";
 import { listarProductos, type ProductoLista } from "@/lib/productos";
 import { formatMoney } from "@/lib/format";
 import { ErrorText, PrimaryButton, SectionTitle } from "@/components/ui";
@@ -173,6 +174,7 @@ export default function AutoventasScreen() {
       return;
     }
     setMessage(res.message || "Inventario cargado.");
+    const emp = getEmpresaActual();
     setUltimaCarga({
       camionLabel: camiones.find((c) => c.id === camionId)?.placa ?? "-",
       fecha: new Date().toISOString(),
@@ -181,6 +183,8 @@ export default function AutoventasScreen() {
         producto: productosVistos[i.producto_id]?.nombre ?? "Producto",
         cantidad: i.cantidad_solicitada,
       })),
+      empresaNombre: emp?.nombre,
+      empresaCodigo: emp?.codigo,
     });
     setVerComprobante(false);
     setCantidadesCarga({});
@@ -191,7 +195,10 @@ export default function AutoventasScreen() {
     if (!data) return;
     setImprimiendo(true);
     setError(null);
-    const res = await printToPreferredPrinter(buildCargaCamionTicketText(data));
+    const res = await printToPreferredPrinter(
+      buildCargaCamionTicketText(data),
+      { codigoEmpresa: data.empresaCodigo },
+    );
     setImprimiendo(false);
     if (!res.ok) {
       setError(res.error);
@@ -241,6 +248,7 @@ export default function AutoventasScreen() {
       return;
     }
     setMessage(res.message || "Sobrante devuelto al almacén.");
+    const empDescarga = getEmpresaActual();
     setUltimaDescarga(
       res.detalle.length
         ? {
@@ -252,6 +260,8 @@ export default function AutoventasScreen() {
               producto: d.nombre,
               cantidad: d.cantidad,
             })),
+            empresaNombre: empDescarga?.nombre,
+            empresaCodigo: empDescarga?.codigo,
           }
         : null,
     );

@@ -31,6 +31,8 @@ export type CargaCamionTicketData = {
   lineas: CargaCamionLinea[];
   /** `descarga`: sobrante devuelto al almacén. */
   tipo?: "carga" | "descarga";
+  empresaNombre?: string;
+  empresaCodigo?: string;
 };
 
 export type OrdenTicketData = {
@@ -48,6 +50,8 @@ export type OrdenTicketData = {
   totalRecaudar: number;
   estadoCuentaVacios?: LineaEstadoCuentaVacios[];
   estadoCuentaProvisional?: boolean;
+  empresaNombre?: string;
+  empresaCodigo?: string;
 };
 
 const LINE = "--------------------------------";
@@ -119,7 +123,7 @@ export function buildCargaCamionTicketText(data: CargaCamionTicketData): string 
   const total = data.lineas.reduce((s, l) => s + l.cantidad, 0);
   const descarga = data.tipo === "descarga";
   const lines: string[] = [
-    "LogiTrack",
+    data.empresaNombre || "LogiTrack",
     descarga ? "DESCARGA DE CAMION" : "CARGA DE CAMION",
     `Camion: ${data.camionLabel}`,
     formatDate(data.fecha),
@@ -154,7 +158,7 @@ export function buildCargaCamionTicketText(data: CargaCamionTicketData): string 
 
 export function buildOrdenTicketText(data: OrdenTicketData): string {
   const lines: string[] = [
-    "LogiTrack",
+    data.empresaNombre || "LogiTrack",
     "ORDEN DE DISTRIBUCION",
     `#${data.correlativo}`,
     data.facturaOrigen,

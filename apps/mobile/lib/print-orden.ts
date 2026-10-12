@@ -7,6 +7,7 @@ import {
   resolveDespachadorNombre,
   type OrdenDetalle,
 } from "./ordenes";
+import { getEmpresaActual } from "./supabase";
 
 /** Arma el texto ESC/POS de una orden (líneas + vacíos). */
 export async function buildTicketForOrden(
@@ -65,6 +66,8 @@ export async function buildTicketForOrden(
     totalRecaudar: total,
     estadoCuentaVacios: vacios.lineas,
     estadoCuentaProvisional: vacios.provisional,
+    empresaNombre: getEmpresaActual()?.nombre,
+    empresaCodigo: getEmpresaActual()?.codigo,
   };
 
   return {

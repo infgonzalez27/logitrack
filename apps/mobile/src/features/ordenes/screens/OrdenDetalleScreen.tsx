@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -23,6 +24,8 @@ import {
   getPreferredPrinterMac,
   printTextToBluetooth,
 } from "@/lib/bluetooth-print";
+import { getEmpresaLogoSource } from "@/lib/logos-raster";
+import { getEmpresaActual } from "@/lib/supabase";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { StatusBadge } from "@/src/ui/StatusBadge";
@@ -44,6 +47,7 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
   const [ticketText, setTicketText] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [anulando, setAnulando] = useState(false);
+  const logoSource = useMemo(() => getEmpresaLogoSource(getEmpresaActual()?.codigo), []);
 
   const load = useCallback(
     async (mode: "initial" | "refresh") => {
@@ -318,6 +322,13 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
               },
             ]}
           >
+            {logoSource ? (
+              <Image
+                source={logoSource}
+                style={styles.previewLogo}
+                resizeMode="contain"
+              />
+            ) : null}
             <Text style={[styles.previewText, { color: theme.colors.text }]}>
               {ticketText}
             </Text>
@@ -418,5 +429,12 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
     fontSize: 12,
     lineHeight: 18,
+  },
+  previewLogo: {
+    width: 80,
+    height: 80,
+    alignSelf: "center",
+    marginBottom: 8,
+    borderRadius: 8,
   },
 });

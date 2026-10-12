@@ -26,7 +26,7 @@ const central = createClient(
   },
 );
 
-export type EmpresaActual = { id: string; nombre: string };
+export type EmpresaActual = { id: string; codigo: string; nombre: string };
 
 let dataClient: SupabaseClient = central;
 let empresaActual: EmpresaActual | null = null;
@@ -42,6 +42,7 @@ function sameHost(a: string, b: string): boolean {
 
 type EmpresaRow = {
   id: string;
+  codigo_empresa: string | null;
   nombre_empresa: string | null;
   activo: boolean;
   supabase_url: string | null;
@@ -73,7 +74,7 @@ export async function resolveEmpresa(
     ? { data: null, error: null }
     : await central
         .from("usuarios_empresas")
-        .select("empresas(id, nombre_empresa, activo, supabase_url, supabase_anon_key)")
+        .select("empresas(id, codigo_empresa, nombre_empresa, activo, supabase_url, supabase_anon_key)")
         .eq("user_id", userId)
         .order("created_at", { ascending: true })
         .limit(1)
@@ -101,10 +102,18 @@ export async function resolveEmpresa(
   }
 
   empresaActual = empresa
-    ? { id: empresa.id, nombre: empresa.nombre_empresa ?? "" }
+    ? {
+        id: empresa.id,
+        codigo: empresa.codigo_empresa ?? "",
+        nombre: empresa.nombre_empresa ?? "",
+      }
     : null;
   resueltoPara = userId;
   return { ok: true, empresa: empresaActual };
+}
+
+export function getEmpresaActual(): EmpresaActual | null {
+  return empresaActual;
 }
 
 export function clearEmpresa(): void {

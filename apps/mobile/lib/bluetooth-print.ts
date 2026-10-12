@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PermissionsAndroid, Platform } from "react-native";
 import { buildEscPosBytes, toThermalText } from "./ticket";
 import { buildRasterEscPosChunks, type AnchoPapel } from "./escpos-raster";
+import { getEmpresaLogoRasterChunks } from "./logos-raster";
+import { getEmpresaActual } from "./supabase";
 
 const PRINTER_KEY = "logitrack.print.preferred_mac";
 const CONFIG_KEY_PREFIX = "logitrack.print.config.";
@@ -188,6 +190,7 @@ export async function listBondedPrinters(): Promise<
 /** Imprime en la impresora guardada; `sinImpresora` si aún no se configuró. */
 export async function printToPreferredPrinter(
   texto: string,
+  opts?: { cut?: boolean; codigoEmpresa?: string | null },
 ): Promise<
   { ok: true } | { ok: false; error: string; sinImpresora?: boolean }
 > {
@@ -199,13 +202,13 @@ export async function printToPreferredPrinter(
       error: "No hay impresora guardada. Configúrala en Impresora.",
     };
   }
-  return printTextToBluetooth(mac, texto);
+  return printTextToBluetooth(mac, texto, opts);
 }
 
 export async function printTextToBluetooth(
   address: string,
   texto: string,
-  opts?: { cut?: boolean },
+  opts?: { cut?: boolean; codigoEmpresa?: string | null },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const bt = getBluetoothModule();
   if (!bt) {
@@ -227,6 +230,18 @@ export async function printTextToBluetooth(
 
     const config = await getPrinterConfig(address);
     const connection = await bt.connectToDevice(address);
+
+    // Si la empresa tiene logo registrado, se envía como gráfico raster ESC/POS en la cabecera
+    const codigo = opts?.codigoEmpresa ?? getEmpresaActual()?.codigo;
+    const logoChunks = getEmpresaLogoRasterChunks(codigo, config.ancho);
+    if (logoChunks.length) {
+      for (const chunk of logoChunks) {
+        await connection.write(toLatin1(chunk), "latin1");
+        await esperar(25);
+      }
+      await esperar(40);
+    }
+
     // Sin encoding la librería convierte el string a UTF-8 y altera bytes ≥ 0x80.
     if (config.modo === "imagen") {
       const chunks = buildRasterEscPosChunks(toThermalText(texto), {
@@ -241,7 +256,7 @@ export async function printTextToBluetooth(
       await connection.write(toLatin1(buildEscPosBytes(texto, opts)), "latin1");
     }
     // Cerrar el socket enseguida puede descartar lo que aún no salió por RFCOMM.
-    await esperar(config.modo === "imagen" ? 1500 : 800);
+    await esperar(config.modo === "imagen" || logoChunks.length ? 1500 : 800);
     try {
       await connection.disconnect();
     } catch {
