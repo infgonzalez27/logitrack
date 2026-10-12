@@ -4,7 +4,15 @@ import { Button } from "@/components/ui/button";
 import { ClientesListaClient } from "./clientes-lista-client";
 import type { Cliente } from "@/types/database";
 
-export default async function ClientesPage() {
+export default async function ClientesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ q?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const initialQuery =
+    typeof resolvedParams.q === "string" ? resolvedParams.q : "";
+
   const supabase = await createClient();
   const { data: clientes } = await supabase
     .from("clientes")
@@ -18,7 +26,10 @@ export default async function ClientesPage() {
         description="Módulo 1 — Entidades maestras"
         action={<Button href="/clientes/nuevo">Nuevo cliente</Button>}
       />
-      <ClientesListaClient clientes={(clientes ?? []) as Cliente[]} />
+      <ClientesListaClient
+        clientes={(clientes ?? []) as Cliente[]}
+        initialQuery={initialQuery}
+      />
     </div>
   );
 }
