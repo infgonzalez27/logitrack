@@ -234,15 +234,38 @@ export async function createInventarioMovilAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const { supabase } = await getUserId();
-  const { error } = await supabase.from("inventario_movil").insert({
-    camion_id: String(formData.get("camion_id")),
-    producto_id: String(formData.get("producto_id")),
-    cantidad_cargada: Number(formData.get("cantidad_cargada") || 0),
-    cantidad_entregada: 0,
-    cantidad_devolucion: 0,
-  });
+  const camionId = String(formData.get("camion_id"));
+  const productoId = String(formData.get("producto_id"));
+  const cantidadCargada = Number(formData.get("cantidad_cargada") || 0);
 
-  if (error) return { error: error.message };
+  const { data: existente } = await supabase
+    .from("inventario_movil")
+    .select("id, cantidad_cargada")
+    .eq("camion_id", camionId)
+    .eq("producto_id", productoId)
+    .maybeSingle();
+
+  if (existente) {
+    const { error } = await supabase
+      .from("inventario_movil")
+      .update({
+        cantidad_cargada:
+          Number(existente.cantidad_cargada || 0) + cantidadCargada,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existente.id);
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase.from("inventario_movil").insert({
+      camion_id: camionId,
+      producto_id: productoId,
+      cantidad_cargada: cantidadCargada,
+      cantidad_entregada: 0,
+      cantidad_devolucion: 0,
+    });
+    if (error) return { error: error.message };
+  }
+
   revalidatePath("/inventario-movil");
   return { success: true };
 }

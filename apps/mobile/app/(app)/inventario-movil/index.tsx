@@ -111,7 +111,10 @@ export default function InventarioMovilScreen() {
               <Text style={styles.meta}>Camión {item.camion_placa}</Text>
               <Text style={styles.meta}>
                 Cargada {formatNumber(item.cantidad_cargada)} · Entregada{" "}
-                {formatNumber(item.cantidad_entregada)}
+                {formatNumber(item.cantidad_entregada)} · Disponible{" "}
+                {formatNumber(
+                  Math.max(0, item.cantidad_cargada - item.cantidad_entregada),
+                )}
               </Text>
             </View>
           )}
