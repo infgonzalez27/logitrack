@@ -143,8 +143,8 @@ BEGIN
         );
     END IF;
 
-    -- REGAL CRÍTICA: Bloquear si tiene rendición de cuentas activa
-    SELECT dro.id, rc.id AS rendicion_id, rc.estado AS estado_rendicion, rc.correlativo
+    -- REGLA CRÍTICA: Bloquear si tiene rendición de cuentas activa
+    SELECT dro.id, rc.id AS rendicion_id, rc.estado AS estado_rendicion
     INTO v_rendicion_activa
     FROM public.detalle_rendicion_ordenes dro
     JOIN public.rendiciones_cuentas rc ON dro.rendicion_id = rc.id
@@ -158,7 +158,7 @@ BEGIN
             'data', NULL,
             'error', jsonb_build_object(
                 'code', 'ORDEN_CON_RENDICION',
-                'message', 'No se puede anular la orden porque tiene una rendición de cuentas asociada activa (Rendición #' || COALESCE(v_rendicion_activa.correlativo::text, '') || ', Estado: ' || v_rendicion_activa.estado_rendicion || '). Debe reversar la rendición antes de anular la orden.'
+                'message', 'No se puede anular la orden porque tiene una rendición de cuentas asociada activa (ID: ' || COALESCE(SUBSTRING(v_rendicion_activa.rendicion_id::text, 1, 8), '') || ', Estado: ' || v_rendicion_activa.estado_rendicion || '). Debe reversar la rendición antes de anular la orden.'
             )
         );
     END IF;
@@ -224,21 +224,13 @@ BEGIN
             -- Si la orden sumó entregados y restó retirados, la reversión resta entregados y suma retirados
             v_nuevo_saldo := GREATEST(0, v_saldo_act - v_mov_cont.total_entregados + v_mov_cont.total_retirados);
 
-            INSERT INTO public.movimientos_contenedores (
-                cliente_id, orden_id, contenedor_id, cantidad_entregada,
-                cantidad_retirada, creado_por, saldo_anterior, saldo_actual
-            ) VALUES (
-                v_orden.cliente_id, p_orden_id, v_mov_cont.contenedor_id,
-                (v_mov_cont.total_entregados * -1),
-                (v_mov_cont.total_retirados * -1),
-                auth.uid(), v_saldo_act, v_nuevo_saldo
-            );
-
             UPDATE public.saldo_contenedores_clientes
             SET saldo_pendiente = v_nuevo_saldo,
                 updated_at = NOW()
             WHERE cliente_id = v_orden.cliente_id AND contenedor_id = v_mov_cont.contenedor_id;
         END LOOP;
+
+        DELETE FROM public.movimientos_contenedores WHERE orden_id = p_orden_id;
     END IF;
 
     -- Actualizar estado de la orden a 'anulada'
@@ -336,8 +328,8 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'data', NULL, 'error', jsonb_build_object('code', 'ORDEN_NO_EDITABLE', 'message', 'No se puede editar una orden en estado ' || v_orden.estado || '.'));
     END IF;
 
-    -- REGAL CRÍTICA: Bloquear si tiene rendición de cuentas activa
-    SELECT dro.id, rc.id AS rendicion_id, rc.estado AS estado_rendicion, rc.correlativo
+    -- REGLA CRÍTICA: Bloquear si tiene rendición de cuentas activa
+    SELECT dro.id, rc.id AS rendicion_id, rc.estado AS estado_rendicion
     INTO v_rendicion_activa
     FROM public.detalle_rendicion_ordenes dro
     JOIN public.rendiciones_cuentas rc ON dro.rendicion_id = rc.id
@@ -351,7 +343,7 @@ BEGIN
             'data', NULL,
             'error', jsonb_build_object(
                 'code', 'ORDEN_CON_RENDICION',
-                'message', 'No se puede editar la orden porque ya tiene rendición de cuentas o cobranzas aplicadas (Rendición #' || COALESCE(v_rendicion_activa.correlativo::text, '') || ').'
+                'message', 'No se puede editar la orden porque ya tiene rendición de cuentas o cobranzas aplicadas (ID: ' || COALESCE(SUBSTRING(v_rendicion_activa.rendicion_id::text, 1, 8), '') || ', Estado: ' || v_rendicion_activa.estado_rendicion || ').'
             )
         );
     END IF;
