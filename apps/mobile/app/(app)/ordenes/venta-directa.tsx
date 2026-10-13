@@ -161,7 +161,7 @@ export default function VentaDirectaScreen() {
         .join("\n\n"),
       [
         {
-          text: "Ver orden",
+          text: "Imprimir / Ver orden",
           onPress: () =>
             router.replace({ pathname: "/(app)/ordenes/[id]", params: { id: res.venta.ordenId } }),
         },

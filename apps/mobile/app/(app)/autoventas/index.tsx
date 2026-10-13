@@ -439,38 +439,55 @@ export default function AutoventasScreen() {
                         alignItems: "center",
                       }}
                     >
-                      <View style={{ flex: 1, marginRight: 8 }}>
+                      <Pressable
+                        style={{ flex: 1, marginRight: 8 }}
+                        onPress={() =>
+                          router.push(`/(app)/ordenes/${v.orden_id}` as Href)
+                        }
+                      >
                         <Text style={styles.name}>
                           #{v.correlativo} · {v.cliente_nombre}
                         </Text>
                         <Text style={styles.meta}>
                           ${formatMoney(v.total_recaudar_usd)} · {v.estado}
                         </Text>
-                      </View>
-                      {v.estado !== "anulada" ? (
+                      </Pressable>
+
+                      <View style={{ flexDirection: "row", alignItems: "center" }}>
                         <Pressable
-                          style={styles.anularBtn}
-                          disabled={saving}
+                          style={styles.verBtn}
                           onPress={() =>
-                            onAnularVenta(
-                              v.orden_id,
-                              v.correlativo,
-                              v.cliente_nombre,
-                            )
+                            router.push(`/(app)/ordenes/${v.orden_id}` as Href)
                           }
                         >
-                          <Text style={styles.anularBtnText}>Anular</Text>
+                          <Text style={styles.verBtnText}>Ticket</Text>
                         </Pressable>
-                      ) : (
-                        <Text
-                          style={[
-                            styles.meta,
-                            { color: "#C62828", fontWeight: "600" },
-                          ]}
-                        >
-                          Anulada
-                        </Text>
-                      )}
+
+                        {v.estado !== "anulada" ? (
+                          <Pressable
+                            style={styles.anularBtn}
+                            disabled={saving}
+                            onPress={() =>
+                              onAnularVenta(
+                                v.orden_id,
+                                v.correlativo,
+                                v.cliente_nombre,
+                              )
+                            }
+                          >
+                            <Text style={styles.anularBtnText}>Anular</Text>
+                          </Pressable>
+                        ) : (
+                          <Text
+                            style={[
+                              styles.meta,
+                              { color: "#C62828", fontWeight: "600" },
+                            ]}
+                          >
+                            Anulada
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </View>
                 ))
@@ -750,6 +767,20 @@ const styles = StyleSheet.create({
   },
   anularBtnText: {
     color: "#D92D20",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  verBtn: {
+    backgroundColor: "#F0F9FF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#B9E6FE",
+    marginRight: 6,
+  },
+  verBtnText: {
+    color: "#026AA2",
     fontSize: 12,
     fontWeight: "600",
   },

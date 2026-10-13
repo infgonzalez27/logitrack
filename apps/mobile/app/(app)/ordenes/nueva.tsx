@@ -196,7 +196,7 @@ export default function NuevaOrdenScreen() {
     }
     Alert.alert("Orden creada", `Se creó la orden correctamente.`, [
       {
-        text: "Ver detalle",
+        text: "Imprimir / Ver orden",
         onPress: () =>
           router.replace({
             pathname: "/(app)/ordenes/[id]",
