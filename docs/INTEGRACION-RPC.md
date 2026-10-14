@@ -175,14 +175,23 @@ Si se envía `p_es_cortesia: true` desde la App Móvil o panel Web, el sistema a
 
 *Nota del Frontend*: Ya se implementó el Checkbox / Switch visual en el formulario de Venta Directa (tanto en el Dashboard Web (`venta-directa-form.tsx`) como en la App Móvil (`venta-directa.tsx`)). Al marcarse la opción de cortesía, la interfaz visualiza automáticamente los montos y totales en `$0.00` de forma simultánea, enviando el booleano `p_es_cortesia` a este RPC.
 
+> [!IMPORTANT]
+> **Envío explícito de `p_es_cortesia` y Limpieza de Sobrecargas (Parche `20261013192500`):**
+> Al llamar a `crear_orden_distribucion`, el Frontend debe enviar SIEMPRE de forma explícita `p_es_cortesia: boolean` (ej. `p_es_cortesia: input.esCortesia ?? false`).
+> Mediante el parche `20261013192500_drop_overload_crear_orden_distribucion.sql` se eliminó la sobrecarga obsoleta huérfana de 7 parámetros que provocaba el error en PostgreSQL:
+> *"Could not choose the best candidate function between: public.crear_orden_distribucion(7 params) and public.crear_orden_distribucion(8 params)"*.
+
 **Uso en Frontend (TypeScript):**
 ```typescript
 const { data, error } = await supabase.rpc('crear_orden_distribucion', {
   p_vendedor_id: '...',
   p_cliente_id: '...',
   p_camion_id: '...',
+  p_tasa_cambio: tasaCambio ?? null,
   p_productos_json: [...],
-  p_es_cortesia: true // NUEVO: Enviar en true si es de cortesía
+  p_despachador_id: cliente.despachador_id,
+  p_id_ruta: cliente.id_ruta,
+  p_es_cortesia: esCortesia ?? false // OBLIGATORIO: enviar true o false explícito
 });
 ```
 

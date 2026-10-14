@@ -424,6 +424,7 @@ export async function crearOrdenDistribucion(input: {
   fechaDespachoIso: string;
   lineas: LineaCrearOrden[];
   tasaCambio?: number | null;
+  esCortesia?: boolean;
 }): Promise<{ ok: true; ordenId: string } | { ok: false; error: string }> {
   const { data: cliente, error: clienteError } = await supabase
     .from("clientes")
@@ -456,6 +457,7 @@ export async function crearOrdenDistribucion(input: {
     p_productos_json: productosJson,
     p_despachador_id: cliente.despachador_id,
     p_id_ruta: cliente.id_ruta,
+    p_es_cortesia: input.esCortesia ?? false,
   });
 
   if (error) return { ok: false, error: error.message };

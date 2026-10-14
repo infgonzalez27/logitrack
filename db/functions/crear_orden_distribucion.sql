@@ -1,3 +1,6 @@
+DROP FUNCTION IF EXISTS public.crear_orden_distribucion(UUID, UUID, UUID, NUMERIC, JSONB, UUID, UUID);
+DROP FUNCTION IF EXISTS public.crear_orden_distribucion(UUID, UUID, UUID, UUID, JSONB);
+
 CREATE OR REPLACE FUNCTION public.crear_orden_distribucion(
     p_vendedor_id UUID,
     p_cliente_id UUID,
