@@ -151,6 +151,9 @@ GRANT EXECUTE ON FUNCTION public.lt_asentar_contenedores_orden(UUID, JSONB) TO s
 -- ------------------------------------------------------------------------------
 -- 3. anular_orden_distribucion (Reversión transaccional limpia)
 -- ------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.anular_orden_distribucion(uuid);
+DROP FUNCTION IF EXISTS public.anular_orden_distribucion(uuid, text);
+
 CREATE OR REPLACE FUNCTION public.anular_orden_distribucion(
     p_orden_id UUID,
     p_motivo TEXT DEFAULT NULL
