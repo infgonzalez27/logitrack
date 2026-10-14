@@ -182,16 +182,9 @@ export default function VentaDirectaScreen() {
         );
       }
     }
-    const excedidos = envases.filter(
-      (e) => (Number(retirados[e.contenedor_id]) || 0) > e.saldo + (entregados[e.contenedor_id] ?? 0),
-    );
     Alert.alert(
       "Registrar venta",
-      `${cliente.razon_social} por $${formatMoney(total)}. Se descontará del almacén.${
-        excedidos.length
-          ? `\n\nLos retirados superan el saldo en: ${excedidos.map((e) => e.nombre).join(", ")}. El saldo quedará en 0.`
-          : ""
-      }\n\n¿Continuar?`,
+      `${cliente.razon_social} por $${formatMoney(total)}. Se descontará del almacén.\n\n¿Continuar?`,
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Registrar", onPress: () => void registrar() },
@@ -339,7 +332,7 @@ export default function VentaDirectaScreen() {
             envases.map((e) => {
               const ent = entregados[e.contenedor_id] ?? 0;
               const ret = Number(retirados[e.contenedor_id]) || 0;
-              const saldoActual = Math.max(0, e.saldo + ent - ret);
+              const saldoActual = e.saldo + ent - ret;
               return (
                 <View key={e.contenedor_id} style={styles.linea}>
                   <Text style={styles.lineaTitulo}>

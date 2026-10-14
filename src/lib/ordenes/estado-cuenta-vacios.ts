@@ -408,13 +408,11 @@ export async function lineasDesdeMovimientosOrden(input: {
         };
       }
       const saldoHoy = saldoTabla.get(contenedor_id);
-      const saldo_nuevo = Math.max(
-        0,
+      const saldo_nuevo =
         saldoHoy != null
           ? saldoHoy - (netoPosterior.get(contenedor_id) ?? 0)
-          : v.entregado - v.retirado,
-      );
-      const saldo_anterior = Math.max(0, saldo_nuevo - v.entregado + v.retirado);
+          : v.entregado - v.retirado;
+      const saldo_anterior = saldo_nuevo - v.entregado + v.retirado;
       return {
         contenedor_id,
         nombre,
@@ -424,7 +422,7 @@ export async function lineasDesdeMovimientosOrden(input: {
         saldo_nuevo,
       };
     })
-    .filter((l) => l.entregado > 0 || l.retirado > 0 || l.saldo_nuevo > 0)
+    .filter((l) => l.entregado > 0 || l.retirado > 0 || l.saldo_nuevo !== 0)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 

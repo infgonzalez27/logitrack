@@ -43,7 +43,7 @@ export function EnvasesVentaFields({
           const ent = entregados[t.id] ?? 0;
           const ret = Number(retirados[t.id]) || 0;
           const excede = ret > saldo + ent;
-          const final = Math.max(0, saldo + ent - ret);
+          const final = saldo + ent - ret;
           return (
             <div
               key={t.id}
@@ -80,17 +80,12 @@ export function EnvasesVentaFields({
                 <p className="text-xs text-lt-text-muted">Saldo actual</p>
                 <p
                   className={`text-lg font-bold tabular-nums ${
-                    excede ? "text-lt-danger-text" : "text-lt-text"
+                    final < 0 ? "text-lt-success-text" : "text-lt-text"
                   }`}
                 >
                   {formatNumber(final)}
                 </p>
               </div>
-              {excede ? (
-                <p className="text-xs text-lt-danger-text sm:col-span-12">
-                  Los retirados superan el saldo del cliente más lo entregado; el saldo quedará en 0.
-                </p>
-              ) : null}
             </div>
           );
         })

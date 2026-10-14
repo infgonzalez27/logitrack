@@ -312,23 +312,7 @@ export default function AutoventaNuevaScreen() {
       setError("Agrega al menos un producto del inventario móvil.");
       return;
     }
-    const excedidos = envases.filter(
-      (e) => aEntero(e.retirados) > e.saldo + (entregados[e.contenedor_id] ?? 0),
-    );
-    if (excedidos.length) {
-      const detalle = excedidos
-        .map((e) => `${e.nombre}: saldo ${e.saldo}, retira ${aEntero(e.retirados)}`)
-        .join("\n");
-      Alert.alert(
-        "Retiro mayor al saldo",
-        `El cliente tiene menos envases pendientes de los que se retiran:\n${detalle}\n\nSi continúas, el saldo quedará en 0.`,
-        [
-          { text: "Revisar", style: "cancel" },
-          { text: "Registrar igual", onPress: () => void registrar() },
-        ],
-      );
-      return;
-    }
+    // Se permite registrar la venta con saldo negativo (saldo a favor del cliente en envases)
     void registrar();
   };
 
@@ -589,7 +573,7 @@ export default function AutoventaNuevaScreen() {
               ) : (
                 envases.map((e) => {
                   const ent = entregados[e.contenedor_id] ?? 0;
-                  const saldoFinal = Math.max(0, e.saldo + ent - aEntero(e.retirados));
+                  const saldoFinal = e.saldo + ent - aEntero(e.retirados);
                   return (
                     <View key={e.contenedor_id} style={styles.card}>
                       <Text style={styles.name}>

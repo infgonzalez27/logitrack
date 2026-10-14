@@ -436,17 +436,6 @@ export function AutoVentasClient({
         };
       })
       .filter((c) => c.entregados > 0 || c.retirados > 0);
-    const excedidos = contenedoresJson.filter((c) => c.excede);
-    if (
-      excedidos.length &&
-      !confirm(
-        `Los retirados superan el saldo del cliente en: ${excedidos
-          .map((c) => c.nombre)
-          .join(", ")}. El saldo final quedará en 0. ¿Continuar?`,
-      )
-    ) {
-      return;
-    }
 
     startTransition(async () => {
       const res = await registrarVentaEnRutaAction({
