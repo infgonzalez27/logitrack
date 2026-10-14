@@ -359,3 +359,80 @@ Permite registrar entradas o salidas excepcionales (obsequios, consumo interno, 
   "error": null
 }
 ```
+
+---
+
+### 5. Resumen de Jornada de AutoVentas (`retorna_resumen_autoventas_jornada`)
+
+#### Directiva para el Frontend (Web y Móvil):
+Al consultar el **Resumen de Jornada** en el módulo de AutoVentas, es **indispensable enviar el parámetro `p_fecha`** si se desea consultar cualquier día específico o una jornada histórica.
+
+#### Contexto del Comportamiento:
+La función en Supabase tiene como firma `public.retorna_resumen_autoventas_jornada(p_camion_id uuid, p_fecha date DEFAULT CURRENT_DATE)`.
+- Si **no** se envía `p_fecha` (o se envía `null`/`undefined`), PostgreSQL aplica automáticamente `CURRENT_DATE` (la fecha de hoy).
+- Si el usuario en el frontend selecciona una fecha anterior en el calendario (por ejemplo, `2026-10-07`) pero el frontend no envía el parámetro a Supabase, la base de datos consulta la fecha actual y la pantalla muestra 0 ventas.
+
+#### Parámetros de la RPC:
+- `p_camion_id` (`UUID`, Requerido): Identificador del camión asignado a la autoventa.
+- `p_fecha` (`DATE`, Recomendado / Obligatorio para fechas pasadas): Fecha de la jornada en formato `'YYYY-MM-DD'`. Si se omite, toma la fecha del día actual.
+
+#### Ejemplo de Invocación en Frontend (TypeScript / Supabase Client):
+```typescript
+const { data, error } = await supabase.rpc('retorna_resumen_autoventas_jornada', {
+  p_camion_id: camionId,
+  p_fecha: fechaSeleccionada // ej: '2026-10-07'
+});
+```
+
+#### En Server Actions de Next.js (`@/lib/actions/autoventas`):
+```typescript
+// En autoventas-client.tsx o hook de consulta:
+useEffect(() => {
+  if (!camionId) return;
+  setCargandoResumen(true);
+  void obtenerResumenAutoVentasJornada(camionId, fechaSeleccionada).then((res) => {
+    setCargandoResumen(false);
+    if (res.success && res.data) {
+      setResumenRpc(res.data);
+    }
+  });
+}, [camionId, fechaSeleccionada]); // Recordar incluir fechaSeleccionada en las dependencias
+```
+
+#### Estructura de Respuesta del RPC:
+```json
+{
+  "success": true,
+  "data": {
+    "camion_id": "1a921046-7e7a-429b-bbb0-f242b32071a6",
+    "fecha": "2026-10-07",
+    "total_ordenes_autoventa": 4,
+    "total_facturado_usd": 3959.5,
+    "total_facturado_bs": 3460076.38,
+    "inventario_movil": [
+      {
+        "producto_id": "uuid-producto",
+        "codigo": "PRD-01",
+        "nombre": "Agua 20L",
+        "cantidad_cargada": 100,
+        "cantidad_entregada": 100,
+        "cantidad_disponible": 0
+      }
+    ],
+    "ventas": [
+      {
+        "orden_id": "6f605f38-3243-4ef0-8a1b-6c1f3d020156",
+        "correlativo": 15,
+        "factura_origen_numero": "AV-000015",
+        "cliente_nombre": "INVERSIONES PUERTO LA CRUZ",
+        "estado": "por_liquidar",
+        "total_recaudar_usd": 692.7,
+        "total_recaudar_bs": 605327.67,
+        "created_at": "2026-10-07T19:09:50.051346+00:00"
+      }
+    ]
+  },
+  "error": null
+}
+```
+
