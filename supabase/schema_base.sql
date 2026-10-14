@@ -6237,7 +6237,7 @@ BEGIN
         FROM public.saldo_contenedores_clientes s
         JOIN public.clientes c ON s.cliente_id = c.id
         JOIN public.tipos_contenedores t ON s.contenedor_id = t.id
-        WHERE s.saldo_pendiente > 0;
+        WHERE s.saldo_pendiente <> 0;
 
     ELSE
         -- Retornar el saldo del cliente especificado.
@@ -7988,8 +7988,7 @@ CREATE TABLE IF NOT EXISTS "public"."saldo_contenedores_clientes" (
     "cliente_id" "uuid" NOT NULL,
     "contenedor_id" "uuid" NOT NULL,
     "saldo_pendiente" integer DEFAULT 0 NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "saldo_contenedores_clientes_saldo_pendiente_check" CHECK (("saldo_pendiente" >= 0))
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 

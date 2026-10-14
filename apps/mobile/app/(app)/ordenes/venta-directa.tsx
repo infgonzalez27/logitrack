@@ -362,7 +362,7 @@ export default function VentaDirectaScreen() {
                       />
                     </View>
                   </View>
-                  <Text style={[styles.subtotal, ret > e.saldo + ent && styles.excede]}>
+                  <Text style={[styles.subtotal, saldoActual < 0 && styles.aFavor]}>
                     Saldo actual: {formatNumber(saldoActual)}
                   </Text>
                 </View>
@@ -416,6 +416,7 @@ const styles = StyleSheet.create({
   quitar: { color: "#C62828", fontWeight: "600" },
   hint: { color: "#5B6B7C", fontSize: 13, marginBottom: 6 },
   excede: { color: "#C62828", fontWeight: "600" },
+  aFavor: { color: "#2E7D32", fontWeight: "700" },
   linea: {
     backgroundColor: "#fff",
     borderRadius: 12,

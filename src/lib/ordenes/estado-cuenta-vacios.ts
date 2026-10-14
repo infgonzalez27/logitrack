@@ -402,9 +402,9 @@ export async function lineasDesdeMovimientosOrden(input: {
           contenedor_id,
           nombre,
           entregado: v.entregado,
-          saldo_anterior: Math.max(0, v.saldoAnterior),
+          saldo_anterior: v.saldoAnterior,
           retirado: v.retirado,
-          saldo_nuevo: Math.max(0, v.saldoActual),
+          saldo_nuevo: v.saldoActual,
         };
       }
       const saldoHoy = saldoTabla.get(contenedor_id);
@@ -462,9 +462,9 @@ export async function lineasDesdeContenedoresResumen(
         contenedor_id,
         nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
         entregado: Number(r.cantidad_entregada) || 0,
-        saldo_anterior: Math.max(0, Number(r.saldo_anterior) || 0),
+        saldo_anterior: Number(r.saldo_anterior) || 0,
         retirado: Number(r.cantidad_retirada) || 0,
-        saldo_nuevo: Math.max(0, Number(r.saldo_actualizado) || 0),
+        saldo_nuevo: Number(r.saldo_actualizado) || 0,
       };
     })
     .filter((l) => l.contenedor_id)

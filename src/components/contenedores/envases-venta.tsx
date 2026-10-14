@@ -42,7 +42,6 @@ export function EnvasesVentaFields({
           const saldo = saldos?.[t.id] ?? 0;
           const ent = entregados[t.id] ?? 0;
           const ret = Number(retirados[t.id]) || 0;
-          const excede = ret > saldo + ent;
           const final = saldo + ent - ret;
           return (
             <div

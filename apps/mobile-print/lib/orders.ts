@@ -315,13 +315,10 @@ export async function fetchEstadoCuentaVacios(orden: OrdenDetalle): Promise<{
       nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
       entregado: v.entregado,
       retirado: v.retirado,
-      saldo_nuevo: Math.max(
-        0,
-        saldoTabla.get(contenedor_id) ??
-          Math.max(0, v.entregado - v.retirado),
-      ),
+      saldo_nuevo:
+        saldoTabla.get(contenedor_id) ?? (v.entregado - v.retirado),
     }))
-    .filter((l) => l.entregado > 0 || l.retirado > 0 || l.saldo_nuevo > 0)
+    .filter((l) => l.entregado > 0 || l.retirado > 0 || l.saldo_nuevo !== 0)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
   return { lineas, provisional: false };
