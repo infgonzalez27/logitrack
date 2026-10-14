@@ -322,6 +322,8 @@ const { data, error } = await supabase.rpc('editar_orden_distribucion', {
      - **Pre-venta** (Web y Móvil)
      - **Auto-venta** (App Móvil y Web)
      - **Ventas Directas de Almacén** (Web y Móvil)
-2. **Validación de UI:**
-   - Si la orden está en estado `'anulada'`, el botón debe estar deshabilitado o no mostrarse.
-   - Si la API responde con error `ORDEN_CON_RENDICION`, la UI debe mostrar claramente el mensaje indicándole al usuario que la orden ya posee cobros registrados y no puede anularse sin reversar la rendición.
+3. **Soporte de Saldo de Contenedores a Favor del Cliente (`saldo < 0`):**
+   - Anteriormente existía una restricción `CHECK (saldo_pendiente >= 0)` y un truncamiento `GREATEST(0, ...)` que impedía que un cliente pudiera entregar más envases de los que tenía pendientes.
+   - **Comportamiento Actual:** Se eliminaron las restricciones CHECK y truncamientos. Si a un cliente se le retiran más envases de los que debía, su saldo ahora reflejará un valor **negativo (`< 0`)**, lo cual indica un saldo de envases **a favor del cliente**.
+   - **Frontend Web & Mobile:** La función `retorna_saldo_contenedores_segun_clientes` y los listados de estado de cuenta filtran ahora por `saldo_pendiente <> 0` (no solo `> 0`), mostrando saldos tanto adeudados (> 0) como saldos a favor (< 0).
+   - **Anulación de Órdenes:** Se eliminó la inserción errónea de movimientos con cantidades negativas. Ahora `anular_orden_distribucion` revierte el saldo del cliente matemáticamente y purga los registros de `movimientos_contenedores` correspondientes a la orden, evitando violaciones de restricciones CHECK.

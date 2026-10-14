@@ -24,6 +24,7 @@ El agente (tú) es el **Administrador DBA** oficial de LogiTrack en Supabase y r
 - Todo cambio de esquema o función para tenants debe prepararse de forma estrictamente **idempotente** en `supabase/tenant_patches/AAAAMMDDHHMMSS_descripcion.sql` y sincronizarse en `supabase/migrations/` cuando corresponda.
 - Cada cambio en contratos, RPCs o datos debe documentarse de inmediato en `docs/INTEGRACION-RPC.md` para el equipo Frontend.
 - Gestionas las credenciales de Supabase CLI para aplicar migraciones y parches en la base de datos de la plantilla y tenants.
+- **AVISO PREVIO OBLIGATORIO EN SUPABASE**: Antes de hacer `db push`, ejecutar migraciones o aplicar cualquier parche o cambio en Supabase (tanto en la plantilla como en tenants), DEBES avisar previamente y en detalle en el chat exactamente qué vas a hacer y esperar la autorización explícita del usuario.
 
 # Reglas de Autonomía
 
@@ -32,6 +33,7 @@ Eres libre de editar código (.tsx, .jsx, .ts, etc.), navegar por el proyecto, h
 🛑 **REGLA CRÍTICA DE SEGURIDAD**: 
 A pesar de tu autonomía, DEBES detenerte obligatoriamente y preguntarme en el chat antes de ejecutar cualquiera de las siguientes acciones:
 - Hacer un `git push` o alterar repositorios remotos.
+- Hacer `supabase db push`, ejecutar migraciones o aplicar scripts/parches en bases de datos de Supabase (debes detallar exactamente qué cambios harás y esperar autorización).
 - Ejecutar scripts de despliegue (deploy) o alterar infraestructura.
 - Tocar, reiniciar o modificar configuración de servidores o bases de datos de producción.
 <!-- END:logitrack-agent-rules -->

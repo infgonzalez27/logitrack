@@ -385,27 +385,24 @@ export async function fetchEstadoCuentaVacios(orden: OrdenDetalle): Promise<{
         return {
           contenedor_id,
           nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
-          saldo_anterior: Math.max(0, v.saldoAnterior),
+          saldo_anterior: v.saldoAnterior,
           entregado: v.entregado,
           retirado: v.retirado,
-          saldo_nuevo: Math.max(0, v.saldoActual),
+          saldo_nuevo: v.saldoActual,
         };
       }
-      const saldoNuevo = Math.max(
-        0,
-        saldoTabla.get(contenedor_id) ??
-          Math.max(0, v.entregado - v.retirado),
-      );
+      const saldoNuevo =
+        saldoTabla.get(contenedor_id) ?? (v.entregado - v.retirado);
       return {
         contenedor_id,
         nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
-        saldo_anterior: Math.max(0, saldoNuevo - v.entregado + v.retirado),
+        saldo_anterior: saldoNuevo - v.entregado + v.retirado,
         entregado: v.entregado,
         retirado: v.retirado,
         saldo_nuevo: saldoNuevo,
       };
     })
-    .filter((l) => l.entregado > 0 || l.retirado > 0 || l.saldo_nuevo > 0)
+    .filter((l) => l.entregado > 0 || l.retirado > 0 || l.saldo_nuevo !== 0)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
   return { lineas, provisional: false };

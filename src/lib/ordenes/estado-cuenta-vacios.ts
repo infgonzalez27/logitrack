@@ -232,15 +232,12 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
       // Con asiento al despachar, el saldo consolidado ya refleja retiros.
       const saldo_nuevo =
         asentadoEnDespacho || radarAprobado
-          ? Math.max(
-              0,
-              saldoTabla != null
-                ? saldoTabla
-                : saldoMov != null
-                  ? saldoMov
-                  : saldo_anterior,
-            )
-          : Math.max(0, saldo_anterior - (retiradoDetalle - retiradoMov));
+          ? saldoTabla != null
+            ? saldoTabla
+            : saldoMov != null
+              ? saldoMov
+              : saldo_anterior
+          : saldo_anterior - (retiradoDetalle - retiradoMov);
 
       // Antes del asiento, saldo_anterior en movimientos incluye la entrega;
       // para mostrar "saldo anterior" visual = saldo_nuevo + retirado - entregado
@@ -250,16 +247,16 @@ export async function retornaEstadoCuentaVaciosOrden(input: {
         contenedor_id,
         nombre: nombres.get(contenedor_id) ?? contenedor_id.slice(0, 8),
         entregado,
-        saldo_anterior: Math.max(0, saldo_anterior),
+        saldo_anterior,
         retirado,
         saldo_nuevo,
       };
     })
     .filter(
       (l) =>
-        l.saldo_anterior > 0 ||
+        l.saldo_anterior !== 0 ||
         l.retirado > 0 ||
-        l.saldo_nuevo > 0 ||
+        l.saldo_nuevo !== 0 ||
         l.entregado > 0 ||
         nombres.has(l.contenedor_id),
     )
