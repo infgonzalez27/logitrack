@@ -16,6 +16,9 @@ ALTER TABLE public.movimientos_contenedores
 ALTER TABLE public.movimientos_contenedores
     DROP CONSTRAINT IF EXISTS movimientos_contenedores_cantidad_retirada_check;
 
+ALTER TABLE public.ordenes_distribucion
+    ADD COLUMN IF NOT EXISTS observaciones TEXT;
+
 -- ------------------------------------------------------------------------------
 -- 2. lt_asentar_contenedores_orden (Permitiendo saldo actual < 0)
 -- ------------------------------------------------------------------------------
