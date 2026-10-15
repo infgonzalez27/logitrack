@@ -328,3 +328,34 @@ const { data, error } = await supabase.rpc('editar_orden_distribucion', {
    - **Frontend Web & Mobile:** Se eliminaron todas las alertas y mensajes restrictivos (ej. *"Los retirados superan el saldo del cliente más lo entregado; el saldo quedará en 0"*) y los `Math.max(0, ...)` en estado de cuenta y tickets de impresión. Ahora los saldos a favor se muestran en verde o con su valor negativo real (`-X`).
    - **Listados de Envases:** La función `retorna_saldo_contenedores_segun_clientes` y los listados de estado de cuenta filtran ahora por `saldo_pendiente <> 0` (no solo `> 0`), mostrando saldos tanto adeudados (> 0) como saldos a favor (< 0).
    - **Anulación de Órdenes:** Se eliminó la inserción errónea de movimientos con cantidades negativas. Ahora `anular_orden_distribucion` revierte el saldo del cliente matemáticamente y purga los registros de `movimientos_contenedores` correspondientes a la orden, evitando violaciones de restricciones CHECK.
+
+---
+
+### 4. Movimientos Especiales de Inventario (`registrar_movimiento_inventario_especial`)
+
+Permite registrar entradas o salidas excepcionales (obsequios, consumo interno, eventos, mermas/daños o ajustes) afectando tanto el **Almacén** central como el **Inventario Móvil** (camiones).
+
+- **Nombre RPC:** `registrar_movimiento_inventario_especial`
+- **Parámetros:**
+  - `p_tipo_movimiento` (`VARCHAR`): `'ENTRADA'` o `'SALIDA'`.
+  - `p_concepto` (`VARCHAR`): Concepto (`'OBSEQUIO'`, `'CONSUMO_INTERNO'`, `'EVENTOS'`, `'MERMA'`, `'AJUSTE'`, u otro texto).
+  - `p_tipo_inventario_afectado` (`VARCHAR`): `'ALMACEN'` o `'MOVIL'`.
+  - `p_id_referencia_movil` (`UUID`, requerido si es `'MOVIL'`): Identificador del camión (`camion_id`).
+  - `p_id_cliente` (`UUID`, opcional): Identificador del cliente asociado al movimiento especial (si aplica).
+  - `p_observaciones` (`TEXT`, opcional): Notas adicionales.
+  - `p_detalles` (`JSONB`): Array de productos `[{ producto_id: UUID, cantidad: number, costo_unitario: number }]`.
+
+**Corrección en BD para `MOVIL`:**
+- En la tabla `public.inventario_movil`, el stock disponible se calcula como `(cantidad_cargada - cantidad_entregada)`. Se corrigió la consulta que erróneamente buscaba columnas inexistentes (`radar_id` y `cantidad_disponible`), vinculando ahora directamente por `camion_id` y actualizando `cantidad_cargada`.
+
+**Respuesta estándar:**
+```json
+{
+  "success": true,
+  "message": "Movimiento registrado exitosamente",
+  "data": {
+    "movimiento_id": "uuid-del-movimiento"
+  },
+  "error": null
+}
+```
