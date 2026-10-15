@@ -1,4 +1,4 @@
-﻿-- Deploy INTEGRACION-RPC descuentos: crear_orden + radar metadatos
+-- Deploy INTEGRACION-RPC descuentos: crear_orden + radar metadatos
 -- 4. Actualizar función RPC crear_orden_distribucion
 CREATE OR REPLACE FUNCTION public.crear_orden_distribucion(
     p_vendedor_id UUID,

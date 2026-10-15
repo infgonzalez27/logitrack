@@ -1,4 +1,4 @@
-﻿-- ==============================================================================
+-- ==============================================================================
 -- Parche Idempotente: Fix column rc.correlativo y check constraint movimientos_contenedores
 -- Fecha: 2026-10-13 18:05:00
 -- Descripción: 1. public.rendiciones_cuentas no tiene columna correlativo (su PK es id uuid).

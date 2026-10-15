@@ -1,4 +1,4 @@
-﻿-- Migración: Funciones RPC de Saldo e Historial de Movimientos de Contenedores por Cliente
+-- Migración: Funciones RPC de Saldo e Historial de Movimientos de Contenedores por Cliente
 
 -- 1. Función: retorna_saldo_contenedores_segun_clientes
 CREATE OR REPLACE FUNCTION public.retorna_saldo_contenedores_segun_clientes(

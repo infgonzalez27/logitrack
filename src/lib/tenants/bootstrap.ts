@@ -65,7 +65,8 @@ async function runSqlFile(projectRef: string, fileName: string): Promise<void> {
   if (!fs.existsSync(sqlPath)) {
     throw new Error(`Falta supabase/${fileName} en el deploy.`);
   }
-  await runProjectSql(projectRef, fs.readFileSync(sqlPath, "utf8"));
+  const sql = fs.readFileSync(sqlPath, "utf8").replace(/^\uFEFF/, "");
+  await runProjectSql(projectRef, sql);
 }
 
 /** Cada parche debe ser idempotente: se re-aplican todos en cada sincronización. */
@@ -80,7 +81,10 @@ async function runTenantPatches(projectRef: string): Promise<void> {
     .sort();
   for (const file of files) {
     try {
-      await runProjectSql(projectRef, fs.readFileSync(path.join(dir, file), "utf8"));
+      const sql = fs
+        .readFileSync(path.join(dir, file), "utf8")
+        .replace(/^\uFEFF/, "");
+      await runProjectSql(projectRef, sql);
     } catch (err) {
       throw new Error(
         `Falló el parche ${file} en ${projectRef}: ${err instanceof Error ? err.message : String(err)}`,

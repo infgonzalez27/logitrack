@@ -1,4 +1,4 @@
-﻿-- Migraci├│n: M├│dulo de Reporte de Formas de Pago por Rango de Fechas (Rendici├│n de Cuentas)
+-- Migraci├│n: M├│dulo de Reporte de Formas de Pago por Rango de Fechas (Rendici├│n de Cuentas)
 
 -- 1. Agregar columna es_bancario a la tabla public.fpagos
 ALTER TABLE public.fpagos 

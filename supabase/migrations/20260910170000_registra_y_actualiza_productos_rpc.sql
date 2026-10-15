@@ -1,4 +1,4 @@
-﻿-- Migraci├│n: Crear RPC registra_nuevo_producto_retorna_id y actualizar RPC actualizar_registro_productos_segun_id
+-- Migraci├│n: Crear RPC registra_nuevo_producto_retorna_id y actualizar RPC actualizar_registro_productos_segun_id
 
 -- 1. Funci├│n para registrar nuevo producto y retornar su ID
 CREATE OR REPLACE FUNCTION public.registra_nuevo_producto_retorna_id(
