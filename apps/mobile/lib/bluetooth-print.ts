@@ -222,6 +222,7 @@ export async function printTextToBluetooth(
   const perms = await ensureBluetoothPermissions();
   if (!perms.ok) return perms;
 
+  let connection: Awaited<ReturnType<typeof bt.connectToDevice>> | null = null;
   try {
     const enabled = await bt.isBluetoothEnabled();
     if (!enabled && bt.requestBluetoothEnabled) {
@@ -229,7 +230,7 @@ export async function printTextToBluetooth(
     }
 
     const config = await getPrinterConfig(address);
-    const connection = await bt.connectToDevice(address);
+    connection = await bt.connectToDevice(address);
 
     // Si la empresa tiene logo registrado, se envía como gráfico raster ESC/POS en la cabecera
     const codigo = opts?.codigoEmpresa ?? getEmpresaActual()?.codigo;
@@ -265,6 +266,13 @@ export async function printTextToBluetooth(
     await setPreferredPrinterMac(address);
     return { ok: true };
   } catch (err) {
+    if (connection) {
+      try {
+        await connection.disconnect();
+      } catch {
+        /* ignore */
+      }
+    }
     const raw =
       err instanceof Error
         ? err.message
@@ -274,6 +282,17 @@ export async function printTextToBluetooth(
         ok: false,
         error:
           "Falta permiso BLUETOOTH_CONNECT. Actívalo en Ajustes → Apps → LogiTrack → Permisos.",
+      };
+    }
+    if (
+      /socket.*closed|read failed|timeout|read ret|broken pipe|connection refused|unable to connect|connection reset|is not connected|ioexception/i.test(
+        raw,
+      )
+    ) {
+      return {
+        ok: false,
+        error:
+          "Conexión perdida con la impresora. Verifica que tenga batería, esté encendida y reiníciala (apagar y volver a encender).",
       };
     }
     return { ok: false, error: raw };
