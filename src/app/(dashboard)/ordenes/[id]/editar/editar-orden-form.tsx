@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { actualizaOrdenDistribucionAction } from "@/lib/actions/ordenes";
+import { listarProductosAction } from "@/lib/actions/productos";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -32,6 +33,7 @@ export function EditarOrdenForm({
   clientes,
   camiones,
   productos,
+  productosError = null,
   tasaActual = null,
   ordenTasa = null,
 }: {
@@ -47,6 +49,7 @@ export function EditarOrdenForm({
   clientes: ClienteOrdenOption[];
   camiones: Option[];
   productos: ProductoListaRpc[];
+  productosError?: string | null;
   tasaActual?: TasaCambio | null;
   ordenTasa?: number | null;
 }) {
@@ -57,6 +60,8 @@ export function EditarOrdenForm({
   const [camionId, setCamionId] = useState(initial.camion_id);
   const [factura, setFactura] = useState(initial.factura_origen_numero);
   const [fechaDespacho, setFechaDespacho] = useState(initial.fecha_despacho);
+  const [catalogoProductos, setCatalogoProductos] =
+    useState<ProductoListaRpc[]>(productos);
   const [catalogo, setCatalogo] = useState<Record<string, ProductoListaRpc>>(
     () => Object.fromEntries(productos.map((p) => [p.id, p])),
   );
@@ -66,6 +71,34 @@ export function EditarOrdenForm({
     () => clientes.find((c) => c.value === clienteId) ?? null,
     [clientes, clienteId],
   );
+
+  useEffect(() => {
+    setCatalogoProductos(productos);
+    setCatalogo((prev) => ({
+      ...prev,
+      ...Object.fromEntries(productos.map((p) => [p.id, p])),
+    }));
+  }, [productos]);
+
+  useEffect(() => {
+    if (!clienteId) return;
+
+    let active = true;
+    void listarProductosAction(".F.", clienteId).then((res) => {
+      if (!active) return;
+      if (!res.ok) return;
+
+      setCatalogoProductos(res.productos);
+      setCatalogo((prev) => ({
+        ...prev,
+        ...Object.fromEntries(res.productos.map((p) => [p.id, p])),
+      }));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [clienteId]);
 
   function agregarProducto(producto: ProductoListaRpc, cantidad: number) {
     const qty = Math.max(1, Math.floor(cantidad) || 1);
@@ -85,7 +118,10 @@ export function EditarOrdenForm({
           producto_id: producto.id,
           cantidad_solicitada: qty,
           valor_unitario_usd:
-            producto.precio_lista1 ?? producto.precio ?? 0,
+            producto.precio_final_usd ??
+            producto.precio ??
+            producto.precio_lista1 ??
+            0,
         },
       ];
     });
@@ -204,8 +240,11 @@ export function EditarOrdenForm({
       </Card>
 
       <Card title="Catálogo de productos">
+        {productosError ? (
+          <p className="lt-alert-error mb-4">{productosError}</p>
+        ) : null}
         <ProductoCatalogo
-          productos={productos}
+          productos={catalogoProductos}
           onAdd={agregarProducto}
           selectedIds={lineas.map((l) => l.producto_id)}
         />

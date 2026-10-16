@@ -3,6 +3,7 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { canEditarOrdenBorrador } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
+import { listarProductosAction } from "@/lib/actions/productos";
 import { retornaUsuariosDespachadoresAction } from "@/lib/actions/rutas";
 import { retornaUltimaTasaCambioAction } from "@/lib/actions/tasa-cambio";
 import { getOrdenDistribucionDetalle } from "@/lib/data/ordenes";
@@ -48,7 +49,7 @@ export default async function EditarOrdenPage({
     { data: clientes },
     camionesResult,
     despachadoresResult,
-    { data: productosRpc },
+    productosResult,
     tasaResult,
   ] = await Promise.all([
     supabase
@@ -58,7 +59,7 @@ export default async function EditarOrdenPage({
       .order("razon_social"),
     listarCamionesParaOrdenAction(),
     retornaUsuariosDespachadoresAction(),
-    supabase.rpc("retorna_lista_productos"),
+    listarProductosAction(".F.", orden.cliente_id ?? undefined),
     retornaUltimaTasaCambioAction(),
   ]);
 
@@ -109,7 +110,8 @@ export default async function EditarOrdenPage({
               }))
             : []
         }
-        productos={(productosRpc ?? []) as ProductoListaRpc[]}
+        productos={productosResult.ok ? productosResult.productos : []}
+        productosError={productosResult.ok ? null : productosResult.error}
         tasaActual={tasaResult.ok ? tasaResult.tasa : null}
         ordenTasa={orden.tasa_cambio ?? null}
       />
