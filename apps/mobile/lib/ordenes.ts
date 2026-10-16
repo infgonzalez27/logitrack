@@ -25,6 +25,7 @@ export type OrdenDetalle = {
   peso_total_calculado: number | null;
   despachador_id: string | null;
   cliente_id: string | null;
+  camion_id?: string | null;
   radar_id: string | null;
   clientes: {
     razon_social: string;
@@ -34,6 +35,7 @@ export type OrdenDetalle = {
   camiones: { placa: string; modelo: string | null } | null;
   detalle_distribucion: Array<{
     id: string;
+    producto_id?: string;
     secuencia_entrega: number | null;
     cantidad_solicitada: number;
     valor_unitario_usd: number | null;
@@ -166,11 +168,11 @@ export async function getOrdenDetalle(
     .select(
       `
       id, correlativo, estado, factura_origen_numero, fecha_despacho, created_at,
-      peso_total_calculado, total_recaudar_usd, despachador_id, cliente_id, radar_id,
+      peso_total_calculado, total_recaudar_usd, despachador_id, cliente_id, camion_id, radar_id,
       clientes(razon_social, rif_nit, direccion_fiscal),
       camiones(placa, modelo),
       detalle_distribucion(
-        id, secuencia_entrega, cantidad_solicitada,
+        id, secuencia_entrega, cantidad_solicitada, producto_id,
         valor_unitario_usd, subtotal_recaudar_usd,
         precio_lista_usd, porcentaje_descuento, monto_descuento_usd,
         productos(nombre, codigo_producto, contenedor_id, unidades_por_contenedor)
@@ -222,6 +224,7 @@ export async function getOrdenDetalle(
       peso_total_calculado: data.peso_total_calculado ?? null,
       despachador_id: data.despachador_id ?? null,
       cliente_id: data.cliente_id,
+      camion_id: (data as { camion_id?: string | null }).camion_id ?? null,
       radar_id: data.radar_id ?? null,
       clientes,
       camiones,
@@ -533,6 +536,82 @@ export async function actualizarFechaDespachoOrden(input: {
     .eq("id", input.ordenId);
 
   if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export type LineaActualizarOrden = {
+  producto_id: string;
+  cantidad_solicitada: number;
+  valor_unitario_usd: number;
+};
+
+/** Actualiza orden completa (cabecera y productos) vía RPC `actualiza_orden_distribucion_segun_correlativo`. */
+export async function actualizarOrdenDistribucion(input: {
+  correlativo: number;
+  clienteId: string;
+  camionId?: string | null;
+  fechaDespachoIso?: string | null;
+  facturaOrigenNumero?: string | null;
+  lineas: LineaActualizarOrden[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!input.lineas.length) {
+    return { ok: false, error: "Agrega al menos un producto a la orden." };
+  }
+
+  const { data: cliente, error: clienteError } = await supabase
+    .from("clientes")
+    .select("despachador_id, id_ruta")
+    .eq("id", input.clienteId)
+    .maybeSingle();
+
+  if (clienteError) return { ok: false, error: clienteError.message };
+  if (!cliente) return { ok: false, error: "Cliente no encontrado." };
+  if (!cliente.despachador_id) {
+    return {
+      ok: false,
+      error: "El cliente no tiene despachador asignado.",
+    };
+  }
+
+  const header = {
+    cliente_id: input.clienteId,
+    camion_id: input.camionId || null,
+    chofer_id: cliente.despachador_id,
+    despachador_id: cliente.despachador_id,
+    id_ruta: cliente.id_ruta,
+    fecha_despacho: input.fechaDespachoIso?.trim() || null,
+    factura_origen_numero: input.facturaOrigenNumero?.trim() || null,
+  };
+
+  const detalle = input.lineas.map((l) => ({
+    producto_id: l.producto_id,
+    cantidad_solicitada: Math.max(1, Math.floor(l.cantidad_solicitada)),
+    valor_unitario_usd: Number(l.valor_unitario_usd) || 0,
+  }));
+
+  const { data, error } = await supabase.rpc(
+    "actualiza_orden_distribucion_segun_correlativo",
+    {
+      p_correlativo: input.correlativo,
+      p_header: header,
+      p_detalle: detalle,
+    },
+  );
+
+  if (error) return { ok: false, error: error.message };
+
+  const res = data as {
+    success?: boolean;
+    error?: { message?: string } | null;
+  } | null;
+
+  if (res && res.success === false) {
+    return {
+      ok: false,
+      error: res.error?.message ?? "Error al actualizar la orden.",
+    };
+  }
+
   return { ok: true };
 }
 

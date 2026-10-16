@@ -20,6 +20,7 @@ import { listarCamiones, retornaUltimaTasa, type CamionOption } from "@/lib/cata
 import { listarProductos, precioNeto, type ProductoLista } from "@/lib/productos";
 import { crearOrdenDistribucion } from "@/lib/ordenes";
 import { defaultFechaDespachoLocal, formatMoney } from "@/lib/format";
+import { FechaDespachoPicker } from "@/components/FechaDespachoPicker";
 
 type LineaDraft = {
   producto_id: string;
@@ -369,13 +370,11 @@ export default function NuevaOrdenScreen() {
             <Text style={styles.selectText}>{camionLabel}</Text>
           </Pressable>
 
-          <Text style={styles.label}>Fecha despacho (local)</Text>
-          <TextInput
-            style={styles.input}
+          <FechaDespachoPicker
+            label="Fecha despacho"
             value={fechaDespacho}
-            onChangeText={setFechaDespacho}
-            placeholder="YYYY-MM-DDTHH:mm"
-            autoCapitalize="none"
+            onChange={setFechaDespacho}
+            required
           />
 
           {tasa != null ? (
