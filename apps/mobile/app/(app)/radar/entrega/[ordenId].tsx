@@ -9,7 +9,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import {
   finalizarEntregaRadar,
@@ -19,6 +20,7 @@ import {
   type ContenedorOption,
   type RadarOrden,
 } from "@/lib/radar";
+import { imprimirTicketOrden } from "@/lib/print-orden";
 
 const INCIDENCIAS = [
   "Cliente cerrado",
@@ -43,6 +45,60 @@ export default function RadarEntregaScreen() {
   >([]);
   const [incidenciaOpen, setIncidenciaOpen] = useState(false);
   const [incidencia, setIncidencia] = useState(INCIDENCIAS[0]);
+  const [printing, setPrinting] = useState(false);
+
+  const handlePrint = async () => {
+    if (!ordenId) return;
+    setPrinting(true);
+    try {
+      const res = await imprimirTicketOrden(ordenId);
+      if (!res.ok) {
+        if (res.sinImpresora) {
+          Alert.alert(
+            "Sin impresora configurada",
+            "Configura una impresora térmica Bluetooth en Ajustes > Impresora.",
+            [
+              { text: "Cancelar", style: "cancel" },
+              {
+                text: "Ir a Ajustes",
+                onPress: () => router.push("/(app)/impresora" as Href),
+              },
+            ],
+          );
+        } else {
+          Alert.alert("Error de impresión", res.error);
+        }
+      } else {
+        Alert.alert("Éxito", "Ticket enviado a la impresora.");
+      }
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  const printAndBack = async () => {
+    if (!ordenId) {
+      router.back();
+      return;
+    }
+    setPrinting(true);
+    try {
+      const pRes = await imprimirTicketOrden(ordenId);
+      if (!pRes.ok) {
+        Alert.alert(
+          "Atención",
+          pRes.sinImpresora
+            ? "Entrega registrada, pero no tienes impresora configurada."
+            : `Entrega registrada, pero falló la impresión: ${pRes.error}`,
+          [{ text: "OK", onPress: () => router.back() }],
+        );
+        return;
+      }
+    } finally {
+      setPrinting(false);
+    }
+    router.back();
+  };
 
   const load = useCallback(async () => {
     if (!ordenId) return;
@@ -127,7 +183,13 @@ export default function RadarEntregaScreen() {
       res.deVuelta
         ? "Alguna línea quedó incompleta: toda la parada pasó a devolución."
         : "La parada se cerró correctamente.",
-      [{ text: "OK", onPress: () => router.back() }],
+      [
+        {
+          text: "Imprimir ticket",
+          onPress: () => void printAndBack(),
+        },
+        { text: "Listo", style: "default", onPress: () => router.back() },
+      ],
     );
   };
 
@@ -174,8 +236,26 @@ export default function RadarEntregaScreen() {
       style={styles.root}
       contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
     >
-      <Text style={styles.title}>{orden.cliente.razon_social}</Text>
-      <Text style={styles.meta}>Orden #{orden.correlativo}</Text>
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text style={styles.title}>{orden.cliente.razon_social}</Text>
+          <Text style={styles.meta}>Orden #{orden.correlativo}</Text>
+        </View>
+        <Pressable
+          style={[styles.btnPrintHeader, printing && { opacity: 0.6 }]}
+          disabled={printing}
+          onPress={() => void handlePrint()}
+        >
+          {printing ? (
+            <ActivityIndicator size="small" color="#0B3A5C" />
+          ) : (
+            <>
+              <Ionicons name="print-outline" size={16} color="#0B3A5C" />
+              <Text style={styles.btnPrintHeaderText}>Imprimir</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Text style={styles.section}>Productos pendientes</Text>
@@ -328,6 +408,21 @@ export default function RadarEntregaScreen() {
         </>
       ) : null}
 
+      <Pressable
+        style={[styles.btnActionPrint, printing && { opacity: 0.6 }]}
+        disabled={printing}
+        onPress={() => void handlePrint()}
+      >
+        {printing ? (
+          <ActivityIndicator size="small" color="#0B3A5C" />
+        ) : (
+          <Ionicons name="print-outline" size={18} color="#0B3A5C" />
+        )}
+        <Text style={styles.btnActionPrintText}>
+          {printing ? "Imprimiendo ticket…" : "Imprimir ticket de la orden"}
+        </Text>
+      </Pressable>
+
       <Text style={styles.hint}>
         Si alguna cantidad queda por debajo de la asignada, toda la parada pasa
         a devolución (misma regla que en la web).
@@ -339,6 +434,44 @@ export default function RadarEntregaScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F4F6F8" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  btnPrintHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#E8F1F8",
+    borderWidth: 1,
+    borderColor: "#B8D5E8",
+  },
+  btnPrintHeaderText: {
+    color: "#0B3A5C",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  btnActionPrint: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#F0F5FA",
+    borderWidth: 1,
+    borderColor: "#0B3A5C",
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginTop: 4,
+  },
+  btnActionPrintText: {
+    color: "#0B3A5C",
+    fontWeight: "600",
+    fontSize: 15,
+  },
   title: { fontSize: 20, fontWeight: "700", color: "#0B3A5C" },
   name: { fontWeight: "600", color: "#0B3A5C" },
   meta: { fontSize: 13, color: "#5B6B7C" },

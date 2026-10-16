@@ -4,10 +4,12 @@ import {
 } from "./ticket";
 import {
   fetchEstadoCuentaVacios,
+  getOrdenDetalle,
   resolveDespachadorNombre,
   type OrdenDetalle,
 } from "./ordenes";
 import { getEmpresaActual } from "./supabase";
+import { printToPreferredPrinter } from "./bluetooth-print";
 
 /** Arma el texto ESC/POS de una orden (líneas + vacíos). */
 export async function buildTicketForOrden(
@@ -76,3 +78,22 @@ export async function buildTicketForOrden(
     data,
   };
 }
+
+/** Imprime el ticket de una orden en la impresora Bluetooth preferida. */
+export async function imprimirTicketOrden(
+  ordenOId: string | OrdenDetalle,
+): Promise<{ ok: true } | { ok: false; error: string; sinImpresora?: boolean }> {
+  let orden: OrdenDetalle;
+  if (typeof ordenOId === "string") {
+    const res = await getOrdenDetalle(ordenOId);
+    if (!res.ok) return { ok: false, error: res.error };
+    orden = res.orden;
+  } else {
+    orden = ordenOId;
+  }
+  const ticket = await buildTicketForOrden(orden);
+  return printToPreferredPrinter(ticket.text, {
+    codigoEmpresa: getEmpresaActual()?.codigo,
+  });
+}
+

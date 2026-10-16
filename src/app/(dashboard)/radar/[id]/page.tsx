@@ -93,7 +93,7 @@ export default async function RadarDetallePage({
           </section>
           <section className="border-t border-lt-border pt-8 print:border-0 print:pt-0">
             <h2 className="mb-4 text-base font-semibold text-lt-text print:hidden">
-              Reporte de carga
+              Reportes del radar
             </h2>
             <RadarReporteView reporte={reporte.reporte} />
           </section>

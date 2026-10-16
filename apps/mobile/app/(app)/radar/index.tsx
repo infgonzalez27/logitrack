@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Linking,
   Pressable,
@@ -9,7 +10,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import {
   aprobarRadar,
@@ -21,6 +23,7 @@ import {
   type RadarOrden,
   type RadarParadaResumen,
 } from "@/lib/radar";
+import { imprimirTicketOrden } from "@/lib/print-orden";
 import { formatDate, formatMoney } from "@/lib/format";
 
 export default function RadarScreen() {
@@ -40,6 +43,35 @@ export default function RadarScreen() {
   );
   const [paradas, setParadas] = useState<RadarParadaResumen[]>([]);
   const [approving, setApproving] = useState(false);
+  const [imprimiendoId, setImprimiendoId] = useState<string | null>(null);
+
+  const onImprimirOrden = async (ordenId: string) => {
+    setImprimiendoId(ordenId);
+    try {
+      const res = await imprimirTicketOrden(ordenId);
+      if (!res.ok) {
+        if (res.sinImpresora) {
+          Alert.alert(
+            "Sin impresora configurada",
+            "Configura una impresora térmica Bluetooth en Ajustes > Impresora.",
+            [
+              { text: "Cancelar", style: "cancel" },
+              {
+                text: "Ir a Ajustes",
+                onPress: () => router.push("/(app)/impresora" as Href),
+              },
+            ],
+          );
+        } else {
+          Alert.alert("Error de impresión", res.error);
+        }
+      } else {
+        Alert.alert("Éxito", "Ticket enviado a la impresora.");
+      }
+    } finally {
+      setImprimiendoId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -173,6 +205,23 @@ export default function RadarScreen() {
                       <Text style={styles.btnGhostText}>Mapas</Text>
                     </Pressable>
                   ) : null}
+                  <Pressable
+                    style={[
+                      styles.btnGhost,
+                      imprimiendoId === item.orden_id && { opacity: 0.6 },
+                    ]}
+                    disabled={imprimiendoId === item.orden_id}
+                    onPress={() => void onImprimirOrden(item.orden_id)}
+                  >
+                    {imprimiendoId === item.orden_id ? (
+                      <ActivityIndicator size="small" color="#0B3A5C" />
+                    ) : (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <Ionicons name="print-outline" size={16} color="#0B3A5C" />
+                        <Text style={styles.btnGhostText}>Imprimir</Text>
+                      </View>
+                    )}
+                  </Pressable>
                   {pendientes ? (
                     <Pressable
                       style={styles.btn}
@@ -245,6 +294,25 @@ export default function RadarScreen() {
               <Text style={styles.meta}>
                 {item.items} uds · {item.sku} SKU
               </Text>
+              <View style={[styles.actions, { marginTop: 8 }]}>
+                <Pressable
+                  style={[
+                    styles.btnGhost,
+                    imprimiendoId === item.id_orden_distribucion && { opacity: 0.6 },
+                  ]}
+                  disabled={imprimiendoId === item.id_orden_distribucion}
+                  onPress={() => void onImprimirOrden(item.id_orden_distribucion)}
+                >
+                  {imprimiendoId === item.id_orden_distribucion ? (
+                    <ActivityIndicator size="small" color="#0B3A5C" />
+                  ) : (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Ionicons name="print-outline" size={16} color="#0B3A5C" />
+                      <Text style={styles.btnGhostText}>Imprimir</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </View>
             </View>
           )}
         />
