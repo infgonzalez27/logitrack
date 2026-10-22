@@ -436,3 +436,23 @@ useEffect(() => {
 }
 ```
 
+
+---
+
+### 6. Regla de Estado de Camiones: Solo en Carga y Descarga (`en_ruta` / `disponible`)
+
+#### Regla de Negocio Implementada en Base de Datos (`20261022125500_fix_estado_camion_solo_carga_descarga.sql`):
+El estado de un camión (`public.camiones.estado`) **únicamente cambia cuando se carga o se descarga el camión**, nunca al cobrar o liquidar órdenes individuales:
+
+1. **Carga del Camión (`disponible` → `en_ruta`):**
+   - `solicita_cargar_inventario_movil_desde_almacen` (tanto en **Radar** como en **AutoVentas**).
+   - `cargar_inventario_movil` / transición a `en_transito`.
+
+2. **Liquidación Financiera / Cobranzas (NO altera el estado del camión):**
+   - Se eliminó el `UPDATE public.camiones SET estado = 'disponible'` dentro de `liquidar_orden_distribucion` (disparado al aprobar Rendiciones de Cuentas) y de `actualizar_estado_orden_distribucion` (en las transiciones a `liquidada` o `anulada`).
+   - Ahora, cuando se cobra o liquida una orden individual, el camión **mantiene su estado actual** (`en_ruta`) hasta que se ejecute formalmente su descarga de inventario en almacén.
+
+3. **Descarga del Camión (`en_ruta` → `disponible`):**
+   - **AutoVentas (`descargar_camion_autoventa`):** Al ejecutar la descarga total del sobrante al almacén principal, vacía `inventario_movil` del camión y pasa el camión a `'disponible'`.
+   - **Radar — Cierre y Retorno de Inventario (`solicita_aprobar_radar` → `retorna_inventario_no_despachado_para_almacen`):** Devuelve la mercancía no despachada al almacén principal, limpia el `inventario_movil` del camión y actualiza `camiones.estado = 'disponible'` (verificando que no tenga otro radar activo en tránsito).
+   - **Radar — Reverso de Carga (`solicita_reversar_carga_inventario_movil_a_almacen`):** Al descargar/reversar toda la carga del camión de vuelta al almacén antes de iniciar entregas, actualiza `camiones.estado = 'disponible'`.
