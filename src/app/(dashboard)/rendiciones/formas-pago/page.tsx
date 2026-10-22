@@ -4,10 +4,10 @@ import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { reporteFormasPagoRendicionAction } from "@/lib/actions/rendiciones";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { PageHeader } from "@/components/layout/page-header";
-import { PrintButton } from "@/components/print/print-button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { ReporteFormasPagoFiltros } from "./reporte-formas-pago-filtros";
+import { ExportFormasPagoExcelButton } from "./export-formas-pago-excel-button";
 
 function defaultDesde(): string {
   const d = new Date();
@@ -45,14 +45,18 @@ export default async function ReporteFormasPagoPage({
   });
 
   return (
-    <div className="lt-print-document mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-4">
       <PageHeader
         title="Reporte de formas de pago"
         description="Movimientos de pago en rendiciones aprobadas (§2.42 reporte_formas_pago_rendicion)."
-        action={<PrintButton label="Imprimir" />}
+        action={
+          result.ok ? (
+            <ExportFormasPagoExcelButton data={result.data} />
+          ) : undefined
+        }
       />
 
-      <Card className="lt-no-print space-y-3 p-4">
+      <Card className="lt-no-print space-y-3 p-3">
         <ReporteFormasPagoFiltros
           defaultDesde={desde}
           defaultHasta={hasta}
@@ -64,81 +68,63 @@ export default async function ReporteFormasPagoPage({
         <p className="lt-alert-error">{result.error}</p>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Card className="p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-lt-text-subtle">
-                Registros
-              </p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-lt-text">
-                {formatNumber(result.data.total_registros)}
-              </p>
-            </Card>
-            <Card className="p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-lt-text-subtle">
-                Total USD
-              </p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-lt-success-text">
-                {formatCurrency(result.data.monto_total_usd)}
-              </p>
-            </Card>
-            <Card className="p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-lt-text-subtle">
-                Total Bs
-              </p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-lt-text">
-                {formatNumber(result.data.monto_total_bs)}
-              </p>
-            </Card>
+          <div className="flex items-center justify-between text-xs text-lt-text-muted">
+            <span>
+              Período {result.data.fecha_desde} → {result.data.fecha_hasta}
+              {result.data.solo_bancarios
+                ? " · Solo bancarios"
+                : " · Todas las formas de pago"}
+            </span>
+            <span>{formatNumber(result.data.total_registros)} registros</span>
           </div>
 
-          <p className="text-sm text-lt-text-muted">
-            Período {result.data.fecha_desde} → {result.data.fecha_hasta}
-            {result.data.solo_bancarios
-              ? " · Solo bancarios (Pago móvil, Transferencia, Zelle, Binance)"
-              : " · Todas las formas de pago"}
-          </p>
-
-          <Card>
+          <Card className="overflow-hidden">
             <DataTable
               emptyMessage="No hay movimientos de pago en el rango seleccionado."
               columns={[
                 { key: "fecha", label: "Fecha" },
                 { key: "cliente", label: "Cliente" },
                 { key: "forma", label: "Forma de pago" },
-                { key: "ref", label: "Referencia" },
+                { key: "ref", label: "Referencia / Cuenta" },
                 { key: "usd", label: "USD" },
                 { key: "bs", label: "Bs" },
               ]}
               rows={result.data.movimientos.map((m, i) => ({
                 id: `${m.rendicion_id}-${m.fpago_id}-${i}`,
                 cells: {
-                  fecha: formatDate(m.fecha_rendicion),
+                  fecha: (
+                    <span className="text-xs">{formatDate(m.fecha_rendicion)}</span>
+                  ),
                   cliente: (
-                    <span>
-                      <span className="font-medium">{m.cliente_nombre}</span>
-                      <span className="block text-xs text-lt-text-muted">
+                    <span className="text-xs">
+                      <span className="font-medium text-lt-text">{m.cliente_nombre}</span>
+                      <span className="block text-[11px] text-lt-text-muted">
                         {m.cliente_rif}
                       </span>
                     </span>
                   ),
                   forma: (
-                    <span className="inline-flex flex-wrap items-center gap-1">
+                    <span className="inline-flex flex-wrap items-center gap-1 text-xs">
                       {m.fpago_concepto}
                       {m.es_bancario ? (
-                        <span className="rounded-md bg-lt-primary-muted px-1.5 py-0.5 text-[10px] font-medium text-lt-primary">
+                        <span className="rounded bg-lt-primary-muted px-1.5 py-0.5 text-[10px] font-medium text-lt-primary">
                           Bancario
                         </span>
                       ) : null}
                     </span>
                   ),
-                  ref: m.referencia_bancaria || m.cuenta_bancaria || "—",
+                  ref: (
+                    <span className="text-xs text-lt-text-muted">
+                      {m.referencia_bancaria || m.cuenta_bancaria || "—"}
+                    </span>
+                  ),
                   usd: (
-                    <span className="tabular-nums">
+                    <span className="text-xs font-semibold tabular-nums text-lt-success-text">
                       {formatCurrency(Number(m.monto_usd ?? 0))}
                     </span>
                   ),
                   bs: (
-                    <span className="tabular-nums">
+                    <span className="text-xs tabular-nums text-lt-text">
                       {formatNumber(Number(m.monto_bs ?? 0))}
                     </span>
                   ),
@@ -146,6 +132,27 @@ export default async function ReporteFormasPagoPage({
               }))}
             />
           </Card>
+
+          {/* Resumen al final con puros montos totales */}
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+            <div className="flex items-center gap-4 rounded-xl border border-lt-border bg-lt-surface px-4 py-2.5 shadow-xs">
+              <span className="text-xs font-semibold uppercase tracking-wider text-lt-text-muted">
+                Totales Generales:
+              </span>
+              <div className="flex items-baseline gap-1.5 border-l border-lt-border pl-4">
+                <span className="text-xs text-lt-text-muted">Total USD:</span>
+                <span className="text-base font-bold tabular-nums text-lt-success-text">
+                  {formatCurrency(result.data.monto_total_usd)}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5 border-l border-lt-border pl-4">
+                <span className="text-xs text-lt-text-muted">Total Bs:</span>
+                <span className="text-base font-bold tabular-nums text-lt-text">
+                  Bs. {formatNumber(result.data.monto_total_bs)}
+                </span>
+              </div>
+            </div>
+          </div>
         </>
       )}
     </div>

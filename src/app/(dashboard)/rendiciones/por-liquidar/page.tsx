@@ -5,6 +5,7 @@ import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { retornaOrdenesPorLiquidarAction } from "@/lib/actions/rendiciones";
 import { PageHeader } from "@/components/layout/page-header";
 import { PrintButton } from "@/components/print/print-button";
+import { ExportPorLiquidarExcelButton } from "./export-por-liquidar-excel-button";
 import { PorLiquidarLista } from "./por-liquidar-lista";
 
 export default async function OrdenesPorLiquidarPage() {
@@ -29,7 +30,8 @@ export default async function OrdenesPorLiquidarPage() {
         title="Órdenes por liquidar"
         description="Cartera por cliente (días vencidos y montos desde el SP)."
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ExportPorLiquidarExcelButton items={items} />
             <PrintButton label="Imprimir" />
             <Link
               href="/rendiciones/nuevo"

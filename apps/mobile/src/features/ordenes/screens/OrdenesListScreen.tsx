@@ -1,12 +1,13 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
+  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
   View,
   type ListRenderItemInfo,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { ORDEN_CARD_GAP } from "@/src/theme/tokens";
 import { getOrdenItemLayout, optimizedListProps } from "@/src/ui/list";
@@ -14,6 +15,7 @@ import { SkeletonList } from "@/src/ui/Skeleton";
 import { EmptyState, ErrorState } from "@/src/ui/EmptyState";
 import { BottomActionBar } from "@/src/ui/BottomActionBar";
 import type { OrdenListaItem } from "@/lib/ordenes";
+import { imprimirTicketOrden } from "@/lib/print-orden";
 import { OrdenCard } from "../components/OrdenCard";
 import { useOrdenesList } from "../hooks/useOrdenesList";
 
@@ -52,11 +54,37 @@ export const OrdenesListScreen: React.FC = function OrdenesListScreen() {
     router.push("/(app)/radar");
   }, [router]);
 
+  const handlePrint = useCallback(
+    async (id: string) => {
+      const res = await imprimirTicketOrden(id);
+      if (!res.ok) {
+        if (res.sinImpresora) {
+          Alert.alert(
+            "Sin impresora configurada",
+            "Configura una impresora térmica Bluetooth en Ajustes > Impresora.",
+            [
+              { text: "Cancelar", style: "cancel" },
+              {
+                text: "Ir a Ajustes",
+                onPress: () => router.push("/(app)/impresora" as Href),
+              },
+            ],
+          );
+        } else {
+          Alert.alert("Error de impresión", res.error);
+        }
+      } else {
+        Alert.alert("Éxito", "Ticket enviado a la impresora.");
+      }
+    },
+    [router],
+  );
+
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<OrdenListaItem>) => (
-      <OrdenCard item={item} onPress={handleOpenOrden} />
+      <OrdenCard item={item} onPress={handleOpenOrden} onPrint={handlePrint} />
     ),
-    [handleOpenOrden],
+    [handleOpenOrden, handlePrint],
   );
 
   const listEmpty = useCallback(() => {

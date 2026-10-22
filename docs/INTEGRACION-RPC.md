@@ -480,14 +480,32 @@ Las siguientes tareas corresponden 100% al equipo de desarrollo Frontend (Web y 
 ### B. Dashboard Web: Reporte de Formas de Pago — Exportar a Excel y Quitar Botón de Imprimir
 
 - **Módulo:** Dashboard Web (`src/app/(dashboard)/rendiciones/formas-pago/`)
-- **Estado de Supabase / Backend:** ✅ **Listo y disponible**.
+- **Estado:** ✅ **Completado**.
 - **Función RPC Existente:** `public.reporte_formas_pago_rendicion(p_fecha_desde date, p_fecha_hasta date, p_solo_bancarios boolean)`
-- **Detalle de la Tarea para Frontend:**
-  1. **Visual de Pantalla:** Se mantiene idéntico como está visualmente en el navegador (mantiene sus tarjetas, filtros y tabla).
-  2. **Quitar botón "Imprimir":** Remover el componente `<PrintButton label="Imprimir" />` de la cabecera.
-  3. **Agregar botón "Exportar a Excel":**
-     - Consumir los datos ya entregados por la Server Action `reporteFormasPagoRendicionAction` (`movimientos`, `monto_total_usd`, `monto_total_bs`, `total_registros`).
-     - Generar el archivo Excel (siguiendo el estándar de diseño de `src/lib/export/radar-excel.ts`):
-       - Fuente limpia y compacta (10pt, `line-height: 1.15`, padding ajustado).
-       - Sin filas vacías ni espaciados excesivos entre registros.
-       - En lugar de tarjetas al inicio, colocar al **final de la hoja de cálculo un bloque/fila resumen** con puros montos totales (`Total USD` y `Total Bs`).
+- **Detalle Implementado:**
+  1. Se removió el botón Imprimir y se agregó el botón `Exportar a Excel` con estilos a 10pt, `line-height: 1.15`, padding compacto y resumen final con montos totales.
+  2. Archivos: `src/lib/export/formas-pago-excel.ts`, `src/app/(dashboard)/rendiciones/formas-pago/export-formas-pago-excel-button.tsx`, `page.tsx`.
+
+---
+
+### C. Dashboard Web: Cuentas por Cobrar (Órdenes por Liquidar) — Exportar a Excel
+
+- **Módulo:** Dashboard Web (`src/app/(dashboard)/rendiciones/por-liquidar/`)
+- **Estado:** ✅ **Completado**.
+- **Detalle Implementado:**
+  1. Se incorporó botón `Exportar a Excel` en la cabecera de la vista de órdenes por liquidar.
+  2. Generación de Excel con estándar visual de 10pt, `line-height: 1.15`, padding compacto y resumen al final con Total Clientes, Total Órdenes y Monto Total por Liquidar (USD).
+  3. Archivos: `src/lib/export/por-liquidar-excel.ts`, `src/app/(dashboard)/rendiciones/por-liquidar/export-por-liquidar-excel-button.tsx`, `page.tsx`.
+
+---
+
+### D. Dashboard Web: Cobranzas — Consulta por Rango de Fechas y Exportar a Excel
+
+- **Módulo:** Dashboard Web (`src/app/(dashboard)/rendiciones/`)
+- **Estado:** ✅ **Completado**.
+- **Detalle Implementado:**
+  1. Formulario interactivo de filtros de fecha (`desde` y `hasta`) con botón "Consultar" y "Limpiar".
+  2. Filtrado dinámico en la consulta a `rendiciones_cuentas`.
+  3. Botón `Exportar a Excel` que genera la planilla de cobranzas del período con formato 10pt, padding compacto y resumen final de totales (Efectivo, Transferencias, Total USD y Total Bs).
+  4. Archivos: `src/lib/export/cobranzas-excel.ts`, `src/app/(dashboard)/rendiciones/cobranzas-filtros.tsx`, `src/app/(dashboard)/rendiciones/export-cobranzas-excel-button.tsx`, `page.tsx`.
+

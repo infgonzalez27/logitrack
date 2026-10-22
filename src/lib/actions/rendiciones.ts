@@ -15,6 +15,7 @@ import {
   resolverMontosOrden,
 } from "@/lib/rendiciones/moneda";
 import type { CuentaBancariaEmpresa, Fpago, OrdenPorLiquidarCliente, ReporteFormasPagoData } from "@/types/database";
+export type { ReporteFormasPagoData };
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

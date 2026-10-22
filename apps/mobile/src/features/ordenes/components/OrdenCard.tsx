@@ -11,11 +11,13 @@ import { mapOrdenStatus } from "../status";
 export interface OrdenCardProps {
   item: OrdenListaItem;
   onPress: (id: string) => void;
+  onPrint?: (id: string) => void;
 }
 
 export const OrdenCard: React.FC<OrdenCardProps> = memo(function OrdenCard({
   item,
   onPress,
+  onPrint,
 }) {
   const { theme } = useTheme();
   const status = mapOrdenStatus(item.estado);
@@ -40,9 +42,31 @@ export const OrdenCard: React.FC<OrdenCardProps> = memo(function OrdenCard({
       ]}
     >
       <View style={styles.top}>
-        <Text style={[styles.tracking, { color: theme.colors.text }]}>
-          #{item.correlativo}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={[styles.tracking, { color: theme.colors.text }]}>
+            #{item.correlativo}
+          </Text>
+          {onPrint ? (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onPrint(item.id);
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Imprimir orden ${item.correlativo}`}
+              style={({ pressed }) => [
+                {
+                  padding: 4,
+                  borderRadius: 6,
+                  backgroundColor: pressed ? theme.colors.brandMuted : "transparent",
+                },
+              ]}
+            >
+              <Ionicons name="print-outline" size={18} color={theme.colors.brand} />
+            </Pressable>
+          ) : null}
+        </View>
         <StatusBadge label={status.label} tone={status.tone} />
       </View>
 
