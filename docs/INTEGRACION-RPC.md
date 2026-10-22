@@ -456,3 +456,38 @@ El estado de un camión (`public.camiones.estado`) **únicamente cambia cuando s
    - **AutoVentas (`descargar_camion_autoventa`):** Al ejecutar la descarga total del sobrante al almacén principal, vacía `inventario_movil` del camión y pasa el camión a `'disponible'`.
    - **Radar — Cierre y Retorno de Inventario (`solicita_aprobar_radar` → `retorna_inventario_no_despachado_para_almacen`):** Devuelve la mercancía no despachada al almacén principal, limpia el `inventario_movil` del camión y actualiza `camiones.estado = 'disponible'` (verificando que no tenga otro radar activo en tránsito).
    - **Radar — Reverso de Carga (`solicita_reversar_carga_inventario_movil_a_almacen`):** Al descargar/reversar toda la carga del camión de vuelta al almacén antes de iniciar entregas, actualiza `camiones.estado = 'disponible'`.
+
+
+---
+
+## 7. Tareas Exclusivas del Frontend (22/10/2026) — Sin cambios en Base de Datos
+
+Las siguientes tareas corresponden 100% al equipo de desarrollo Frontend (Web y Móvil), ya que toda la infraestructura de datos, tablas y funciones RPC en Supabase se encuentran implementadas y listas para su consumo.
+
+---
+
+### A. APK Móvil: Opción de Impresión de Orden en Despacho de Productos
+
+- **Módulo:** `apps/mobile` (Radar / Entregas / Órdenes)
+- **Estado de Supabase / Backend:** ✅ **Listo y disponible**. No requiere nuevas funciones en base de datos.
+- **Detalle de la Tarea para Frontend:**
+  1. En el flujo donde el despachador o chofer realiza la entrega/despacho físico de productos (módulo de Radar `app/(app)/radar/index.tsx` y `app/(app)/radar/entrega/[ordenId].tsx`), asegurar que la acción interactiva de **"Imprimir Orden / Ticket"** esté visible y accesible de forma directa.
+  2. Verificar que tanto antes de iniciar la parada como inmediatamente tras confirmar la entrega de productos y el retiro de vacíos, el usuario pueda lanzar la impresión térmica Bluetooth mediante el motor existente `imprimirTicketOrden(ordenId)` de `apps/mobile/lib/print-orden.ts`.
+  3. En la tarjeta de orden (`OrdenCard.tsx`) o listado general de órdenes (`ordenes/index.tsx`), habilitar el acceso directo a la impresión del ticket sin obligar al usuario a navegar por múltiples pantallas intermedias.
+
+---
+
+### B. Dashboard Web: Reporte de Formas de Pago — Exportar a Excel y Quitar Botón de Imprimir
+
+- **Módulo:** Dashboard Web (`src/app/(dashboard)/rendiciones/formas-pago/`)
+- **Estado de Supabase / Backend:** ✅ **Listo y disponible**.
+- **Función RPC Existente:** `public.reporte_formas_pago_rendicion(p_fecha_desde date, p_fecha_hasta date, p_solo_bancarios boolean)`
+- **Detalle de la Tarea para Frontend:**
+  1. **Visual de Pantalla:** Se mantiene idéntico como está visualmente en el navegador (mantiene sus tarjetas, filtros y tabla).
+  2. **Quitar botón "Imprimir":** Remover el componente `<PrintButton label="Imprimir" />` de la cabecera.
+  3. **Agregar botón "Exportar a Excel":**
+     - Consumir los datos ya entregados por la Server Action `reporteFormasPagoRendicionAction` (`movimientos`, `monto_total_usd`, `monto_total_bs`, `total_registros`).
+     - Generar el archivo Excel (siguiendo el estándar de diseño de `src/lib/export/radar-excel.ts`):
+       - Fuente limpia y compacta (10pt, `line-height: 1.15`, padding ajustado).
+       - Sin filas vacías ni espaciados excesivos entre registros.
+       - En lugar de tarjetas al inicio, colocar al **final de la hoja de cálculo un bloque/fila resumen** con puros montos totales (`Total USD` y `Total Bs`).
