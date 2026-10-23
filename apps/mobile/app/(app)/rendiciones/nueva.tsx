@@ -15,10 +15,12 @@ import { getClienteVisita } from "@/lib/clientes";
 import { retornaUltimaTasa } from "@/lib/catalogos";
 import {
   listarCuentasBancarias,
+  listarEntidadesBancarias,
   listarFormasPago,
   registrarRendicion,
   solicitaAbonosCliente,
   type CuentaBancaria,
+  type EntidadBancaria,
   type Fpago,
   type OrdenParaRendicion,
 } from "@/lib/rendiciones";
@@ -35,6 +37,7 @@ type PagoDraft = {
   key: string;
   fpago_id: string;
   monto: string;
+  codigo_banco: string;
   referencia: string;
   cuenta_id: string;
 };
@@ -53,6 +56,7 @@ export default function NuevaRendicionScreen() {
   const [saldoFavor, setSaldoFavor] = useState(0);
   const [formas, setFormas] = useState<Fpago[]>([]);
   const [cuentas, setCuentas] = useState<CuentaBancaria[]>([]);
+  const [entidades, setEntidades] = useState<EntidadBancaria[]>([]);
   const [pagos, setPagos] = useState<PagoDraft[]>([]);
   const [tasa, setTasa] = useState<number | null>(null);
   const [obs, setObs] = useState("");
@@ -61,6 +65,7 @@ export default function NuevaRendicionScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pickerPagoKey, setPickerPagoKey] = useState<string | null>(null);
   const [pickerCuentaKey, setPickerCuentaKey] = useState<string | null>(null);
+  const [pickerBancoKey, setPickerBancoKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!profile || !clienteId) {
@@ -68,11 +73,12 @@ export default function NuevaRendicionScreen() {
       setLoading(false);
       return;
     }
-    const [cRes, aRes, fRes, cuRes, tRes] = await Promise.all([
+    const [cRes, aRes, fRes, cuRes, ebRes, tRes] = await Promise.all([
       getClienteVisita(clienteId, profile),
       solicitaAbonosCliente(clienteId),
       listarFormasPago(),
       listarCuentasBancarias(),
+      listarEntidadesBancarias(),
       retornaUltimaTasa(),
     ]);
     if (cRes.ok) setClienteNombre(cRes.cliente.razon_social);
@@ -90,6 +96,7 @@ export default function NuevaRendicionScreen() {
     }
     if (fRes.ok) setFormas(fRes.formas);
     if (cuRes.ok) setCuentas(cuRes.cuentas);
+    if (ebRes.ok) setEntidades(ebRes.entidades);
     if (tRes.ok && tasa == null) setTasa(tRes.tasa);
     setLoading(false);
   }, [profile, clienteId, tasa]);
@@ -150,6 +157,7 @@ export default function NuevaRendicionScreen() {
         key: `${Date.now()}`,
         fpago_id: first.fpago_id,
         monto: "",
+        codigo_banco: entidades[0]?.codigo_eb ?? "0102",
         referencia: "",
         cuenta_id: cuentas[0]?.id ?? "",
       },
@@ -190,6 +198,7 @@ export default function NuevaRendicionScreen() {
           monto: Number(p.monto.replace(",", ".")) || 0,
           en_bs: forma ? esFormaPagoEnBs(forma.fpago_concepto) : false,
           fpago_info: !!forma?.fpago_info,
+          codigo_banco: p.codigo_banco,
           referencia_bancaria: p.referencia,
           cuenta_bancaria_id: p.cuenta_id,
         };
@@ -244,6 +253,44 @@ export default function NuevaRendicionScreen() {
                 {esFormaPagoEnBs(item.fpago_concepto) ? "En Bs" : "En USD"}
                 {item.fpago_info ? " · requiere referencia" : ""}
               </Text>
+            </Pressable>
+          )}
+        />
+      </View>
+    );
+  }
+
+  if (pickerBancoKey) {
+    return (
+      <View style={styles.root}>
+        <Pressable onPress={() => setPickerBancoKey(null)}>
+          <Text style={styles.back}>← Volver</Text>
+        </Pressable>
+        <FlatList
+          data={entidades}
+          keyExtractor={(eb) => eb.codigo_eb}
+          contentContainerStyle={{ padding: 16 }}
+          ListEmptyComponent={
+            <Text style={styles.meta}>No hay entidades bancarias activas.</Text>
+          }
+          renderItem={({ item }) => (
+            <Pressable
+              style={styles.card}
+              onPress={() => {
+                setPagos((prev) =>
+                  prev.map((p) =>
+                    p.key === pickerBancoKey
+                      ? { ...p, codigo_banco: item.codigo_eb }
+                      : p,
+                  ),
+                );
+                setPickerBancoKey(null);
+              }}
+            >
+              <Text style={styles.name}>
+                {item.codigo_eb} · {item.nombre_corto || item.nombre_eb}
+              </Text>
+              <Text style={styles.meta}>{item.nombre_eb}</Text>
             </Pressable>
           )}
         />
@@ -361,6 +408,9 @@ export default function NuevaRendicionScreen() {
               ? esFormaPagoEnBs(forma.fpago_concepto)
               : false;
             const cuenta = cuentas.find((c) => c.id === p.cuenta_id);
+            const entidad = entidades.find(
+              (eb) => eb.codigo_eb === p.codigo_banco,
+            );
             return (
               <View key={p.key} style={styles.card}>
                 <Pressable onPress={() => setPickerPagoKey(p.key)}>
@@ -384,9 +434,17 @@ export default function NuevaRendicionScreen() {
                 />
                 {forma?.fpago_info ? (
                   <>
+                    <Pressable onPress={() => setPickerBancoKey(p.key)}>
+                      <Text style={styles.meta}>
+                        Banco:{" "}
+                        {entidad
+                          ? `${entidad.codigo_eb} · ${entidad.nombre_corto || entidad.nombre_eb}`
+                          : p.codigo_banco || "Elegir…"}
+                      </Text>
+                    </Pressable>
                     <Pressable onPress={() => setPickerCuentaKey(p.key)}>
                       <Text style={styles.meta}>
-                        Cuenta: {cuenta ? cuenta.banco : "Elegir…"}
+                        Cuenta destino: {cuenta ? cuenta.banco : "Elegir…"}
                       </Text>
                     </Pressable>
                     <TextInput

@@ -115,7 +115,9 @@ export default async function ReporteFormasPagoPage({
                   ),
                   ref: (
                     <span className="text-xs text-lt-text-muted">
-                      {m.referencia_bancaria || m.cuenta_bancaria || "—"}
+                      {m.referencia_bancaria
+                        ? `${m.codigo_banco ? `${m.codigo_banco}-` : ""}${m.referencia_bancaria}${m.nombre_banco ? ` (${m.nombre_banco})` : ""}`
+                        : m.cuenta_bancaria || "—"}
                     </span>
                   ),
                   usd: (

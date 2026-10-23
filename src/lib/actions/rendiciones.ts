@@ -14,7 +14,7 @@ import {
   esFormaPagoEnBs,
   resolverMontosOrden,
 } from "@/lib/rendiciones/moneda";
-import type { CuentaBancariaEmpresa, Fpago, OrdenPorLiquidarCliente, ReporteFormasPagoData } from "@/types/database";
+import type { CuentaBancariaEmpresa, EntidadBancaria, Fpago, OrdenPorLiquidarCliente, ReporteFormasPagoData } from "@/types/database";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,12 +75,77 @@ export type PagoRendicionInput = {
   monto_bs?: number | null;
   monto_usd?: number | null;
   cuenta_bancaria_id?: string | null;
+  /** Código BCV de 4 dígitos de la entidad bancaria (`entidades_bancarias.codigo_eb`). */
+  codigo_banco?: string | null;
   referencia_bancaria?: string | null;
   /** Texto legado; preferir `cuenta_bancaria_id`. */
   cuenta_bancaria?: string | null;
   capture_url?: string | null;
   fpago_info?: boolean;
 };
+
+const BANCOS_BCV_FALLBACK: EntidadBancaria[] = [
+  { codigo_eb: "0102", nombre_eb: "Banco de Venezuela, S.A. Banco Universal", nombre_corto: "Banco de Venezuela", rif_eb: "G-20009997-6", activo: true },
+  { codigo_eb: "0104", nombre_eb: "Venezolano de Crédito, S.A. Banco Universal", nombre_corto: "Venezolano de Crédito", rif_eb: "J-00002970-9", activo: true },
+  { codigo_eb: "0105", nombre_eb: "Mercantil, C.A. Banco Universal", nombre_corto: "Banco Mercantil", rif_eb: "J-00002961-0", activo: true },
+  { codigo_eb: "0108", nombre_eb: "BBVA Provincial, S.A. Banco Universal", nombre_corto: "BBVA Provincial", rif_eb: "J-00002967-9", activo: true },
+  { codigo_eb: "0114", nombre_eb: "Bancaribe, C.A. Banco Universal", nombre_corto: "Bancaribe", rif_eb: "J-00002949-0", activo: true },
+  { codigo_eb: "0115", nombre_eb: "Banco Exterior, C.A. Banco Universal", nombre_corto: "Banco Exterior", rif_eb: "J-00002950-4", activo: true },
+  { codigo_eb: "0128", nombre_eb: "Banco Caroní, C.A. Banco Universal", nombre_corto: "Banco Caroní", rif_eb: "J-09504855-1", activo: true },
+  { codigo_eb: "0134", nombre_eb: "Banesco Banco Universal, C.A.", nombre_corto: "Banesco", rif_eb: "J-07013380-5", activo: true },
+  { codigo_eb: "0137", nombre_eb: "Banco Sofitasa Banco Universal, C.A.", nombre_corto: "Sofitasa", rif_eb: "J-09028384-6", activo: true },
+  { codigo_eb: "0138", nombre_eb: "Banco Plaza, Banco Universal, C.A.", nombre_corto: "Banco Plaza", rif_eb: "J-00297055-3", activo: true },
+  { codigo_eb: "0146", nombre_eb: "Banco de la Gente Emprendedora (Bangente), C.A.", nombre_corto: "Bangente", rif_eb: "J-30144204-0", activo: true },
+  { codigo_eb: "0151", nombre_eb: "BFC Banco Fondo Común, C.A. Banco Universal", nombre_corto: "BFC Fondo Común", rif_eb: "J-00072306-0", activo: true },
+  { codigo_eb: "0156", nombre_eb: "100% Banco, Banco Universal, C.A.", nombre_corto: "100% Banco", rif_eb: "J-08500776-8", activo: true },
+  { codigo_eb: "0157", nombre_eb: "DelSur Banco Universal, C.A.", nombre_corto: "DelSur", rif_eb: "J-00079723-4", activo: true },
+  { codigo_eb: "0163", nombre_eb: "Banco del Tesoro, C.A. Banco Universal", nombre_corto: "Banco del Tesoro", rif_eb: "G-20005187-6", activo: true },
+  { codigo_eb: "0166", nombre_eb: "Banco Agrícola de Venezuela, C.A. Banco Universal", nombre_corto: "Banco Agrícola", rif_eb: "G-20005795-5", activo: true },
+  { codigo_eb: "0168", nombre_eb: "Bancrecer, S.A. Banco Microfinanciero", nombre_corto: "Bancrecer", rif_eb: "J-31637417-3", activo: true },
+  { codigo_eb: "0169", nombre_eb: "R4, Banco Microfinanciero, C.A.", nombre_corto: "R4 / Mi Banco", rif_eb: "J-31594102-3", activo: true },
+  { codigo_eb: "0171", nombre_eb: "Banco Activo, C.A. Banco Universal", nombre_corto: "Banco Activo", rif_eb: "J-08006622-7", activo: true },
+  { codigo_eb: "0172", nombre_eb: "Bancamiga Banco Universal, C.A.", nombre_corto: "Bancamiga", rif_eb: "J-31628759-9", activo: true },
+  { codigo_eb: "0173", nombre_eb: "Banco Internacional de Desarrollo, C.A. Banco Universal", nombre_corto: "BID", rif_eb: "J-29464010-9", activo: true },
+  { codigo_eb: "0174", nombre_eb: "Banplus Banco Universal, C.A.", nombre_corto: "Banplus", rif_eb: "J-00042303-2", activo: true },
+  { codigo_eb: "0175", nombre_eb: "Banco Digital de los Trabajadores, Banco Universal, C.A.", nombre_corto: "BDT / Bicentenario", rif_eb: "G-20009148-7", activo: true },
+  { codigo_eb: "0177", nombre_eb: "Banco de la Fuerza Armada Nacional Bolivariana, B.U.", nombre_corto: "BANFANB", rif_eb: "G-20010657-3", activo: true },
+  { codigo_eb: "0178", nombre_eb: "N58 Banco Digital, Banco Microfinanciero, S.A.", nombre_corto: "N58 Banco Digital", rif_eb: "J-50358110-7", activo: true },
+  { codigo_eb: "0191", nombre_eb: "Banco Nacional de Crédito, C.A. Banco Universal", nombre_corto: "BNC", rif_eb: "J-30984132-7", activo: true },
+];
+
+/** Catálogo de entidades bancarias activas en Venezuela (`entidades_bancarias`). */
+export async function listarEntidadesBancariasAction(
+  soloActivas = true,
+): Promise<
+  | { ok: true; entidades: EntidadBancaria[] }
+  | { ok: false; error: string }
+> {
+  const response = await callDbProcedure<EntidadBancaria[]>(
+    "retorna_entidades_bancarias",
+    { p_solo_activas: soloActivas },
+  );
+
+  if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+    return { ok: true, entidades: response.data };
+  }
+
+  const supabase = await createClient();
+  let query = supabase
+    .from("entidades_bancarias")
+    .select("codigo_eb, nombre_eb, nombre_corto, rif_eb, activo, created_at")
+    .order("codigo_eb", { ascending: true });
+
+  if (soloActivas) {
+    query = query.eq("activo", true);
+  }
+
+  const { data, error } = await query;
+  if (!error && Array.isArray(data) && data.length > 0) {
+    return { ok: true, entidades: data as EntidadBancaria[] };
+  }
+
+  return { ok: true, entidades: BANCOS_BCV_FALLBACK };
+}
 
 /** DB-011 — catálogo desde tabla `fpagos`. */
 export async function listarFormasPagoAction(): Promise<
@@ -516,6 +581,7 @@ export async function registrarRendicionCuentasAction(input: {
     }
   }
 
+  const seenBancoRef = new Set<string>();
   for (let i = 0; i < input.pagos.length; i++) {
     const pago = input.pagos[i];
     if (!pago.fpago_id || !isUuid(pago.fpago_id)) {
@@ -525,7 +591,14 @@ export async function registrarRendicionCuentasAction(input: {
       return { error: `Pago #${i + 1}: el monto debe ser mayor a 0.` };
     }
     if (pago.fpago_info === true) {
-      if (!pago.referencia_bancaria?.trim()) {
+      const codBanco = pago.codigo_banco?.trim() || "";
+      const ref = pago.referencia_bancaria?.trim() || "";
+      if (!codBanco) {
+        return {
+          error: `Pago #${i + 1}: selecciona la entidad bancaria.`,
+        };
+      }
+      if (!ref) {
         return {
           error: `Pago #${i + 1}: la referencia bancaria es obligatoria.`,
         };
@@ -535,6 +608,13 @@ export async function registrarRendicionCuentasAction(input: {
           error: `Pago #${i + 1}: selecciona la cuenta bancaria de la empresa.`,
         };
       }
+      const tupleKey = `${codBanco}|${ref}`;
+      if (seenBancoRef.has(tupleKey)) {
+        return {
+          error: `Pago #${i + 1}: la referencia ${ref} del banco ${codBanco} está duplicada en esta misma cobranza.`,
+        };
+      }
+      seenBancoRef.add(tupleKey);
     }
   }
 
@@ -632,6 +712,9 @@ export async function registrarRendicionCuentasAction(input: {
         monto_usd: montoUsd,
         monto_bs: montoBs,
         cuenta_bancaria_id: cuentaId,
+        codigo_banco: p.fpago_info
+          ? p.codigo_banco?.trim() || null
+          : null,
         referencia_bancaria: p.fpago_info
           ? p.referencia_bancaria?.trim() || null
           : null,
@@ -973,6 +1056,8 @@ export async function reporteFormasPagoRendicionAction(input?: {
             fpago_id: String(m.fpago_id),
             fpago_concepto: String(m.fpago_concepto ?? "—"),
             es_bancario: Boolean(m.es_bancario),
+            codigo_banco: m.codigo_banco ? String(m.codigo_banco) : null,
+            nombre_banco: m.nombre_banco ? String(m.nombre_banco) : null,
             referencia_bancaria: m.referencia_bancaria
               ? String(m.referencia_bancaria)
               : null,

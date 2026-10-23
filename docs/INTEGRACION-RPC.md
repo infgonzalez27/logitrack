@@ -509,3 +509,69 @@ Las siguientes tareas corresponden 100% al equipo de desarrollo Frontend (Web y 
   3. Botón `Exportar a Excel` que genera la planilla de cobranzas del período con formato 10pt, padding compacto y resumen final de totales (Efectivo, Transferencias, Total USD y Total Bs).
   4. Archivos: `src/lib/export/cobranzas-excel.ts`, `src/app/(dashboard)/rendiciones/cobranzas-filtros.tsx`, `src/app/(dashboard)/rendiciones/export-cobranzas-excel-button.tsx`, `page.tsx`.
 
+---
+
+## 8. Entidades Bancarias (BCV) y Control de Duplicidad de Referencias en Cobranzas (23/10/2026)
+
+### Parche de Base de Datos:
+- `supabase/tenant_patches/20261023140000_entidades_bancarias_y_unicidad_pagos.sql`
+- `supabase/migrations/20261023140000_entidades_bancarias_y_unicidad_pagos.sql`
+- `supabase/seed_base.sql` (Semilla inicial para futuros tenants)
+
+### 8.1. Tabla `public.entidades_bancarias`
+Catálogo oficial de instituciones bancarias activas en Venezuela según el BCV / SUDEBAN, utilizando el código oficial de 4 dígitos como llave primaria natural:
+
+```sql
+CREATE TABLE IF NOT EXISTS public.entidades_bancarias (
+    codigo_eb VARCHAR(4) PRIMARY KEY,      -- '0102', '0134', '0105', etc.
+    nombre_eb VARCHAR(120) NOT NULL,
+    nombre_corto VARCHAR(50),
+    rif_eb VARCHAR(15),
+    activo BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### 8.2. Nueva Función RPC: `public.retorna_entidades_bancarias`
+- **Firma:** `public.retorna_entidades_bancarias(p_solo_activas boolean DEFAULT true)`
+- **Respuesta JSON:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "codigo_eb": "0102",
+        "nombre_eb": "Banco de Venezuela, S.A. Banco Universal",
+        "nombre_corto": "Banco de Venezuela",
+        "rif_eb": "G-20009997-6",
+        "activo": true
+      }
+    ],
+    "error": null
+  }
+  ```
+
+### 8.3. Modificación en `public.detalle_rendicion_fpagos` (Control de Duplicidad)
+- Se agregó la columna `codigo_banco VARCHAR(4) REFERENCES public.entidades_bancarias(codigo_eb) ON DELETE RESTRICT`.
+- Se agregó la restricción de unicidad compuesta:
+  ```sql
+  CONSTRAINT uq_pago_banco_referencia UNIQUE (codigo_banco, referencia_bancaria)
+  ```
+- **Comportamiento:**
+  - Permite una misma referencia en bancos distintos (`0102-000225633` y `0134-000225633`).
+  - Bloquea que la misma tupla `(codigo_banco, referencia_bancaria)` se registre más de una vez.
+  - **Registros históricos (Opción A):** Permanecen con `codigo_banco = NULL` (histórico cerrado y conciliado; en PostgreSQL los valores `NULL` no colisionan en la restricción `UNIQUE`).
+  - **Reverso de cobranzas (`reversa_rendicion_cuenta_segun_id_rendicion`):** Cuando el gerente reversa una cobranza aprobada, la función libera `codigo_banco = NULL` en `detalle_rendicion_fpagos` para que la referencia bancaria pueda volver a cargarse si fue reversada por error de captura.
+
+### 8.4. Contratos Actualizados en RPCs e Integración Frontend / Móvil
+1. **`public.registrar_rendicion_cuentas`:**
+   - Cada elemento del arreglo `p_pagos` ahora acepta `"codigo_banco": "0102"`.
+   - Si el par `(codigo_banco, referencia_bancaria)` ya existe en `detalle_rendicion_fpagos`, retorna `success: false` con `error.code = 'REFERENCIA_DUPLICADA'` y un mensaje descriptivo indicando el banco y la referencia.
+2. **`public.reporte_formas_pago_rendicion`:**
+   - Cada movimiento del arreglo `data.movimientos` ahora incluye `"codigo_banco"` y `"nombre_banco"`.
+3. **Frontend Web y App Móvil:**
+   - `src/lib/actions/rendiciones.ts` (`listarEntidadesBancariasAction`, validación de `codigo_banco` en `registrarRendicionCuentasAction`).
+   - `src/app/(dashboard)/rendiciones/nuevo/nueva-rendicion-form.tsx` (selector **Entidad bancaria (BCV)** y validación de duplicados en el formulario).
+   - `apps/mobile/lib/rendiciones.ts` y `apps/mobile/app/(app)/rendiciones/nueva.tsx` (selector de banco en la pantalla móvil de nueva rendición).
+
+

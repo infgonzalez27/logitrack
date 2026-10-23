@@ -19,6 +19,7 @@ import {
 } from "@/lib/rendiciones/moneda";
 import type {
   CuentaBancariaEmpresa,
+  EntidadBancaria,
   Fpago,
   TasaCambio,
 } from "@/types/database";
@@ -40,6 +41,8 @@ type PagoAgregado = {
   monto_bs: number;
   tasa_aplicada: number | null;
   fecha: string;
+  codigo_banco: string | null;
+  banco_label: string | null;
   referencia_bancaria: string | null;
   cuenta_bancaria_id: string | null;
   cuenta_label: string | null;
@@ -106,6 +109,7 @@ export function NuevaRendicionForm({
   formasError,
   cuentasBancarias,
   cuentasError = null,
+  entidadesBancarias = [],
   tasaDelDia = null,
   tasaError = null,
   initialClienteId,
@@ -116,6 +120,7 @@ export function NuevaRendicionForm({
   formasError?: string | null;
   cuentasBancarias: CuentaBancariaEmpresa[];
   cuentasError?: string | null;
+  entidadesBancarias?: EntidadBancaria[];
   tasaDelDia?: TasaCambio | null;
   tasaError?: string | null;
   /** Prefill desde visita (`?cliente_id=`). */
@@ -156,6 +161,9 @@ export function NuevaRendicionForm({
       : "",
   );
   const [borradorFechaPago, setBorradorFechaPago] = useState(hoyLocal);
+  const [borradorCodigoBanco, setBorradorCodigoBanco] = useState(
+    () => entidadesBancarias[0]?.codigo_eb ?? "",
+  );
   const [borradorReferencia, setBorradorReferencia] = useState("");
   const [borradorCuentaId, setBorradorCuentaId] = useState(
     () => cuentasBancarias[0]?.id ?? "",
@@ -212,6 +220,15 @@ export function NuevaRendicionForm({
         label: `${c.entidad_bancaria} · ${c.cuenta_bancaria}`,
       })),
     [cuentasBancarias],
+  );
+
+  const entidadesOptions = useMemo(
+    () =>
+      entidadesBancarias.map((eb) => ({
+        value: eb.codigo_eb,
+        label: `${eb.codigo_eb} · ${eb.nombre_corto || eb.nombre_eb}`,
+      })),
+    [entidadesBancarias],
   );
 
   useEffect(() => {
@@ -452,6 +469,7 @@ export function NuevaRendicionForm({
     setBorradorMontoUsd(formatMoneyInput(0));
     setBorradorMontoBs(formatMoneyInput(0));
     setBorradorFechaPago(hoyLocal());
+    setBorradorCodigoBanco(entidadesBancarias[0]?.codigo_eb ?? "");
     setBorradorReferencia("");
     setBorradorCuentaId(cuentasBancarias[0]?.id ?? "");
     setBorradorCaptureUrl(null);
@@ -531,6 +549,9 @@ export function NuevaRendicionForm({
     }
 
     if (formaSeleccionada.fpago_info) {
+      if (!borradorCodigoBanco.trim()) {
+        return { ok: false, error: "Selecciona la entidad bancaria." };
+      }
       if (!borradorReferencia.trim()) {
         return { ok: false, error: "Ingresa la referencia bancaria." };
       }
@@ -538,6 +559,19 @@ export function NuevaRendicionForm({
         return {
           ok: false,
           error: "Selecciona la cuenta bancaria de la empresa.",
+        };
+      }
+      const refTrim = borradorReferencia.trim();
+      const codTrim = borradorCodigoBanco.trim();
+      if (
+        pagos.some(
+          (p) =>
+            p.codigo_banco === codTrim && p.referencia_bancaria === refTrim,
+        )
+      ) {
+        return {
+          ok: false,
+          error: `La referencia ${refTrim} del banco ${codTrim} ya fue agregada en esta cobranza.`,
         };
       }
     }
@@ -554,6 +588,9 @@ export function NuevaRendicionForm({
           : 0;
     const montoIngresado = borradorEnBs ? montoBs : montoUsd;
     const cuenta = cuentasBancarias.find((c) => c.id === borradorCuentaId);
+    const entidad = entidadesBancarias.find(
+      (eb) => eb.codigo_eb === borradorCodigoBanco,
+    );
 
     return {
       ok: true,
@@ -568,6 +605,14 @@ export function NuevaRendicionForm({
         monto_bs: bsFinal,
         tasa_aplicada: tasa,
         fecha: borradorFechaPago || fechaPago,
+        codigo_banco: formaSeleccionada.fpago_info
+          ? borradorCodigoBanco.trim()
+          : null,
+        banco_label: formaSeleccionada.fpago_info
+          ? entidad
+            ? `${entidad.codigo_eb} · ${entidad.nombre_corto || entidad.nombre_eb}`
+            : borradorCodigoBanco.trim()
+          : null,
         referencia_bancaria: formaSeleccionada.fpago_info
           ? borradorReferencia.trim()
           : null,
@@ -678,6 +723,7 @@ export function NuevaRendicionForm({
           monto_bs: p.monto_bs,
           monto_usd: p.monto_usd,
           fpago_info: p.fpago_info,
+          codigo_banco: p.codigo_banco,
           referencia_bancaria: p.referencia_bancaria,
           cuenta_bancaria_id: p.cuenta_bancaria_id,
           capture_url: p.capture_url,
@@ -1058,7 +1104,16 @@ export function NuevaRendicionForm({
           </div>
 
           {pideInfoBancaria ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Select
+                label="Entidad bancaria (BCV)"
+                required
+                placeholder="Selecciona banco"
+                options={entidadesOptions}
+                value={borradorCodigoBanco}
+                onChange={(e) => setBorradorCodigoBanco(e.target.value)}
+                disabled={entidadesBancarias.length === 0}
+              />
               <Input
                 label="Referencia bancaria"
                 required
@@ -1180,10 +1235,15 @@ export function NuevaRendicionForm({
                         {formatNumber(p.monto_bs)}
                       </td>
                       <td className="px-4 py-3 text-lt-text-muted">
-                        {p.cuenta_label ?? "—"}
-                        {p.referencia_bancaria
-                          ? ` · ${p.referencia_bancaria}`
-                          : ""}
+                        {[
+                          p.banco_label ? `Banco: ${p.banco_label}` : null,
+                          p.referencia_bancaria
+                            ? `Ref: ${p.codigo_banco ? `${p.codigo_banco}-` : ""}${p.referencia_bancaria}`
+                            : null,
+                          p.cuenta_label ? `Destino: ${p.cuenta_label}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
                       </td>
                       <td className="px-4 py-3">
                         {p.preview_url || p.capture_url ? (
@@ -1222,10 +1282,15 @@ export function NuevaRendicionForm({
                       <td className="px-4 py-3">
                         {pideInfoBancaria
                           ? [
+                              entidadesOptions.find(
+                                (eb) => eb.value === borradorCodigoBanco,
+                              )?.label,
+                              borradorReferencia.trim()
+                                ? `${borradorCodigoBanco ? `${borradorCodigoBanco}-` : ""}${borradorReferencia.trim()}`
+                                : null,
                               cuentasOptions.find(
                                 (c) => c.value === borradorCuentaId,
                               )?.label,
-                              borradorReferencia.trim() || null,
                             ]
                               .filter(Boolean)
                               .join(" · ") || "—"

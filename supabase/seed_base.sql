@@ -286,3 +286,60 @@ BEGIN
     VALUES ('7972', 'AGUA MINERAL BIENESTAR 6X1.5L', 'UNID', 0.00, 1, NULL) ON CONFLICT (codigo_producto) DO NOTHING;
 END;
 $$;
+
+-- 7. Catálogo de Entidades Bancarias de Venezuela (BCV / SUDEBAN)
+CREATE TABLE IF NOT EXISTS public.entidades_bancarias (
+    codigo_eb VARCHAR(4) PRIMARY KEY,
+    nombre_eb VARCHAR(120) NOT NULL,
+    nombre_corto VARCHAR(50),
+    rif_eb VARCHAR(15),
+    activo BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.entidades_bancarias ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lectura publica de entidades_bancarias" ON public.entidades_bancarias;
+CREATE POLICY "Lectura publica de entidades_bancarias"
+    ON public.entidades_bancarias
+    FOR SELECT
+    TO anon, authenticated, service_role
+    USING (true);
+
+GRANT SELECT ON TABLE public.entidades_bancarias TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.entidades_bancarias TO service_role;
+
+INSERT INTO public.entidades_bancarias (codigo_eb, nombre_eb, nombre_corto, rif_eb, activo)
+VALUES
+    ('0102', 'Banco de Venezuela, S.A. Banco Universal', 'Banco de Venezuela', 'G-20009997-6', true),
+    ('0104', 'Venezolano de Crédito, S.A. Banco Universal', 'Venezolano de Crédito', 'J-00002970-9', true),
+    ('0105', 'Mercantil, C.A. Banco Universal', 'Banco Mercantil', 'J-00002961-0', true),
+    ('0108', 'BBVA Provincial, S.A. Banco Universal', 'BBVA Provincial', 'J-00002967-9', true),
+    ('0114', 'Bancaribe, C.A. Banco Universal', 'Bancaribe', 'J-00002949-0', true),
+    ('0115', 'Banco Exterior, C.A. Banco Universal', 'Banco Exterior', 'J-00002950-4', true),
+    ('0128', 'Banco Caroní, C.A. Banco Universal', 'Banco Caroní', 'J-09504855-1', true),
+    ('0134', 'Banesco Banco Universal, C.A.', 'Banesco', 'J-07013380-5', true),
+    ('0137', 'Banco Sofitasa Banco Universal, C.A.', 'Sofitasa', 'J-09028384-6', true),
+    ('0138', 'Banco Plaza, Banco Universal, C.A.', 'Banco Plaza', 'J-00297055-3', true),
+    ('0146', 'Banco de la Gente Emprendedora (Bangente), C.A.', 'Bangente', 'J-30144204-0', true),
+    ('0151', 'BFC Banco Fondo Común, C.A. Banco Universal', 'BFC Fondo Común', 'J-00072306-0', true),
+    ('0156', '100% Banco, Banco Universal, C.A.', '100% Banco', 'J-08500776-8', true),
+    ('0157', 'DelSur Banco Universal, C.A.', 'DelSur', 'J-00079723-4', true),
+    ('0163', 'Banco del Tesoro, C.A. Banco Universal', 'Banco del Tesoro', 'G-20005187-6', true),
+    ('0166', 'Banco Agrícola de Venezuela, C.A. Banco Universal', 'Banco Agrícola', 'G-20005795-5', true),
+    ('0168', 'Bancrecer, S.A. Banco Microfinanciero', 'Bancrecer', 'J-31637417-3', true),
+    ('0169', 'R4, Banco Microfinanciero, C.A.', 'R4 / Mi Banco', 'J-31594102-3', true),
+    ('0171', 'Banco Activo, C.A. Banco Universal', 'Banco Activo', 'J-08006622-7', true),
+    ('0172', 'Bancamiga Banco Universal, C.A.', 'Bancamiga', 'J-31628759-9', true),
+    ('0173', 'Banco Internacional de Desarrollo, C.A. Banco Universal', 'BID', 'J-29464010-9', true),
+    ('0174', 'Banplus Banco Universal, C.A.', 'Banplus', 'J-00042303-2', true),
+    ('0175', 'Banco Digital de los Trabajadores, Banco Universal, C.A.', 'BDT / Bicentenario', 'G-20009148-7', true),
+    ('0177', 'Banco de la Fuerza Armada Nacional Bolivariana, B.U.', 'BANFANB', 'G-20010657-3', true),
+    ('0178', 'N58 Banco Digital, Banco Microfinanciero, S.A.', 'N58 Banco Digital', 'J-50358110-7', true),
+    ('0191', 'Banco Nacional de Crédito, C.A. Banco Universal', 'BNC', 'J-30984132-7', true)
+ON CONFLICT (codigo_eb) DO UPDATE
+SET
+    nombre_eb = EXCLUDED.nombre_eb,
+    nombre_corto = EXCLUDED.nombre_corto,
+    rif_eb = EXCLUDED.rif_eb,
+    activo = EXCLUDED.activo;

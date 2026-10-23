@@ -391,6 +391,16 @@ export interface Fpago {
   es_bancario?: boolean;
 }
 
+/** Catálogo de entidades bancarias activas en Venezuela (BCV / SUDEBAN). */
+export interface EntidadBancaria {
+  codigo_eb: string;
+  nombre_eb: string;
+  nombre_corto: string | null;
+  rif_eb: string | null;
+  activo: boolean;
+  created_at?: string | null;
+}
+
 export type ReporteFormaPagoMovimiento = {
   rendicion_id: string;
   fecha_rendicion: string;
@@ -401,6 +411,8 @@ export type ReporteFormaPagoMovimiento = {
   fpago_id: string;
   fpago_concepto: string;
   es_bancario: boolean;
+  codigo_banco?: string | null;
+  nombre_banco?: string | null;
   referencia_bancaria: string | null;
   cuenta_bancaria: string | null;
   capture_url: string | null;
@@ -458,11 +470,13 @@ export interface DetalleRendicionPago {
   monto_bs?: number | null;
   monto_usd?: number | null;
   cuenta_bancaria_id?: string | null;
+  codigo_banco?: string | null;
   referencia_bancaria: string | null;
   cuenta_bancaria: string | null;
   capture_url: string | null;
   fpagos?: Fpago | null;
   cuentas_bancarias_empresa?: CuentaBancariaEmpresa | null;
+  entidades_bancarias?: EntidadBancaria | null;
 }
 
 export interface FacturaCompra {
@@ -805,6 +819,7 @@ export interface Database {
       rendiciones_cuentas: TableDef<RendicionCuentas>;
       facturas_compras: TableDef<FacturaCompra>;
       pagos_proveedores: TableDef<PagoProveedor>;
+      entidades_bancarias: TableDef<EntidadBancaria>;
     };
     Views: Record<string, never>;
     Functions: {
