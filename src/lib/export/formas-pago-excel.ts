@@ -75,6 +75,10 @@ const EXCEL_STYLES = `
       text-align: right;
       mso-number-format: "#,##0.00";
     }
+    td.tasa {
+      text-align: right;
+      mso-number-format: "#,##0.0000";
+    }
     td.text {
       mso-number-format: "\\@";
     }
@@ -124,6 +128,7 @@ export function exportFormasPagoToExcel(data: ReporteFormasPagoData) {
         <td class="text">${escapeHtml(m.fpago_concepto ?? "—")}</td>
         <td class="text">${escapeHtml(tipo)}</td>
         <td class="text">${escapeHtml(ref)}</td>
+        <td class="tasa">${Number(m.tasa_cambio || 0).toFixed(4)}</td>
         <td class="num">${usd.toFixed(2)}</td>
         <td class="num">${bs.toFixed(2)}</td>
       </tr>
@@ -164,6 +169,7 @@ export function exportFormasPagoToExcel(data: ReporteFormasPagoData) {
               <th style="width: 18%;">Forma de Pago</th>
               <th style="width: 10%;">Tipo</th>
               <th style="width: 11%;">Referencia</th>
+              <th class="num" style="width: 8%;">Tasa BCV</th>
               <th class="num" style="width: 7%;">Monto USD</th>
               <th class="num" style="width: 7%;">Monto Bs</th>
             </tr>
@@ -171,7 +177,7 @@ export function exportFormasPagoToExcel(data: ReporteFormasPagoData) {
           <tbody>
             ${rowsHtml}
             <tr class="total">
-              <td colspan="6" style="text-align: right;">TOTALES (${total_registros} registros):</td>
+              <td colspan="7" style="text-align: right;">TOTALES (${total_registros} registros):</td>
               <td class="num">${Number(monto_total_usd ?? 0).toFixed(2)}</td>
               <td class="num">${Number(monto_total_bs ?? 0).toFixed(2)}</td>
             </tr>

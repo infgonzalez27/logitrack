@@ -574,4 +574,15 @@ CREATE TABLE IF NOT EXISTS public.entidades_bancarias (
    - `src/app/(dashboard)/rendiciones/nuevo/nueva-rendicion-form.tsx` (selector **Entidad bancaria (BCV)** y validación de duplicados en el formulario).
    - `apps/mobile/lib/rendiciones.ts` y `apps/mobile/app/(app)/rendiciones/nueva.tsx` (selector de banco en la pantalla móvil de nueva rendición).
 
+---
 
+## 9. Formato Numérico de Tasa en Exportación Excel (23/10/2026)
+
+- **Estado:** ✅ **COMPLETADO E IMPLEMENTADO AL 100% EN FRONTEND WEB.**
+- **Archivos actualizados:**
+  - `src/lib/export/cobranzas-excel.ts`
+  - `src/lib/export/formas-pago-excel.ts`
+- **Problema corregido:** En Excel con configuración regional en español, el punto decimal se interpretaba como separador de miles, convirtiendo `886.2271` en `8.862.271,00`.
+- **Solución implementada:**
+  - Se configuró la clase `td.tasa` con `mso-number-format: "#,##0.0000";` para que Excel respete estrictamente los 4 decimales oficiales del BCV (`886,2271`).
+  - Se añadió la columna **Tasa BCV** con formato de 4 decimales en el Excel de formas de pago.

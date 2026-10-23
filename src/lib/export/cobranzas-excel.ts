@@ -80,6 +80,10 @@ const EXCEL_STYLES = `
       text-align: right;
       mso-number-format: "#,##0.00";
     }
+    td.tasa {
+      text-align: right;
+      mso-number-format: "#,##0.0000";
+    }
     td.text {
       mso-number-format: "\\@";
     }
@@ -121,7 +125,7 @@ export function exportCobranzasToExcel(
         <td class="text">${escapeHtml(item.fecha_rendicion ? formatDate(item.fecha_rendicion) : "—")}</td>
         <td class="text">${escapeHtml(item.cliente || "—")}</td>
         <td class="text">${escapeHtml(item.estado || "—")}</td>
-        <td class="num">${Number(item.tasa_cambio || 0).toFixed(4)}</td>
+        <td class="tasa">${Number(item.tasa_cambio || 0).toFixed(4)}</td>
         <td class="num">${Number(item.total_efectivo || 0).toFixed(2)}</td>
         <td class="num">${Number(item.total_transferencias || 0).toFixed(2)}</td>
         <td class="num">${Number(item.total_recaudado_usd || 0).toFixed(2)}</td>
