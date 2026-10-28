@@ -5,11 +5,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { signIn, signOut, fetchProfile, isAppRole } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-context";
 
@@ -17,13 +19,18 @@ export default function LoginScreen() {
   const { refresh } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit() {
+    if (!email.trim() || !password) {
+      setError("Por favor, ingresa tu correo y contraseña.");
+      return;
+    }
     setPending(true);
     setError(null);
-    const result = await signIn(email, password);
+    const result = await signIn(email.trim(), password);
     if (!result.ok) {
       setError(result.error);
       setPending(false);
@@ -55,46 +62,87 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <View style={styles.card}>
-        <Image
-          source={require("../assets/images/icon.png")}
-          style={styles.logo}
-          accessibilityLabel="LogiTrack"
-        />
-        <Text style={styles.brand}>LogiTrack</Text>
-        <Text style={styles.sub}>
-          App de campo — vendedor, despachador, gerente
-        </Text>
-        <TextInput
-          style={styles.input}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="Correo"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          secureTextEntry
-          placeholder="Contraseña"
-          value={password}
-          onChangeText={setPassword}
-        />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable
-          style={[styles.btn, pending && styles.btnDisabled]}
-          disabled={pending}
-          onPress={() => void onSubmit()}
-        >
-          {pending ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.btnText}>Entrar</Text>
-          )}
-        </Pressable>
-      </View>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.card}>
+          <Image
+            source={require("../assets/images/icon.png")}
+            style={styles.logo}
+            accessibilityLabel="LogiTrack"
+          />
+          <Text style={styles.brand}>LogiTrack</Text>
+          <Text style={styles.sub}>
+            App de campo — vendedor, despachador, gerente
+          </Text>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Correo electrónico</Text>
+            <TextInput
+              style={styles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              placeholder="ejemplo@logitrack.com"
+              placeholderTextColor="#94A3B8"
+              value={email}
+              onChangeText={setEmail}
+              returnKeyType="next"
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Contraseña</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                secureTextEntry={!showPassword}
+                placeholder="Ingresa tu contraseña"
+                placeholderTextColor="#94A3B8"
+                value={password}
+                onChangeText={setPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="go"
+                onSubmitEditing={() => void onSubmit()}
+              />
+              <Pressable
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword((prev) => !prev)}
+                hitSlop={12}
+                accessibilityLabel={
+                  showPassword ? "Ocultar contraseña" : "Ver contraseña"
+                }
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={22}
+                  color="#64748B"
+                />
+              </Pressable>
+            </View>
+          </View>
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          <Pressable
+            style={[styles.btn, pending && styles.btnDisabled]}
+            disabled={pending}
+            onPress={() => void onSubmit()}
+          >
+            {pending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.btnText}>Iniciar sesión</Text>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -103,55 +151,100 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: "#0B3A5C",
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
     padding: 24,
+    paddingVertical: 36,
   },
   card: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    gap: 12,
+    borderRadius: 20,
+    padding: 24,
+    gap: 14,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 16,
-    marginBottom: 4,
+    width: 76,
+    height: 76,
+    borderRadius: 18,
+    marginBottom: 2,
   },
   brand: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "700",
     color: "#0B3A5C",
     alignSelf: "stretch",
     textAlign: "center",
   },
   sub: {
-    color: "#5B6B7C",
-    marginBottom: 8,
+    color: "#64748B",
+    fontSize: 13,
+    marginBottom: 4,
     alignSelf: "stretch",
     textAlign: "center",
   },
+  fieldGroup: {
+    alignSelf: "stretch",
+    gap: 6,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#334155",
+  },
   input: {
-    borderWidth: 1,
-    borderColor: "#D0D7DE",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    alignSelf: "stretch",
+    color: "#0F172A",
+    backgroundColor: "#F8FAFC",
+  },
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: "#0F172A",
+  },
+  eyeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   error: {
     color: "#B42318",
-    fontSize: 14,
+    fontSize: 13,
     alignSelf: "stretch",
+    backgroundColor: "#FEF2F2",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
   },
   btn: {
     backgroundColor: "#0B3A5C",
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 15,
     alignItems: "center",
     alignSelf: "stretch",
+    marginTop: 4,
   },
   btnDisabled: { opacity: 0.7 },
   btnText: { color: "#fff", fontWeight: "600", fontSize: 16 },

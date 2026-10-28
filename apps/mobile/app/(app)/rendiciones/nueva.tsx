@@ -171,6 +171,17 @@ export default function NuevaRendicionScreen() {
     }, 0);
   }, [pagos, formas, tasa]);
 
+  const entidadesFiltradas = useMemo(() => {
+    const q = (filtroBanco || "").toLowerCase().trim();
+    if (!q) return entidades;
+    return entidades.filter(
+      (eb) =>
+        (eb.codigo_eb || "").toLowerCase().includes(q) ||
+        (eb.nombre_corto ? eb.nombre_corto.toLowerCase().includes(q) : false) ||
+        (eb.nombre_eb || "").toLowerCase().includes(q),
+    );
+  }, [entidades, filtroBanco]);
+
   const addPago = () => {
     const first = formas[0];
     if (!first) {
@@ -296,17 +307,6 @@ export default function NuevaRendicionScreen() {
       </View>
     );
   }
-
-  const entidadesFiltradas = useMemo(() => {
-    const q = (filtroBanco || "").toLowerCase().trim();
-    if (!q) return entidades;
-    return entidades.filter(
-      (eb) =>
-        (eb.codigo_eb || "").toLowerCase().includes(q) ||
-        (eb.nombre_corto ? eb.nombre_corto.toLowerCase().includes(q) : false) ||
-        (eb.nombre_eb || "").toLowerCase().includes(q),
-    );
-  }, [entidades, filtroBanco]);
 
   if (pickerBancoKey) {
     return (

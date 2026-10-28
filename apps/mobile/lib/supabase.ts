@@ -3,14 +3,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { joinOne } from "./join";
 
-const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const DEFAULT_SUPABASE_URL = "https://egwryptydgxdnjvwtrfq.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnd3J5cHR5ZGd4ZG5qdnd0cmZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3Mzg3NDQsImV4cCI6MjA5ODMxNDc0NH0.fTPvtapUAyg9CV3L4aLkPMsylhoySkIWqLM-FzRrlhs";
 
-if (!url || !anonKey) {
-  console.warn(
-    "[LogiTrack] Falta EXPO_PUBLIC_SUPABASE_URL o EXPO_PUBLIC_SUPABASE_ANON_KEY",
-  );
-}
+const url = process.env.EXPO_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
 /** BD Central: sesión, cuentas y a qué empresa pertenece cada usuario. */
 const central = createClient(
