@@ -2,7 +2,7 @@
   "expo": {
     "name": "LogiTrack",
     "slug": "logitrack",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "logitrack",
@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.informaticagonzalez.logitrack",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#0B3A5C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
