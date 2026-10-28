@@ -586,3 +586,119 @@ CREATE TABLE IF NOT EXISTS public.entidades_bancarias (
 - **Solución implementada:**
   - Se configuró la clase `td.tasa` con `mso-number-format: "#,##0.0000";` para que Excel respete estrictamente los 4 decimales oficiales del BCV (`886,2271`).
   - Se añadió la columna **Tasa BCV** con formato de 4 decimales en el Excel de formas de pago.
+
+---
+
+## 10. DIRECTIVA PARA FRONTEND MÓVIL (APK): Selector de Entidad Bancaria Emisora en Cobranzas (28/10/2026)
+
+> [!IMPORTANT]
+> **ACCIÓN REQUERIDA PARA EL PRÓXIMO BUILD DE LA APK (`apps/mobile`):**
+> En el último build de la APK no quedó incluido el selector de la **Entidad Bancaria Emisora (BCV)** cuando se registra una cobranza con **Transferencia** o **Pago Móvil** (`fpago_info = true`).
+> A continuación se detalla la especificación técnica completa y los archivos ya sincronizados en el repositorio para que el equipo Frontend los integre y verifique antes de compilar el próximo APK.
+
+### 10.1. Resumen del Requerimiento Funcional en Cobranzas (APK)
+
+Cuando el usuario registra una cobranza (Rendición de Cuentas) en la App Móvil (`apps/mobile/app/(app)/rendiciones/nueva.tsx`) y selecciona una forma de pago bancaria (`forma.fpago_info === true`, como **Transferencia** o **Pago Móvil**), el formulario **DEBE mostrar y exigir tres (3) datos bancarios obligatorios**:
+
+1. **Entidad bancaria emisora (BCV) (`codigo_banco`):**
+   - Banco desde el cual el cliente emite la transferencia o el pago móvil (catálogo oficial BCV de 4 dígitos: `0102 · Banco de Venezuela`, `0134 · Banesco`, `0105 · Banco Mercantil`, etc.).
+   - Se obtiene invocando el RPC `retorna_entidades_bancarias({ p_solo_activas: true })` (con fallback a consulta directa de `public.entidades_bancarias` y catálogo BCV local).
+2. **Cuenta bancaria destino de la empresa (`cuenta_bancaria_id`):**
+   - Cuenta receptora de la empresa donde ingresó el dinero (`retorna_cuentas_bancarias_empresa`).
+3. **Referencia bancaria (`referencia_bancaria`):**
+   - Número o código de referencia de la operación.
+
+### 10.2. Contratos RPC de Supabase (Ya Activos en Base de Datos)
+
+#### A) Consultar catálogo de bancos emisores (BCV)
+- **Nombre RPC:** `public.retorna_entidades_bancarias`
+- **Parámetros:**
+  ```typescript
+  const { data, error } = await supabase.rpc('retorna_entidades_bancarias', {
+    p_solo_activas: true
+  });
+  ```
+- **Estructura de Respuesta JSON:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "codigo_eb": "0102",
+        "nombre_eb": "Banco de Venezuela, S.A. Banco Universal",
+        "nombre_corto": "Banco de Venezuela",
+        "rif_eb": "G-20009997-6",
+        "activo": true
+      },
+      {
+        "codigo_eb": "0134",
+        "nombre_eb": "Banesco Banco Universal, C.A.",
+        "nombre_corto": "Banesco",
+        "rif_eb": "J-07013380-5",
+        "activo": true
+      }
+    ],
+    "error": null
+  }
+  ```
+
+#### B) Registrar Cobranza / Rendición con `codigo_banco`
+- **Nombre RPC:** `public.registrar_rendicion_cuentas`
+- **Payload de cada elemento dentro de `p_pagos`:**
+  ```typescript
+  const { data, error } = await supabase.rpc('registrar_rendicion_cuentas', {
+    p_cliente_id: clienteId,
+    p_observaciones: observaciones ?? null,
+    p_creado_por: userId,
+    p_tasa_cambio: tasaDia,
+    p_ordenes: [
+      {
+        orden_id: 'uuid-orden',
+        monto_recaudado: 50.00,
+        monto_recaudado_bs: 44311.36
+      }
+    ],
+    p_pagos: [
+      {
+        fpago_id: 'uuid-forma-pago',
+        monto: 50.00,
+        monto_usd: 50.00,
+        monto_bs: 44311.36,
+        codigo_banco: '0102',              // <-- OBLIGATORIO cuando fpago_info = true (Código BCV 4 dígitos)
+        cuenta_bancaria_id: 'uuid-cuenta', // <-- OBLIGATORIO cuando fpago_info = true (Cuenta destino empresa)
+        referencia_bancaria: '000225633',  // <-- OBLIGATORIO cuando fpago_info = true
+        cuenta_bancaria: null,
+        capture_url: null
+      }
+    ]
+  });
+  ```
+
+#### C) Regla de Unicidad Compuesta `(codigo_banco, referencia_bancaria)`
+- La tabla `public.detalle_rendicion_fpagos` tiene la restricción `CONSTRAINT uq_pago_banco_referencia UNIQUE (codigo_banco, referencia_bancaria)`.
+- **Misma referencia en bancos distintos:** Permitido (ej. `0102` + `000225633` y `0134` + `000225633`).
+- **Misma referencia en el mismo banco:** Rechazado automáticamente por el RPC con:
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "REFERENCIA_DUPLICADA",
+      "message": "La referencia bancaria "000225633" para la entidad bancaria 0102 (Banco de Venezuela) ya fue registrada previamente en otra cobranza."
+    }
+  }
+  ```
+
+### 10.3. Archivos de la App Móvil (`apps/mobile`) Actualizados en el Repositorio
+
+Al hacer `git pull origin main`, el desarrollador Frontend encontrará listos y tipados los siguientes archivos en `apps/mobile`:
+
+1. **`apps/mobile/lib/rendiciones.ts`**:
+   - Tipo `EntidadBancaria` y función `listarEntidadesBancarias()` (consume `retorna_entidades_bancarias`, con fallback a tabla `entidades_bancarias` y lista BCV offline).
+   - Tipo `PagoInput` con `codigo_banco?: string | null`.
+   - Validación en `registrarRendicion()`: exige `codigo_banco`, `cuenta_bancaria_id` y `referencia_bancaria` cuando `fpago_info === true`, verifica que no haya tuplas `(codigo_banco, referencia_bancaria)` repetidas en el mismo formulario y envía `codigo_banco` dentro de `p_pagos`.
+   - `getRendicionDetalle()` y `reporteFormasPago()`: incluyen `codigo_banco` y `nombre_banco` para mostrar el banco emisor en las consultas.
+2. **`apps/mobile/app/(app)/rendiciones/nueva.tsx`**:
+   - Carga el catálogo de bancos emisores con `listarEntidadesBancarias()`.
+   - Muestra el selector modal (`pickerBancoKey`) bajo la etiqueta **"Entidad bancaria emisora (BCV) *"**, diferenciado claramente de **"Cuenta bancaria destino (Empresa) *"** y **"Referencia bancaria *"**.
+3. **`apps/mobile/app/(app)/rendiciones/[id].tsx`** y **`apps/mobile/app/(app)/rendiciones/formas-pago.tsx`**:
+   - Muestran en el detalle de cada pago el banco emisor BCV (`codigo_banco` y `nombre_banco`) junto con el número de referencia y la cuenta destino.

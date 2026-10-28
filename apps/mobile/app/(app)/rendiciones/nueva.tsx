@@ -434,22 +434,40 @@ export default function NuevaRendicionScreen() {
                 />
                 {forma?.fpago_info ? (
                   <>
-                    <Pressable onPress={() => setPickerBancoKey(p.key)}>
-                      <Text style={styles.meta}>
-                        Banco:{" "}
+                    <Text style={styles.label}>
+                      Entidad bancaria emisora (BCV) *
+                    </Text>
+                    <Pressable
+                      style={styles.selectBox}
+                      onPress={() => setPickerBancoKey(p.key)}
+                    >
+                      <Text style={styles.selectBoxText}>
                         {entidad
                           ? `${entidad.codigo_eb} · ${entidad.nombre_corto || entidad.nombre_eb}`
-                          : p.codigo_banco || "Elegir…"}
+                          : p.codigo_banco
+                            ? `${p.codigo_banco} · Seleccionar banco emisor`
+                            : "Seleccionar entidad bancaria emisora…"}
                       </Text>
                     </Pressable>
-                    <Pressable onPress={() => setPickerCuentaKey(p.key)}>
-                      <Text style={styles.meta}>
-                        Cuenta destino: {cuenta ? cuenta.banco : "Elegir…"}
+
+                    <Text style={styles.label}>
+                      Cuenta bancaria destino (Empresa) *
+                    </Text>
+                    <Pressable
+                      style={styles.selectBox}
+                      onPress={() => setPickerCuentaKey(p.key)}
+                    >
+                      <Text style={styles.selectBoxText}>
+                        {cuenta
+                          ? `${cuenta.banco}${cuenta.numero_cuenta ? ` · ${cuenta.numero_cuenta}` : ""}`
+                          : "Seleccionar cuenta destino…"}
                       </Text>
                     </Pressable>
+
+                    <Text style={styles.label}>Referencia bancaria *</Text>
                     <TextInput
                       style={styles.input}
-                      placeholder="Referencia bancaria"
+                      placeholder="Ej. 000225633"
                       value={p.referencia}
                       onChangeText={(v) =>
                         setPagos((prev) =>
@@ -539,6 +557,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
+  },
+  selectBox: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#0B3A5C",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  selectBoxText: {
+    color: "#0B3A5C",
+    fontWeight: "600",
+    fontSize: 14,
   },
   chip: {
     backgroundColor: "#E8EEF3",

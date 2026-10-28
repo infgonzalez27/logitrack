@@ -165,8 +165,16 @@ export default function FormasPagoReporteScreen() {
                   ? ` · ${formatMoney(item.monto_bs)} Bs`
                   : ""}
               </Text>
-              {item.referencia_bancaria ? (
-                <Text style={styles.meta}>Ref. {item.referencia_bancaria}</Text>
+              {item.codigo_banco || item.referencia_bancaria ? (
+                <Text style={styles.meta}>
+                  {item.codigo_banco
+                    ? `Banco: ${item.codigo_banco}${item.nombre_banco ? ` · ${item.nombre_banco}` : ""}`
+                    : ""}
+                  {item.codigo_banco && item.referencia_bancaria ? " · " : ""}
+                  {item.referencia_bancaria
+                    ? `Ref. ${item.referencia_bancaria}`
+                    : ""}
+                </Text>
               ) : null}
             </View>
           )}

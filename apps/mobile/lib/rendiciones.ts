@@ -468,7 +468,10 @@ export type RendicionDetalle = RendicionListaItem & {
     monto: number;
     monto_usd: number | null;
     monto_bs: number | null;
+    codigo_banco: string | null;
+    nombre_banco: string | null;
     referencia_bancaria: string | null;
+    cuenta_bancaria_destino: string | null;
   }>;
 };
 
@@ -482,6 +485,8 @@ export type ReporteFormaPagoMovimiento = {
   fpago_id: string;
   fpago_concepto: string;
   es_bancario: boolean;
+  codigo_banco: string | null;
+  nombre_banco: string | null;
   referencia_bancaria: string | null;
   cuenta_bancaria: string | null;
   monto_bs: number | null;
@@ -551,8 +556,10 @@ export async function getRendicionDetalle(
         ordenes_distribucion(correlativo)
       ),
       detalle_rendicion_fpagos(
-        id, monto, monto_usd, monto_bs, referencia_bancaria,
-        fpagos(fpago_concepto)
+        id, monto, monto_usd, monto_bs, codigo_banco, referencia_bancaria,
+        fpagos(fpago_concepto),
+        entidades_bancarias(codigo_eb, nombre_eb, nombre_corto),
+        cuentas_bancarias_empresa(banco, numero_cuenta)
       )
     `,
     )
@@ -614,13 +621,44 @@ export async function getRendicionDetalle(
             | { fpago_concepto: string }[]
             | null,
         );
+        const eb = joinOne(
+          (p as {
+            entidades_bancarias?:
+              | { codigo_eb: string; nombre_eb: string; nombre_corto: string | null }
+              | { codigo_eb: string; nombre_eb: string; nombre_corto: string | null }[]
+              | null;
+          }).entidades_bancarias,
+        );
+        const cb = joinOne(
+          (p as {
+            cuentas_bancarias_empresa?:
+              | { banco: string; numero_cuenta: string | null }
+              | { banco: string; numero_cuenta: string | null }[]
+              | null;
+          }).cuentas_bancarias_empresa,
+        );
+        const codBanco =
+          (p as { codigo_banco?: string | null }).codigo_banco ??
+          eb?.codigo_eb ??
+          null;
+        const fallbackEb = codBanco
+          ? BANCOS_BCV_FALLBACK.find((b) => b.codigo_eb === codBanco)
+          : null;
         return {
           id: String(p.id),
           fpago_concepto: forma?.fpago_concepto ?? null,
           monto: Number(p.monto) || 0,
           monto_usd: p.monto_usd != null ? Number(p.monto_usd) : null,
           monto_bs: p.monto_bs != null ? Number(p.monto_bs) : null,
+          codigo_banco: codBanco,
+          nombre_banco:
+            eb?.nombre_corto ??
+            eb?.nombre_eb ??
+            fallbackEb?.nombre_corto ??
+            fallbackEb?.nombre_eb ??
+            null,
           referencia_bancaria: p.referencia_bancaria ?? null,
+          cuenta_bancaria_destino: cb?.banco ?? null,
         };
       }),
     },
@@ -878,6 +916,8 @@ export async function reporteFormasPago(input?: {
           fpago_id: String(row.fpago_id ?? ""),
           fpago_concepto: String(row.fpago_concepto ?? "â€”"),
           es_bancario: Boolean(row.es_bancario),
+          codigo_banco: row.codigo_banco ? String(row.codigo_banco) : null,
+          nombre_banco: row.nombre_banco ? String(row.nombre_banco) : null,
           referencia_bancaria: row.referencia_bancaria
             ? String(row.referencia_bancaria)
             : null,

@@ -126,9 +126,26 @@ export default function RendicionDetalleScreen() {
 
       <SectionTitle>Pagos</SectionTitle>
       {item.pagos.map((p) => (
-        <Text key={p.id} style={styles.meta}>
-          {p.fpago_concepto ?? "Pago"} · ${formatMoney(p.monto_usd ?? p.monto)}
-        </Text>
+        <View key={p.id} style={{ marginTop: 4 }}>
+          <Text style={styles.meta}>
+            {p.fpago_concepto ?? "Pago"} · ${formatMoney(p.monto_usd ?? p.monto)}
+            {p.monto_bs != null && p.monto_bs > 0
+              ? ` (${formatMoney(p.monto_bs)} Bs)`
+              : ""}
+          </Text>
+          {p.codigo_banco || p.referencia_bancaria ? (
+            <Text style={styles.meta}>
+              {p.codigo_banco
+                ? `Banco emisor: ${p.codigo_banco}${p.nombre_banco ? ` (${p.nombre_banco})` : ""}`
+                : ""}
+              {p.codigo_banco && p.referencia_bancaria ? " · " : ""}
+              {p.referencia_bancaria ? `Ref: ${p.referencia_bancaria}` : ""}
+              {p.cuenta_bancaria_destino
+                ? ` → Destino: ${p.cuenta_bancaria_destino}`
+                : ""}
+            </Text>
+          ) : null}
+        </View>
       ))}
 
       <ErrorText message={error} />
