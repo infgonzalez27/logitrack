@@ -47,6 +47,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+import { initCrashLogger } from "@/lib/logger";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+initCrashLogger();
+
 function ThemedStatusBar() {
   const { theme } = useTheme();
   return <StatusBar style={theme.scheme === "dark" ? "light" : "dark"} />;
@@ -55,18 +60,20 @@ function ThemedStatusBar() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <AuthProvider>
-          <ThemedStatusBar />
-          <AuthGate>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="login" />
-              <Stack.Screen name="(app)" />
-              <Stack.Screen name="index" />
-            </Stack>
-          </AuthGate>
-        </AuthProvider>
-      </ThemeProvider>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <AuthProvider>
+            <ThemedStatusBar />
+            <AuthGate>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="login" />
+                <Stack.Screen name="(app)" />
+                <Stack.Screen name="index" />
+              </Stack>
+            </AuthGate>
+          </AuthProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

@@ -159,19 +159,18 @@ export async function listarCuentasBancarias(): Promise<
   if (error) {
     const fallback = await supabase
       .from("cuentas_bancarias_empresa")
-      .select("id, banco, numero_cuenta, titular, activa")
-      .eq("activa", true)
-      .order("banco");
+      .select("*")
+      .order("created_at", { ascending: false });
     if (fallback.error) return { ok: false, error: fallback.error.message };
     return {
       ok: true,
-      cuentas: (fallback.data ?? []).map((c) => ({
-        id: c.id,
-        banco: c.banco,
-        numero_cuenta: c.numero_cuenta,
-        titular: c.titular,
-        activa: c.activa,
-      })),
+      cuentas: (fallback.data ?? []).map((c: Record<string, unknown>) => ({
+        id: String(c.id ?? ""),
+        banco: String(c.entidad_bancaria ?? c.banco ?? c.nombre_banco ?? "Cuenta Bancaria"),
+        numero_cuenta: (c.cuenta_bancaria ?? c.numero_cuenta ?? null) as string | null,
+        titular: (c.titular ?? null) as string | null,
+        activa: c.status_cuenta !== false && c.activa !== false,
+      })).filter((c) => c.id),
     };
   }
   if (!isRpcSuccess(data)) {
@@ -185,10 +184,10 @@ export async function listarCuentasBancarias(): Promise<
     ok: true,
     cuentas: (Array.isArray(rows) ? rows : []).map((c) => ({
       id: String(c.id ?? ""),
-      banco: String(c.banco ?? c.nombre_banco ?? ""),
-      numero_cuenta: (c.numero_cuenta as string) ?? null,
-      titular: (c.titular as string) ?? null,
-      activa: c.activa !== false,
+      banco: String(c.entidad_bancaria ?? c.banco ?? c.nombre_banco ?? "Cuenta Bancaria"),
+      numero_cuenta: (c.cuenta_bancaria ?? c.numero_cuenta ?? null) as string | null,
+      titular: (c.titular ?? null) as string | null,
+      activa: c.status_cuenta !== false && c.activa !== false,
     })).filter((c) => c.id),
   };
 }

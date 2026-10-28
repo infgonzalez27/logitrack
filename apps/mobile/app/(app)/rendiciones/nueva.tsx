@@ -43,13 +43,16 @@ type PagoDraft = {
 };
 
 export default function NuevaRendicionScreen() {
-  const { clienteId: clienteParam } = useLocalSearchParams<{
-    clienteId?: string;
+  const params = useLocalSearchParams<{
+    clienteId?: string | string[];
   }>();
   const { profile } = useAuth();
   const router = useRouter();
 
-  const [clienteId] = useState(clienteParam ?? "");
+  const rawParamId = Array.isArray(params.clienteId)
+    ? params.clienteId[0]
+    : params.clienteId;
+  const [clienteId] = useState(rawParamId ?? "");
   const [clienteNombre, setClienteNombre] = useState("");
   const [ordenes, setOrdenes] = useState<OrdenParaRendicion[]>([]);
   const [montos, setMontos] = useState<Record<string, string>>({});
@@ -74,32 +77,54 @@ export default function NuevaRendicionScreen() {
       setLoading(false);
       return;
     }
-    const [cRes, aRes, fRes, cuRes, ebRes, tRes] = await Promise.all([
-      getClienteVisita(clienteId, profile),
-      solicitaAbonosCliente(clienteId),
-      listarFormasPago(),
-      listarCuentasBancarias(),
-      listarEntidadesBancarias(),
-      retornaUltimaTasa(),
-    ]);
-    if (cRes.ok) setClienteNombre(cRes.cliente.razon_social);
-    if (!aRes.ok) {
-      setError(aRes.error);
-    } else {
-      setSaldoFavor(aRes.abonos.saldo_favor);
-      setOrdenes(aRes.abonos.ordenes);
-      const init: Record<string, string> = {};
-      for (const o of aRes.abonos.ordenes) init[o.id] = "0";
-      setMontos(init);
-      if (aRes.abonos.tasa_oficial_actual) {
-        setTasa(aRes.abonos.tasa_oficial_actual);
+    setLoading(true);
+    setError(null);
+    try {
+      const [cRes, aRes, fRes, cuRes, ebRes, tRes] = await Promise.all([
+        getClienteVisita(clienteId, profile),
+        solicitaAbonosCliente(clienteId),
+        listarFormasPago(),
+        listarCuentasBancarias(),
+        listarEntidadesBancarias(),
+        retornaUltimaTasa(),
+      ]);
+
+      if (!cRes.ok) {
+        setError(cRes.error);
+      } else {
+        setClienteNombre(cRes.cliente.razon_social);
       }
+
+      if (!aRes.ok) {
+        setError((prev) => prev ?? aRes.error);
+      } else {
+        setSaldoFavor(Number(aRes.abonos.saldo_favor) || 0);
+        const ords = Array.isArray(aRes.abonos.ordenes) ? aRes.abonos.ordenes : [];
+        setOrdenes(ords);
+        const init: Record<string, string> = {};
+        for (const o of ords) init[o.id] = "0";
+        setMontos(init);
+        if (aRes.abonos.tasa_oficial_actual) {
+          setTasa(Number(aRes.abonos.tasa_oficial_actual) || null);
+        }
+      }
+
+      if (fRes.ok) setFormas(Array.isArray(fRes.formas) ? fRes.formas : []);
+      else setError((prev) => prev ?? fRes.error);
+
+      if (cuRes.ok) setCuentas(Array.isArray(cuRes.cuentas) ? cuRes.cuentas : []);
+      if (ebRes.ok) setEntidades(Array.isArray(ebRes.entidades) ? ebRes.entidades : []);
+      if (tRes.ok && tasa == null) setTasa(tRes.tasa);
+    } catch (err) {
+      console.error("Error al cargar pantalla de rendición:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Error inesperado al cargar la información del cliente.",
+      );
+    } finally {
+      setLoading(false);
     }
-    if (fRes.ok) setFormas(fRes.formas);
-    if (cuRes.ok) setCuentas(cuRes.cuentas);
-    if (ebRes.ok) setEntidades(ebRes.entidades);
-    if (tRes.ok && tasa == null) setTasa(tRes.tasa);
-    setLoading(false);
   }, [profile, clienteId, tasa]);
 
   useEffect(() => {
@@ -110,14 +135,14 @@ export default function NuevaRendicionScreen() {
   const totalCobranzas = useMemo(
     () =>
       Object.entries(montos).reduce(
-        (acc, [, v]) => acc + (Number(v.replace(",", ".")) || 0),
+        (acc, [, v]) => acc + (Number(String(v ?? "0").replace(",", ".")) || 0),
         0,
       ),
     [montos],
   );
 
   function montoDigitado(ordenId: string): number {
-    return Number((montos[ordenId] ?? "0").replace(",", ".")) || 0;
+    return Number(String(montos[ordenId] ?? "0").replace(",", ".")) || 0;
   }
 
   const totalAplicado = useMemo(
@@ -126,8 +151,8 @@ export default function NuevaRendicionScreen() {
         (acc, o) =>
           acc +
           montoAplicable(
-            Number((montos[o.id] ?? "0").replace(",", ".")) || 0,
-            o.saldo_pendiente,
+            montoDigitado(o.id),
+            Number(o.saldo_pendiente) || 0,
           ),
         0,
       ),
@@ -137,7 +162,7 @@ export default function NuevaRendicionScreen() {
   const totalPagosUsd = useMemo(() => {
     return pagos.reduce((acc, p) => {
       const forma = formas.find((f) => f.fpago_id === p.fpago_id);
-      const monto = Number(p.monto.replace(",", ".")) || 0;
+      const monto = Number(String(p.monto ?? "0").replace(",", ".")) || 0;
       if (!forma || monto <= 0) return acc;
       if (esFormaPagoEnBs(forma.fpago_concepto) && tasa && tasa > 0) {
         return acc + monto / tasa;
@@ -167,54 +192,65 @@ export default function NuevaRendicionScreen() {
 
   const submit = async () => {
     if (!profile || !clienteId) return;
-    const ordenesPayload = ordenes
-      .map((o) => ({
-        orden_id: o.id,
-        monto_recaudado: montoAplicable(montoDigitado(o.id), o.saldo_pendiente),
-      }))
-      .filter((o) => o.monto_recaudado > 0);
+    try {
+      const ordenesPayload = ordenes
+        .map((o) => ({
+          orden_id: o.id,
+          monto_recaudado: montoAplicable(
+            montoDigitado(o.id),
+            Number(o.saldo_pendiente) || 0,
+          ),
+        }))
+        .filter((o) => o.monto_recaudado > 0);
 
-    if (!ordenesPayload.length) {
-      setError("Indica el monto a cobrar en al menos una orden.");
-      return;
-    }
-    if (!pagos.length) {
-      setError("Agrega al menos una forma de pago.");
-      return;
-    }
+      if (!ordenesPayload.length) {
+        setError("Indica el monto a cobrar en al menos una orden.");
+        return;
+      }
+      if (!pagos.length) {
+        setError("Agrega al menos una forma de pago.");
+        return;
+      }
 
-    setSaving(true);
-    setError(null);
-    const res = await registrarRendicion({
-      clienteId,
-      userId: profile.id,
-      observaciones: obs || undefined,
-      tasaCambio: tasa,
-      formas,
-      ordenes: ordenesPayload,
-      pagos: pagos.map((p) => {
-        const forma = formas.find((f) => f.fpago_id === p.fpago_id);
-        return {
-          fpago_id: p.fpago_id,
-          monto: Number(p.monto.replace(",", ".")) || 0,
-          en_bs: forma ? esFormaPagoEnBs(forma.fpago_concepto) : false,
-          fpago_info: !!forma?.fpago_info,
-          codigo_banco: p.codigo_banco,
-          referencia_bancaria: p.referencia,
-          cuenta_bancaria_id: p.cuenta_id,
-        };
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
+      setSaving(true);
+      setError(null);
+      const res = await registrarRendicion({
+        clienteId,
+        userId: profile.id,
+        observaciones: obs || undefined,
+        tasaCambio: tasa,
+        formas,
+        ordenes: ordenesPayload,
+        pagos: pagos.map((p) => {
+          const forma = formas.find((f) => f.fpago_id === p.fpago_id);
+          return {
+            fpago_id: p.fpago_id,
+            monto: Number(String(p.monto ?? "0").replace(",", ".")) || 0,
+            en_bs: forma ? esFormaPagoEnBs(forma.fpago_concepto) : false,
+            fpago_info: !!forma?.fpago_info,
+            codigo_banco: p.codigo_banco,
+            referencia_bancaria: p.referencia,
+            cuenta_bancaria_id: p.cuenta_id,
+          };
+        }),
+      });
+      setSaving(false);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      Alert.alert(
+        "Rendición registrada",
+        `Pendiente de aprobación.\nSaldo favor usado: $${formatMoney(res.saldoFavorUsado)}\nGenerado: $${formatMoney(res.saldoFavorGenerado)}`,
+        [{ text: "OK", onPress: () => router.back() }],
+      );
+    } catch (err) {
+      console.error("Error al registrar rendición:", err);
+      setError(
+        err instanceof Error ? err.message : "Error inesperado al registrar cobranza.",
+      );
+      setSaving(false);
     }
-    Alert.alert(
-      "Rendición registrada",
-      `Pendiente de aprobación.\nSaldo favor usado: $${formatMoney(res.saldoFavorUsado)}\nGenerado: $${formatMoney(res.saldoFavorGenerado)}`,
-      [{ text: "OK", onPress: () => router.back() }],
-    );
   };
 
   if (loading) {
@@ -262,13 +298,13 @@ export default function NuevaRendicionScreen() {
   }
 
   const entidadesFiltradas = useMemo(() => {
-    const q = filtroBanco.toLowerCase().trim();
+    const q = (filtroBanco || "").toLowerCase().trim();
     if (!q) return entidades;
     return entidades.filter(
       (eb) =>
-        eb.codigo_eb.includes(q) ||
-        (eb.nombre_corto && eb.nombre_corto.toLowerCase().includes(q)) ||
-        eb.nombre_eb.toLowerCase().includes(q),
+        (eb.codigo_eb || "").toLowerCase().includes(q) ||
+        (eb.nombre_corto ? eb.nombre_corto.toLowerCase().includes(q) : false) ||
+        (eb.nombre_eb || "").toLowerCase().includes(q),
     );
   }, [entidades, filtroBanco]);
 
