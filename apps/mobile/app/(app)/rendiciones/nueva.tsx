@@ -66,6 +66,7 @@ export default function NuevaRendicionScreen() {
   const [pickerPagoKey, setPickerPagoKey] = useState<string | null>(null);
   const [pickerCuentaKey, setPickerCuentaKey] = useState<string | null>(null);
   const [pickerBancoKey, setPickerBancoKey] = useState<string | null>(null);
+  const [filtroBanco, setFiltroBanco] = useState("");
 
   const load = useCallback(async () => {
     if (!profile || !clienteId) {
@@ -260,18 +261,51 @@ export default function NuevaRendicionScreen() {
     );
   }
 
+  const entidadesFiltradas = useMemo(() => {
+    const q = filtroBanco.toLowerCase().trim();
+    if (!q) return entidades;
+    return entidades.filter(
+      (eb) =>
+        eb.codigo_eb.includes(q) ||
+        (eb.nombre_corto && eb.nombre_corto.toLowerCase().includes(q)) ||
+        eb.nombre_eb.toLowerCase().includes(q),
+    );
+  }, [entidades, filtroBanco]);
+
   if (pickerBancoKey) {
     return (
       <View style={styles.root}>
-        <Pressable onPress={() => setPickerBancoKey(null)}>
-          <Text style={styles.back}>← Volver</Text>
-        </Pressable>
+        <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 8 }}>
+          <Pressable
+            onPress={() => {
+              setPickerBancoKey(null);
+              setFiltroBanco("");
+            }}
+          >
+            <Text style={{ color: "#0B3A5C", fontWeight: "600", paddingVertical: 8 }}>
+              ← Volver
+            </Text>
+          </Pressable>
+          <Text style={styles.title}>Entidad bancaria emisora (BCV)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Buscar por código (ej. 0102) o nombre…"
+            value={filtroBanco}
+            onChangeText={setFiltroBanco}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
         <FlatList
-          data={entidades}
+          data={entidadesFiltradas}
           keyExtractor={(eb) => eb.codigo_eb}
           contentContainerStyle={{ padding: 16 }}
           ListEmptyComponent={
-            <Text style={styles.meta}>No hay entidades bancarias activas.</Text>
+            <Text style={styles.meta}>
+              {filtroBanco
+                ? `No se encontró ningún banco con «${filtroBanco}».`
+                : "No hay entidades bancarias activas."}
+            </Text>
           }
           renderItem={({ item }) => (
             <Pressable
@@ -285,6 +319,7 @@ export default function NuevaRendicionScreen() {
                   ),
                 );
                 setPickerBancoKey(null);
+                setFiltroBanco("");
               }}
             >
               <Text style={styles.name}>
