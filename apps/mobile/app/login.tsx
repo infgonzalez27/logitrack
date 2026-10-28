@@ -71,11 +71,13 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          <Image
-            source={require("../assets/images/icon.png")}
-            style={styles.logo}
-            accessibilityLabel="LogiTrack"
-          />
+          <View style={styles.logoBadge}>
+            <Image
+              source={require("../assets/images/icon.png")}
+              style={styles.logo}
+              accessibilityLabel="LogiTrack"
+            />
+          </View>
           <Text style={styles.brand}>LogiTrack</Text>
           <Text style={styles.sub}>
             App de campo — vendedor, despachador, gerente
@@ -170,11 +172,21 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+  logoBadge: {
+    padding: 3,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    shadowColor: "#0B3A5C",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 6,
+    marginBottom: 4,
+  },
   logo: {
-    width: 76,
-    height: 76,
-    borderRadius: 18,
-    marginBottom: 2,
+    width: 82,
+    height: 82,
+    borderRadius: 21,
   },
   brand: {
     fontSize: 26,

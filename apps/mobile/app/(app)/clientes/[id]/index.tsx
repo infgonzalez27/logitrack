@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -106,6 +106,16 @@ export default function ClienteVisitaScreen() {
     }
   };
 
+  const pendientes = useMemo(
+    () => abonos?.ordenes.filter((o) => o.saldo_pendiente > 0) ?? [],
+    [abonos?.ordenes],
+  );
+
+  const totalDeuda = useMemo(
+    () => pendientes.reduce((acc, curr) => acc + (Number(curr.saldo_pendiente) || 0), 0),
+    [pendientes],
+  );
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -117,16 +127,19 @@ export default function ClienteVisitaScreen() {
   if (error || !cliente) {
     return (
       <View style={styles.center}>
-        <Text style={styles.error}>{error ?? "Sin datos"}</Text>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.link}>Volver</Text>
+        <Ionicons name="alert-circle-outline" size={48} color="#B42318" />
+        <Text style={styles.error}>{error ?? "No se encontró el cliente"}</Text>
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => router.push("/(app)/visita" as Href)}
+        >
+          <Ionicons name="arrow-back" size={16} color="#0B3A5C" />
+          <Text style={styles.backBtnText}>Volver a Cartera</Text>
         </Pressable>
       </View>
     );
   }
 
-  const pendientes =
-    abonos?.ordenes.filter((o) => o.saldo_pendiente > 0) ?? [];
   const puedeCrearOrden =
     profile?.rol === "vendedor" ||
     profile?.rol === "gerente" ||
@@ -139,7 +152,8 @@ export default function ClienteVisitaScreen() {
   return (
     <ScrollView
       style={styles.root}
-      contentContainerStyle={{ padding: 16, gap: 12 }}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -147,119 +161,157 @@ export default function ClienteVisitaScreen() {
             setRefreshing(true);
             void load();
           }}
+          tintColor="#0B3A5C"
         />
       }
     >
-      <Text style={styles.title}>{cliente.razon_social}</Text>
-      <Text style={styles.meta}>{cliente.rif_nit}</Text>
-      {cliente.direccion_fiscal ? (
-        <Text style={styles.meta}>{cliente.direccion_fiscal}</Text>
-      ) : null}
-
-      <Pressable onPress={() => router.push("/(app)/visita" as Href)}>
-        <Text style={styles.link}>← Volver a Visita / cartera</Text>
+      {/* Botón Volver */}
+      <Pressable
+        style={styles.topBackBar}
+        onPress={() => router.push("/(app)/visita" as Href)}
+        hitSlop={8}
+      >
+        <Ionicons name="arrow-back" size={18} color="#0B3A5C" />
+        <Text style={styles.topBackText}>Volver a Visita / cartera</Text>
       </Pressable>
 
-      <View style={styles.card}>
-        <Text style={styles.cardLabel}>Saldo a favor</Text>
-        <Text style={styles.cardValue}>
-          ${formatMoney(abonos?.saldo_favor ?? 0)}
-          {abonos?.saldo_favor_bs != null
-            ? ` · ${formatMoney(abonos.saldo_favor_bs)} Bs`
-            : ""}
-        </Text>
+      {/* Tarjeta Hero del Cliente */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroHeader}>
+          <View style={styles.heroIconWrap}>
+            <Ionicons name="business" size={24} color="#0B3A5C" />
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.heroTitle}>{cliente.razon_social}</Text>
+            <View style={styles.rifBadge}>
+              <Text style={styles.rifBadgeText}>{cliente.rif_nit}</Text>
+            </View>
+          </View>
+        </View>
+
+        {cliente.direccion_fiscal ? (
+          <View style={styles.addressRow}>
+            <Ionicons name="location-outline" size={16} color="#64748B" />
+            <Text style={styles.addressText}>{cliente.direccion_fiscal}</Text>
+          </View>
+        ) : null}
       </View>
 
-      <Pressable
-        style={styles.btnSecondary}
-        onPress={() =>
-          router.push(`/(app)/clientes/${cliente.id}/editar` as Href)
-        }
-      >
-        <Text style={styles.btnSecondaryText}>Editar / descuentos</Text>
-      </Pressable>
+      {/* Resumen Financiero de 2 Columnas */}
+      <View style={styles.balanceGrid}>
+        {/* Saldo a Favor */}
+        <View style={styles.balanceBox}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="arrow-down-circle" size={16} color="#027A48" />
+            <Text style={styles.balanceBoxLabel}>Saldo a favor</Text>
+          </View>
+          <Text style={[styles.balanceBoxValue, { color: "#027A48" }]}>
+            ${formatMoney(abonos?.saldo_favor ?? 0)}
+          </Text>
+          {abonos?.saldo_favor_bs != null ? (
+            <Text style={styles.balanceBoxSub}>
+              {formatMoney(abonos.saldo_favor_bs)} Bs
+            </Text>
+          ) : null}
+        </View>
 
-      {puedeCrearOrden ? (
-        <Pressable
-          style={styles.btnPrimary}
-          onPress={() =>
-            router.push({
-              pathname: "/(app)/ordenes/nueva",
-              params: { clienteId: cliente.id },
-            })
-          }
-        >
-          <Text style={styles.btnPrimaryText}>Nueva orden</Text>
-        </Pressable>
-      ) : null}
+        {/* Deuda Pendiente */}
+        <View style={styles.balanceBox}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="alert-circle" size={16} color="#B42318" />
+            <Text style={styles.balanceBoxLabel}>Por cobrar</Text>
+          </View>
+          <Text style={[styles.balanceBoxValue, { color: "#B42318" }]}>
+            ${formatMoney(totalDeuda)}
+          </Text>
+          <Text style={styles.balanceBoxSub}>
+            {pendientes.length} {pendientes.length === 1 ? "orden" : "órdenes"}
+          </Text>
+        </View>
+      </View>
 
-      {puedeRendir && pendientes.length > 0 ? (
-        <Pressable
-          style={styles.btnSecondary}
-          onPress={() =>
-            router.push({
-              pathname: "/(app)/rendiciones/nueva",
-              params: { clienteId: cliente.id },
-            })
-          }
-        >
-          <Text style={styles.btnSecondaryText}>Cobrar / Rendición</Text>
-        </Pressable>
-      ) : null}
+      {/* Acciones Rápidas */}
+      <View style={styles.actionsContainer}>
+        {puedeRendir && pendientes.length > 0 ? (
+          <Pressable
+            style={styles.btnCobrar}
+            onPress={() =>
+              router.push({
+                pathname: "/(app)/rendiciones/nueva",
+                params: { clienteId: cliente.id },
+              })
+            }
+          >
+            <Ionicons name="flash" size={18} color="#FFFFFF" />
+            <Text style={styles.btnCobrarText}>
+              Cobrar (${formatMoney(totalDeuda)})
+            </Text>
+          </Pressable>
+        ) : null}
 
-      {!cliente.despachador_id ? (
-        <Text style={styles.warn}>
-          Sin despachador asignado: no se puede crear orden hasta asignarlo en
-          la web.
-        </Text>
-      ) : null}
-
-      <Text style={styles.section}>
-        Órdenes con saldo ({pendientes.length})
-      </Text>
-      {pendientes.length === 0 ? (
-        <Text style={styles.empty}>No hay saldos pendientes.</Text>
-      ) : (
-        pendientes.map((o) => (
-          <View key={o.id} style={styles.row}>
+        <View style={styles.actionRowSecondary}>
+          {puedeCrearOrden ? (
             <Pressable
+              style={styles.btnNuevaOrden}
               onPress={() =>
                 router.push({
-                  pathname: "/(app)/ordenes/[id]",
-                  params: { id: o.id },
+                  pathname: "/(app)/ordenes/nueva",
+                  params: { clienteId: cliente.id },
                 })
               }
             >
-              <View style={styles.rowTop}>
-                <Text style={styles.rowTitle}>#{o.correlativo}</Text>
-                <Text style={styles.saldo}>
-                  Pendiente ${formatMoney(o.saldo_pendiente)}
-                </Text>
-              </View>
-              <Text style={styles.meta}>
-                {formatDate(o.fecha_despacho)}
-                {o.dias_vencidos != null ? ` · ${o.dias_vencidos}d` : ""}
-              </Text>
+              <Ionicons name="add-circle-outline" size={18} color="#0B3A5C" />
+              <Text style={styles.btnNuevaOrdenText}>Nueva Orden</Text>
             </Pressable>
+          ) : null}
 
-            <View style={styles.rowActions}>
-              <Pressable
-                style={styles.btnPrint}
-                disabled={imprimiendoId === o.id}
-                onPress={() => void onImprimirOrden(o.id, o.correlativo)}
-              >
-                {imprimiendoId === o.id ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="print-outline" size={16} color="#fff" />
-                    <Text style={styles.btnPrintText}>Imprimir</Text>
-                  </>
-                )}
-              </Pressable>
+          <Pressable
+            style={styles.btnEditar}
+            onPress={() =>
+              router.push(`/(app)/clientes/${cliente.id}/editar` as Href)
+            }
+          >
+            <Ionicons name="create-outline" size={18} color="#475569" />
+            <Text style={styles.btnEditarText}>Editar / Descuentos</Text>
+          </Pressable>
+        </View>
+      </View>
 
+      {!cliente.despachador_id ? (
+        <View style={styles.warnCard}>
+          <Ionicons name="warning-outline" size={18} color="#B54708" />
+          <Text style={styles.warnText}>
+            Sin despachador asignado: no se puede crear orden hasta asignarlo en el panel web.
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Listado de Órdenes Pendientes */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>
+          Órdenes pendientes ({pendientes.length})
+        </Text>
+        {pendientes.length > 0 ? (
+          <Text style={styles.sectionSubtitle}>
+            Total: ${formatMoney(totalDeuda)}
+          </Text>
+        ) : null}
+      </View>
+
+      {pendientes.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Ionicons name="checkmark-done-circle" size={40} color="#027A48" />
+          <Text style={styles.emptyTitle}>¡Sin facturas pendientes!</Text>
+          <Text style={styles.emptySubtitle}>
+            Este cliente se encuentra totalmente al día con sus pagos.
+          </Text>
+        </View>
+      ) : (
+        pendientes.map((o) => {
+          const esVencido = (o.dias_vencidos ?? 0) > 0;
+          return (
+            <View key={o.id} style={styles.orderCard}>
               <Pressable
-                style={styles.btnVer}
                 onPress={() =>
                   router.push({
                     pathname: "/(app)/ordenes/[id]",
@@ -267,72 +319,351 @@ export default function ClienteVisitaScreen() {
                   })
                 }
               >
-                <Ionicons name="eye-outline" size={16} color="#0B3A5C" />
-                <Text style={styles.btnVerText}>Ver orden</Text>
+                <View style={styles.orderTopRow}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={styles.orderNumber}>#{o.correlativo}</Text>
+                    {esVencido ? (
+                      <View style={styles.vencidoBadge}>
+                        <Text style={styles.vencidoBadgeText}>
+                          {o.dias_vencidos}d vencido
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.alDiaBadge}>
+                        <Text style={styles.alDiaBadgeText}>Al día</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.orderAmount}>
+                    ${formatMoney(o.saldo_pendiente)}
+                  </Text>
+                </View>
+
+                <View style={styles.orderMetaRow}>
+                  <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                  <Text style={styles.orderMetaText}>
+                    Despacho: {formatDate(o.fecha_despacho)}
+                  </Text>
+                </View>
               </Pressable>
+
+              <View style={styles.orderActionsRow}>
+                <Pressable
+                  style={styles.btnPrint}
+                  disabled={imprimiendoId === o.id}
+                  onPress={() => void onImprimirOrden(o.id, o.correlativo)}
+                >
+                  {imprimiendoId === o.id ? (
+                    <ActivityIndicator size="small" color="#0B3A5C" />
+                  ) : (
+                    <>
+                      <Ionicons name="print-outline" size={16} color="#0B3A5C" />
+                      <Text style={styles.btnPrintText}>Imprimir</Text>
+                    </>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  style={styles.btnVerOrden}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(app)/ordenes/[id]",
+                      params: { id: o.id },
+                    })
+                  }
+                >
+                  <Ionicons name="eye-outline" size={16} color="#334155" />
+                  <Text style={styles.btnVerOrdenText}>Ver Detalle</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        ))
+          );
+        })
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F4F6F8" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  title: { fontSize: 22, fontWeight: "700", color: "#0B3A5C" },
-  meta: { fontSize: 14, color: "#5B6B7C" },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+  root: { flex: 1, backgroundColor: "#F2F5F8" },
+  scrollContent: { padding: 16, paddingBottom: 32, gap: 14 },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    gap: 12,
+  },
+  topBackBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+  },
+  topBackText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0B3A5C",
+  },
+
+  // Hero Card
+  heroCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+    gap: 10,
+  },
+  heroHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  heroIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#E0F2FE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  rifBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  rifBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
+    fontFamily: "monospace",
+  },
+  addressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    paddingTop: 8,
+  },
+  addressText: {
+    fontSize: 13,
+    color: "#64748B",
+    flex: 1,
+  },
+
+  // Balance Grid
+  balanceGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  balanceBox: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#E5EAF0",
+    borderColor: "#E2E8F0",
+    gap: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  cardLabel: { fontSize: 12, color: "#5B6B7C", textTransform: "uppercase" },
-  cardValue: { fontSize: 20, fontWeight: "700", color: "#0B3A5C", marginTop: 4 },
-  btnPrimary: {
-    backgroundColor: "#0B3A5C",
-    borderRadius: 12,
-    paddingVertical: 14,
+  balanceBoxLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+    textTransform: "uppercase",
+  },
+  balanceBoxValue: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  balanceBoxSub: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+
+  // Actions
+  actionsContainer: {
+    gap: 10,
+  },
+  btnCobrar: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#059669",
+    borderRadius: 14,
+    paddingVertical: 14,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  btnPrimaryText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  btnSecondary: {
-    borderWidth: 1,
+  btnCobrarText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  actionRowSecondary: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  btnNuevaOrden: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
     borderColor: "#0B3A5C",
     borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    backgroundColor: "#fff",
+    paddingVertical: 11,
   },
-  btnSecondaryText: { color: "#0B3A5C", fontWeight: "600", fontSize: 16 },
-  warn: { color: "#B54708", fontSize: 13 },
-  section: { marginTop: 8, fontSize: 16, fontWeight: "600", color: "#0B3A5C" },
-  empty: { color: "#5B6B7C", fontSize: 14 },
-  row: {
-    backgroundColor: "#fff",
+  btnNuevaOrdenText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0B3A5C",
+  },
+  btnEditar: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
     borderRadius: 12,
+    paddingVertical: 11,
+  },
+  btnEditarText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
+  },
+
+  warnCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    padding: 12,
+    borderRadius: 12,
+  },
+  warnText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#92400E",
+  },
+
+  // Section Header
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#B42318",
+  },
+
+  // Order Cards
+  orderCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#E5EAF0",
-    gap: 8,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+    gap: 10,
   },
-  rowTop: {
+  orderTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  rowTitle: { fontWeight: "700", fontSize: 16, color: "#0B3A5C" },
-  saldo: { fontWeight: "700", fontSize: 15, color: "#B42318" },
-  rowActions: {
+  orderNumber: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0B3A5C",
+  },
+  orderAmount: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#B42318",
+  },
+  vencidoBadge: {
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  vencidoBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#B42318",
+  },
+  alDiaBadge: {
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  alDiaBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#027A48",
+  },
+  orderMetaRow: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 6,
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  orderMetaText: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  orderActionsRow: {
+    flexDirection: "row",
+    gap: 8,
     borderTopWidth: 1,
-    borderTopColor: "#F2F4F7",
-    paddingTop: 8,
+    borderTopColor: "#F1F5F9",
+    paddingTop: 10,
   },
   btnPrint: {
     flex: 1,
@@ -340,32 +671,69 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#0B3A5C",
-    paddingVertical: 9,
-    borderRadius: 8,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingVertical: 8,
+    borderRadius: 9,
   },
   btnPrintText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0B3A5C",
   },
-  btnVer: {
+  btnVerOrden: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#0B3A5C",
-    backgroundColor: "#fff",
-    paddingVertical: 9,
-    borderRadius: 8,
+    borderColor: "#E2E8F0",
+    paddingVertical: 8,
+    borderRadius: 9,
   },
-  btnVerText: {
-    color: "#0B3A5C",
-    fontWeight: "600",
+  btnVerOrdenText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
+  },
+
+  // Empty State
+  emptyCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#027A48",
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    textAlign: "center",
+  },
+  error: { color: "#B42318", fontSize: 14, textAlign: "center" },
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  backBtnText: {
     fontSize: 14,
+    fontWeight: "700",
+    color: "#0B3A5C",
   },
-  error: { color: "#B42318", marginBottom: 12 },
-  link: { color: "#0B3A5C", textDecorationLine: "underline" },
 });

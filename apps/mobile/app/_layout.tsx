@@ -84,11 +84,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 20,
-    backgroundColor: "#5D9CEC",
+    backgroundColor: "#0B3A5C",
   },
   bootLogo: {
-    width: 96,
-    height: 96,
-    borderRadius: 22,
+    width: 108,
+    height: 108,
+    borderRadius: 24,
   },
 });

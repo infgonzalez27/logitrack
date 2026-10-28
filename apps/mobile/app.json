@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#5D9CEC"
+      "backgroundColor": "#0B3A5C"
     },
     "ios": {
       "supportsTablet": false,
@@ -23,7 +23,7 @@
       "package": "com.informaticagonzalez.logitrack",
       "versionCode": 5,
       "adaptiveIcon": {
-        "backgroundColor": "#5D9CEC",
+        "backgroundColor": "#0B3A5C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -53,7 +53,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#5D9CEC"
+          "backgroundColor": "#0B3A5C"
         }
       ]
     ],

@@ -19,18 +19,27 @@ import { SkeletonList } from "@/src/ui/Skeleton";
 interface ShortcutItem {
   key: string;
   label: string;
+  sub: string;
   icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  iconBg: string;
   href: Href;
 }
 
 interface KpiTileProps {
   value: number;
   label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  iconBg: string;
 }
 
 const KpiTile: React.FC<KpiTileProps> = React.memo(function KpiTile({
   value,
   label,
+  icon,
+  iconColor,
+  iconBg,
 }) {
   const { theme } = useTheme();
   return (
@@ -43,8 +52,14 @@ const KpiTile: React.FC<KpiTileProps> = React.memo(function KpiTile({
         },
       ]}
     >
-      <Text style={[styles.kpiNum, { color: theme.colors.brand }]}>{value}</Text>
-      <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>
+      <View style={[styles.kpiIconWrap, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={18} color={iconColor} />
+      </View>
+      <Text style={[styles.kpiNum, { color: theme.colors.text }]}>{value}</Text>
+      <Text
+        style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
     </View>
@@ -77,17 +92,22 @@ const ShortcutRow: React.FC<ShortcutRowProps> = React.memo(function ShortcutRow(
         },
       ]}
     >
-      <View
-        style={[styles.shortcutIcon, { backgroundColor: theme.colors.background }]}
-      >
-        <Ionicons name={item.icon} size={20} color={theme.colors.brand} />
+      <View style={[styles.shortcutIcon, { backgroundColor: item.iconBg }]}>
+        <Ionicons name={item.icon} size={22} color={item.iconColor} />
       </View>
-      <Text style={[styles.shortcutText, { color: theme.colors.text }]}>
-        {item.label}
-      </Text>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[styles.shortcutText, { color: theme.colors.text }]}>
+          {item.label}
+        </Text>
+        <Text
+          style={[styles.shortcutSub, { color: theme.colors.textSecondary }]}
+        >
+          {item.sub}
+        </Text>
+      </View>
       <Ionicons
         name="chevron-forward"
-        size={16}
+        size={18}
         color={theme.colors.textSecondary}
       />
     </Pressable>
@@ -132,7 +152,10 @@ export const HomeScreen: React.FC = function HomeScreen() {
       items.push({
         key: "visita",
         label: "Visita / cartera",
+        sub: "Gestión de clientes y cobro",
         icon: "map-outline",
+        iconColor: "#0284C7",
+        iconBg: "#E0F2FE",
         href: "/(app)/visita" as Href,
       });
     }
@@ -140,7 +163,10 @@ export const HomeScreen: React.FC = function HomeScreen() {
       items.push({
         key: "ordenes",
         label: "Órdenes / envíos",
+        sub: "Pedidos y despachos activos",
         icon: "document-text-outline",
+        iconColor: "#2563EB",
+        iconBg: "#DBEAFE",
         href: "/(app)/ordenes" as Href,
       });
     }
@@ -148,7 +174,10 @@ export const HomeScreen: React.FC = function HomeScreen() {
       items.push({
         key: "radar",
         label: "Radar del día",
+        sub: "Mapa y geolocalización de rutas",
         icon: "radio-outline",
+        iconColor: "#7C3AED",
+        iconBg: "#EDE9FE",
         href: "/(app)/radar" as Href,
       });
     }
@@ -156,14 +185,20 @@ export const HomeScreen: React.FC = function HomeScreen() {
       items.push({
         key: "autoventas",
         label: "AutoVentas",
+        sub: "Carga de camión y venta en ruta",
         icon: "car-outline",
+        iconColor: "#EA580C",
+        iconBg: "#FFEDD5",
         href: "/(app)/autoventas" as Href,
       });
     }
     items.push({
       key: "rendiciones",
       label: "Cobranzas",
+      sub: "Registrar rendición de cobros",
       icon: "wallet-outline",
+      iconColor: "#059669",
+      iconBg: "#D1FAE5",
       href: "/(app)/rendiciones" as Href,
     });
     return items;
@@ -192,10 +227,21 @@ export const HomeScreen: React.FC = function HomeScreen() {
     router.push("/(app)/radar");
   }, [router]);
 
+  // Iniciales para el avatar
+  const initials = useMemo(() => {
+    if (!profile?.nombre_completo) return "LT";
+    const parts = profile.nombre_completo.trim().split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return parts[0].slice(0, 2).toUpperCase();
+  }, [profile?.nombre_completo]);
+
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -204,46 +250,80 @@ export const HomeScreen: React.FC = function HomeScreen() {
           />
         }
       >
+        {/* Cabecera del Usuario */}
         <View style={styles.header}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+
+          <View style={{ flex: 1, gap: 2 }}>
             <Text style={[styles.hello, { color: theme.colors.textSecondary }]}>
-              Hola
+              ¡Hola de nuevo!
             </Text>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
+            <Text
+              style={[styles.title, { color: theme.colors.text }]}
+              numberOfLines={1}
+            >
               {profile?.nombre_completo ?? "…"}
             </Text>
-            <Text style={[styles.role, { color: theme.colors.textSecondary }]}>
-              {profile ? roleLabel(profile.rol) : "—"}
-            </Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>
+                {profile ? roleLabel(profile.rol) : "—"}
+              </Text>
+            </View>
           </View>
+
           <Pressable
             onPress={toggleScheme}
             style={[
               styles.themeBtn,
-              { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
             ]}
             accessibilityLabel="Cambiar tema"
           >
             <Ionicons
-              name={theme.scheme === "dark" ? "sunny-outline" : "moon-outline"}
-              size={20}
+              name={theme.scheme === "dark" ? "sunny" : "moon"}
+              size={18}
               color={theme.colors.brand}
             />
           </Pressable>
         </View>
 
+        {/* KPIs de Rendimiento */}
         {loading && !kpis ? (
           <SkeletonList rows={2} />
         ) : kpis ? (
           <View style={styles.kpiRow}>
-            <KpiTile value={ordenesActivas} label="Activas" />
-            <KpiTile value={kpis.clientesActivos} label="Clientes" />
-            <KpiTile value={kpis.rendicionesPendientes} label="Cobranza" />
+            <KpiTile
+              value={ordenesActivas}
+              label="Activas"
+              icon="cube-outline"
+              iconColor="#0284C7"
+              iconBg="#E0F2FE"
+            />
+            <KpiTile
+              value={kpis.clientesActivos}
+              label="Clientes"
+              icon="people-outline"
+              iconColor="#4F46E5"
+              iconBg="#EEF2FF"
+            />
+            <KpiTile
+              value={kpis.rendicionesPendientes}
+              label="Cobranzas"
+              icon="cash-outline"
+              iconColor="#059669"
+              iconBg="#D1FAE5"
+            />
           </View>
         ) : null}
 
+        {/* Sección de Accesos Rápidos */}
         <Text style={[styles.section, { color: theme.colors.text }]}>
-          Accesos rápidos
+          Accesos Rápidos
         </Text>
         <View style={styles.shortcuts}>
           {shortcuts.map((item) => (
@@ -252,8 +332,7 @@ export const HomeScreen: React.FC = function HomeScreen() {
         </View>
 
         <Text style={[styles.hint, { color: theme.colors.textSecondary }]}>
-          Menú lateral: {sections.reduce((n, s) => n + s.items.length, 0)}{" "}
-          opciones · tema {preference === "system" ? "sistema" : preference}
+          {profile?.empresa_nombre ?? "LogiTrack"} · {sections.reduce((n, s) => n + s.items.length, 0)} módulos disponibles
         </Text>
       </ScrollView>
 
@@ -296,57 +375,112 @@ export const HomeScreen: React.FC = function HomeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { padding: 20, paddingBottom: 16, gap: 8 },
-  header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  hello: { fontSize: 13, fontWeight: "600" },
-  title: { fontSize: 24, fontWeight: "800", marginTop: 2 },
-  role: { fontSize: 14, marginTop: 4 },
+  content: { padding: 18, paddingBottom: 24, gap: 10 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 4,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#0B3A5C",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0B3A5C",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  avatarText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  hello: { fontSize: 12, fontWeight: "600" },
+  title: { fontSize: 20, fontWeight: "800" },
+  roleBadge: {
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginTop: 2,
+  },
+  roleBadgeText: {
+    color: "#0369A1",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
   themeBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  kpiRow: { flexDirection: "row", gap: 8, marginTop: 16 },
+  kpiRow: { flexDirection: "row", gap: 10, marginTop: 8 },
   kpi: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    gap: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  kpiNum: { fontSize: 22, fontWeight: "800", textAlign: "center" },
+  kpiIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  kpiNum: { fontSize: 20, fontWeight: "800" },
   kpiLabel: {
     fontSize: 11,
     fontWeight: "600",
-    textAlign: "center",
-    marginTop: 4,
   },
   section: {
-    marginTop: 20,
-    marginBottom: 8,
+    marginTop: 14,
+    marginBottom: 4,
     fontSize: 16,
     fontWeight: "700",
   },
-  shortcuts: { gap: 8 },
+  shortcuts: { gap: 10 },
   shortcut: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    borderWidth: 1,
     paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   shortcutIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  shortcutText: { flex: 1, fontSize: 15, fontWeight: "600" },
-  hint: { marginTop: 16, fontSize: 12, lineHeight: 18 },
+  shortcutText: { fontSize: 15, fontWeight: "700" },
+  shortcutSub: { fontSize: 12, marginTop: 1 },
+  hint: { marginTop: 14, fontSize: 12, textAlign: "center", opacity: 0.8 },
 });
