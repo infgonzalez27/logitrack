@@ -55,16 +55,36 @@ export async function retornaUltimaTasa(): Promise<
   { ok: true; tasa: number; fecha: string | null } | { ok: false; error: string }
 > {
   const { data, error } = await supabase.rpc("retorna_ultima_tasa_cambio");
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    const fallback = await supabase
+      .from("tasa_cambio")
+      .select("fecha_tasa, tasa_cambio")
+      .order("fecha_tasa", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (fallback.error || !fallback.data) {
+      return { ok: false, error: error.message };
+    }
+    const tasaFb = Number(fallback.data.tasa_cambio);
+    if (!Number.isFinite(tasaFb) || tasaFb <= 0) {
+      return { ok: false, error: "Tasa no válida." };
+    }
+    return { ok: true, tasa: tasaFb, fecha: fallback.data.fecha_tasa ?? null };
+  }
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row || typeof row !== "object") {
     return { ok: false, error: "No hay tasa registrada." };
   }
-  const r = row as { tasa_cambio?: number; tasa?: number; fecha_tasa?: string };
-  const tasa = Number(r.tasa_cambio ?? r.tasa);
+  const inner = (row as { data?: unknown }).data ?? row;
+  const r = (Array.isArray(inner) ? inner[0] : inner) as {
+    tasa_cambio?: number;
+    tasa?: number;
+    fecha_tasa?: string;
+  };
+  const tasa = Number(r?.tasa_cambio ?? r?.tasa);
   if (!Number.isFinite(tasa) || tasa <= 0) {
     return { ok: false, error: "No hay tasa registrada." };
   }
-  return { ok: true, tasa, fecha: r.fecha_tasa ?? null };
+  return { ok: true, tasa, fecha: r?.fecha_tasa ?? null };
 }
