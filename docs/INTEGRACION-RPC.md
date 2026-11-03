@@ -702,3 +702,152 @@ Al hacer `git pull origin main`, el desarrollador Frontend encontrará listos y 
    - Muestra el selector modal (`pickerBancoKey`) bajo la etiqueta **"Entidad bancaria emisora (BCV) *"**, diferenciado claramente de **"Cuenta bancaria destino (Empresa) *"** y **"Referencia bancaria *"**.
 3. **`apps/mobile/app/(app)/rendiciones/[id].tsx`** y **`apps/mobile/app/(app)/rendiciones/formas-pago.tsx`**:
    - Muestran en el detalle de cada pago el banco emisor BCV (`codigo_banco` y `nombre_banco`) junto con el número de referencia y la cuenta destino.
+
+
+---
+
+## 11. INFORME TÉCNICO Y DIRECTIVA PARA FRONTEND: Corrección de Generación de Saldo a Favor en Cobranzas / Rendiciones (03/11/2026)
+
+> [!IMPORTANT]
+> **ACCIÓN REQUERIDA PARA EL ENCARGADO DE FRONTEND (`apps/mobile`):**
+> En el build actual de la APK (`v0.2.4` / `versionCode 7`), cuando se registra una cobranza (Rendición de Cuentas) y el cliente paga de más, **no se le está sumando el excedente a su `saldo_favor`**.
+> Se realizó la auditoría completa en **PostgreSQL (Supabase)** y en el **Frontend**. A continuación se presenta el informe técnico y las instrucciones exactas para que el encargado del Frontend aplique la corrección.
+
+---
+
+### 11.1. Verificación en PostgreSQL (Supabase) — ✅ Funciones Operativas
+
+Se auditaron las funciones RPC en Supabase (`public.registrar_rendicion_cuentas` y `public.solicita_abonos_orden_distribucion`):
+
+1. **`public.registrar_rendicion_cuentas`:**
+   - Calcula `v_total_ordenes` sumando `monto_recaudado` de cada elemento en `p_ordenes` (lo que amortiza las facturas).
+   - Calcula `v_total_pagos` sumando `monto_usd` (o `monto_bs / v_tasa_cambio`) de cada elemento en `p_pagos` (el dinero realmente entregado por el cliente).
+   - **Regla de generación de Saldo a Favor en BD:**
+     ```sql
+     -- 8. Manejo de Excedente de Pago (Crédito a Favor Generado)
+     IF v_total_pagos > v_total_ordenes THEN
+         v_exceso := v_total_pagos - v_total_ordenes;
+         v_exceso_bs := v_exceso * v_tasa_cambio;
+
+         INSERT INTO public.movimientos_saldo_favor (
+             cliente_id, rendicion_id, orden_id, monto, tipo, observaciones, created_at
+         ) VALUES (
+             p_cliente_id, v_rendicion_id, NULL, v_exceso, 'abono_recaudacion',
+             'Excedente en formas de pago de rendición de cuentas ID: ' || v_rendicion_id, NOW()
+         );
+
+         UPDATE public.clientes
+         SET saldo_favor = COALESCE(saldo_favor, 0.00) + v_exceso
+         WHERE id = p_cliente_id;
+     END IF;
+     ```
+   - Retorna en el JSON de respuesta:
+     - `data.saldo_favor_usado`
+     - `data.saldo_favor_generado`
+     - `data.saldo_favor_generado_bs`
+2. **`public.solicita_abonos_orden_distribucion`:**
+   - Retorna `data.saldo_favor` y `data.saldo_favor_bs` directamente desde `public.clientes`.
+3. **Condición obligatoria del contrato RPC:**
+   - Para que PostgreSQL acredite el excedente en `clientes.saldo_favor`, el Frontend **DEBE** enviar:
+     - En `p_ordenes`: `monto_recaudado` limitado al `saldo_pendiente` de cada orden (`montoAplicable(digitado, saldo_pendiente)`).
+     - En `p_pagos`: el monto real total pagado por el cliente (incluyendo el sobrepago), de modo que `SUM(p_pagos.monto_usd) > SUM(p_ordenes.monto_recaudado)`.
+
+---
+
+### 11.2. Causa Raíz del Problema en el Frontend (`apps/mobile/app/(app)/rendiciones/nueva.tsx`)
+
+En el archivo `apps/mobile/app/(app)/rendiciones/nueva.tsx` existen **dos fallos de lógica de sincronización** que impiden que el excedente llegue a `p_pagos`:
+
+#### Fallo #1: `computeTotal` y `totalCobrarUsd` truncan el monto digitado antes de sincronizar la Forma de Pago
+1. Supongamos que una orden tiene `saldo_pendiente = $50.00` y el cliente entrega `$60.00`.
+2. Si el usuario entra a **"Abono parcial"** en la tarjeta de la orden y digita `60`, la UI le muestra el aviso (líneas 762–766):
+   > `ℹ️ Se amortizan $50.00 y $10.00 quedarán como saldo a favor.`
+3. Sin embargo, al escribir en ese input se ejecuta `handleOrderMontoChange` (líneas 313–320), que llama a `computeTotal` (líneas 253–263):
+   ```typescript
+   // ❌ CÓDIGO ACTUAL CON BUG EN nueva.tsx (líneas 253-263):
+   const computeTotal = (
+     ordersList: OrdenParaRendicion[],
+     sel: Record<string, boolean>,
+     m: Record<string, string>,
+   ) => {
+     return ordersList.reduce((acc, o) => {
+       if (!sel[o.id]) return acc;
+       const v = Number(String(m[o.id] ?? "0").replace(",", ".")) || 0;
+       return acc + montoAplicable(v, Number(o.saldo_pendiente) || 0); // <-- Trunca 60 a 50
+     }, 0);
+   };
+   ```
+   Como `montoAplicable(60, 50)` hace `Math.min(60, 50) = 50`, `computeTotal` devuelve **`50`** en lugar de los **`60`** digitados.
+4. Inmediatamente después, `handleOrderMontoChange` llama a `syncPaymentWithTotal(nextTotal)`, lo cual **sobreescribe automáticamente la Forma de Pago (Sección 2) con `$50.00`** (o su equivalente en Bs de `$50.00`), **descartando los `$10.00` de saldo a favor**.
+5. Si el usuario pulsa **"Llenar restante"** en la forma de pago (`fillRemainingPayment`, líneas 421–439), también calcula el restante usando `totalCobrarUsd` (que también está truncado en `$50.00`).
+6. Como resultado, al enviar `submit()`:
+   - `p_ordenes` envía `monto_recaudado: 50.00`
+   - `p_pagos` envía `monto_usd: 50.00`
+   - PostgreSQL recibe `$50.00 == $50.00` y genera **`$0.00` de saldo a favor**.
+
+*(Nota de referencia: En el Dashboard Web `src/app/(dashboard)/rendiciones/nuevo/nueva-rendicion-form.tsx` líneas 312–378 sí se separaron `totalOrdenes` y `totalDigitado`, precargando el pago con `totalDigitado`, pero en `apps/mobile` se usó el monto truncado).*
+
+#### Fallo #2: Seleccionar órdenes pisa el monto de pago si el usuario escribió primero el pago mayor en la Sección 2
+- Si el usuario escribe primero el pago recibido en **"2. Formas de pago recibidas"** (ej. `$60.00`) y luego toca **"Cobrar Total ($50.00)"** o **"Cobrar todas"** en la Sección 1, `selectOrderTotal` y `selectAllOrders` invocan `syncPaymentWithTotal(nextTotal)` sin verificar si el usuario ya había ingresado un monto mayor en la forma de pago, **rebajando el pago de `$60.00` a `$50.00`**.
+
+---
+
+### 11.3. Correcciones Exactas que Debe Aplicar el Encargado del Frontend en `apps/mobile/app/(app)/rendiciones/nueva.tsx`
+
+#### 1. Separar `totalAmortizadoUsd` (`totalCobrarUsd`) de `totalDigitadoUsd`
+En `apps/mobile/app/(app)/rendiciones/nueva.tsx` (alrededor de las líneas 195–203 y 253–263):
+
+```typescript
+  // Total que amortiza las órdenes seleccionadas (tope: saldo_pendiente por orden) -> va a p_ordenes
+  const totalCobrarUsd = useMemo(() => {
+    return ordenes.reduce((acc, o) => {
+      if (!selectedOrders[o.id]) return acc;
+      const v = Number(String(montos[o.id] ?? "0").replace(",", ".")) || 0;
+      return acc + montoAplicable(v, Number(o.saldo_pendiente) || 0);
+    }, 0);
+  }, [ordenes, selectedOrders, montos]);
+
+  // Total real digitado en las órdenes (incluyendo cualquier sobrepago digitado) -> sincroniza pagos
+  const totalDigitadoUsd = useMemo(() => {
+    return ordenes.reduce((acc, o) => {
+      if (!selectedOrders[o.id]) return acc;
+      const v = Number(String(montos[o.id] ?? "0").replace(",", ".")) || 0;
+      return acc + Math.max(0, v);
+    }, 0);
+  }, [ordenes, selectedOrders, montos]);
+
+  const excedenteDigitadoOrdenesUsd = Math.max(0, totalDigitadoUsd - totalCobrarUsd);
+```
+
+Y actualizar `computeTotal` (o renombrarlo a `computeTotalDigitado`) para que sume el monto digitado completo sin recortarlo con `montoAplicable` al sincronizar el input de pago:
+
+```typescript
+  const computeTotalDigitado = (
+    ordersList: OrdenParaRendicion[],
+    sel: Record<string, boolean>,
+    m: Record<string, string>,
+  ) => {
+    return ordersList.reduce((acc, o) => {
+      if (!sel[o.id]) return acc;
+      const v = Number(String(m[o.id] ?? "0").replace(",", ".")) || 0;
+      return acc + Math.max(0, v);
+    }, 0);
+  };
+```
+
+#### 2. Actualizar `fillRemainingPayment` y `addPago` para usar `totalDigitadoUsd`
+En `addPago` (línea 399) y `fillRemainingPayment` (línea 431), usar `totalDigitadoUsd` en lugar de `totalCobrarUsd`:
+
+```typescript
+  const objetivoPagoUsd = Math.max(totalCobrarUsd, totalDigitadoUsd);
+  const restanteUsd = Math.max(0, objetivoPagoUsd - otrosPagosUsd);
+```
+
+#### 3. Evitar que `selectOrderTotal` / `selectAllOrders` rebajen un pago mayor ya ingresado manualmente
+En `syncPaymentWithTotal(newTotalUsd: number, preserveHigherPayment = false)`:
+- Cuando se llama desde `selectOrderTotal` o `selectAllOrders`, si el pago único actual en USD ya es mayor que `newTotalUsd` (porque el cobrador escribió primero el billete/pago recibido de más en la Sección 2), conservar el monto mayor o permitir solo incrementarlo, mientras que en `handleOrderMontoChange` y `clearAllOrders` se sincroniza directamente con `computeTotalDigitado`.
+
+#### 4. Mostrar claramente en el Resumen y en el Botón de Envío el monto recaudado y el saldo a favor a generar
+- En el bloque de **Totalizador** y **Resumen de la cobranza** (líneas 804–820 y 1031–1079), si `excedenteDigitadoOrdenesUsd > 0.009`, mostrar el aviso de excedente.
+- En el botón principal **"Registrar Cobranza"** (línea 1096), mostrar el monto real de los pagos (`totalPagosUsd`) en lugar de mostrar únicamente `totalCobrarUsd`, para que el cobrador vea exactamente cuánto dinero total se está registrando en la operación.
+- Mantener en `submit()` (líneas 444–453) el envío de `ordenesPayload` con `monto_recaudado: montoAplicable(v, Number(o.saldo_pendiente) || 0)` (tope en el saldo de la factura) mientras `pagos` envía el monto total recibido. Así PostgreSQL recibirá `v_total_pagos > v_total_ordenes` y sumará automáticamente la diferencia en `clientes.saldo_favor`.
