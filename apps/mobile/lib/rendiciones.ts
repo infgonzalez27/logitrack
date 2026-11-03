@@ -434,6 +434,9 @@ export type OrdenPorLiquidarCliente = {
   dias_vencidos: number;
   cant_ordenes: number;
   monto_por_liquidar: number;
+  vendedor_id?: string | null;
+  dias_visita?: string[];
+  visita_cualquier_dia?: boolean;
 };
 
 /** Alias usado por pantallas de campo. */
@@ -746,6 +749,9 @@ export async function retornaOrdenesPorLiquidar(): Promise<
         dias_vencidos: Math.max(0, Number(r.dias_vencidos ?? 0)),
         cant_ordenes: Math.max(0, Number(r.cant_ordenes ?? 0)),
         monto_por_liquidar: Number(r.monto_por_liquidar ?? 0),
+        vendedor_id: typeof r.vendedor_id === "string" ? r.vendedor_id : null,
+        dias_visita: Array.isArray(r.dias_visita) ? r.dias_visita : [],
+        visita_cualquier_dia: r.visita_cualquier_dia !== false,
       });
     }
 

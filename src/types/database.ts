@@ -100,6 +100,10 @@ export interface Cliente {
   despachador_id?: string | null;
   /** Ruta — schema DB admin; combo vía `retorna_lista_rutas`. */
   id_ruta?: string | null;
+  /** Días de visita asignados al cliente (máximo 2 días canónicos en minúsculas). */
+  dias_visita?: string[];
+  /** Indica si puede ser visitado cualquier día (true) o solo en dias_visita (false). */
+  visita_cualquier_dia?: boolean;
   /** Crédito a favor por rendiciones (USD). */
   saldo_favor?: number | null;
   /** DB-027 — políticas de crédito / despacho. */
@@ -823,6 +827,34 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      reversar_entrega_orden_distribucion: {
+        Args: {
+          p_orden_id: string;
+          p_motivo?: string | null;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data?: {
+            orden_id: string;
+            correlativo: number;
+            origen_orden: string;
+            estado_anterior: string;
+            estado_nuevo: string;
+          } | null;
+          error?: {
+            code: string;
+            message: string;
+            details?: string;
+          } | null;
+        };
+      };
+      lt_dia_semana_actual_texto: {
+        Args: {
+          p_fecha?: string | null;
+        };
+        Returns: string;
+      };
       registra_nuevo_usuario: {
         Args: {
           p_email: string;

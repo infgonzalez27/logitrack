@@ -747,3 +747,45 @@ export async function obtenerInventarioDisponibleMovil(camionId: string): Promis
   return { ok: true, data: env.data };
 }
 
+
+
+/**
+ * Reversa la entrega de una orden de distribución sin anularla.
+ * Invoca el RPC `reversar_entrega_orden_distribucion`.
+ */
+export async function reversarEntregaOrdenDistribucion(
+  ordenId: string,
+  motivo?: string,
+): Promise<
+  | { ok: true; estadoNuevo: string; origenOrden: string; message: string }
+  | { ok: false; error: string }
+> {
+  const { data, error } = await supabase.rpc(
+    "reversar_entrega_orden_distribucion",
+    {
+      p_orden_id: ordenId,
+      p_motivo: motivo?.trim() ? motivo.trim() : null,
+    },
+  );
+  if (error) return { ok: false, error: error.message };
+  const env = data as RpcEnvelope<{
+    orden_id?: string;
+    estado_nuevo?: string;
+    origen_orden?: string;
+  }> | null;
+  if (!env || env.success === false) {
+    return {
+      ok: false,
+      error:
+        env?.message ??
+        env?.error?.message ??
+        "No se pudo reversar la entrega de la orden.",
+    };
+  }
+  return {
+    ok: true,
+    estadoNuevo: env.data?.estado_nuevo ?? "",
+    origenOrden: env.data?.origen_orden ?? "",
+    message: env.message ?? "Entrega reversada exitosamente.",
+  };
+}

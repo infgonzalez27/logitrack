@@ -13,6 +13,8 @@ export type ClienteListaItem = {
   despachador_id: string | null;
   id_ruta: string | null;
   vendedor_id: string | null;
+  dias_visita?: string[];
+  visita_cualquier_dia?: boolean;
 };
 
 export type ClienteVisita = ClienteListaItem & {
@@ -46,7 +48,7 @@ export async function listClientesForProfile(
 > {
   let q = supabase
     .from("clientes")
-    .select("id, razon_social, rif_nit, despachador_id, id_ruta, vendedor_id")
+    .select("id, razon_social, rif_nit, despachador_id, id_ruta, vendedor_id, dias_visita, visita_cualquier_dia")
     .eq("activo", true)
     .order("razon_social")
     .limit(200);
@@ -80,7 +82,7 @@ export async function buscarClientesForProfile(
 
   let q = supabase
     .from("clientes")
-    .select("id, razon_social, rif_nit, despachador_id, id_ruta, vendedor_id")
+    .select("id, razon_social, rif_nit, despachador_id, id_ruta, vendedor_id, dias_visita, visita_cualquier_dia")
     .eq("activo", true)
     .or(`razon_social.ilike.%${term}%,rif_nit.ilike.%${term}%`)
     .order("razon_social")
