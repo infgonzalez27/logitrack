@@ -851,3 +851,531 @@ En `syncPaymentWithTotal(newTotalUsd: number, preserveHigherPayment = false)`:
 - En el bloque de **Totalizador** y **Resumen de la cobranza** (líneas 804–820 y 1031–1079), si `excedenteDigitadoOrdenesUsd > 0.009`, mostrar el aviso de excedente.
 - En el botón principal **"Registrar Cobranza"** (línea 1096), mostrar el monto real de los pagos (`totalPagosUsd`) en lugar de mostrar únicamente `totalCobrarUsd`, para que el cobrador vea exactamente cuánto dinero total se está registrando en la operación.
 - Mantener en `submit()` (líneas 444–453) el envío de `ordenesPayload` con `monto_recaudado: montoAplicable(v, Number(o.saldo_pendiente) || 0)` (tope en el saldo de la factura) mientras `pagos` envía el monto total recibido. Así PostgreSQL recibirá `v_total_pagos > v_total_ordenes` y sumará automáticamente la diferencia en `clientes.saldo_favor`.
+
+
+
+---
+
+## 12. ESPECIFICACIÓN BACKEND Y DIRECTIVA PARA FRONTEND (WEB Y APK): Configuración de Días de Visita y Reversión de Entrega en Despacho (03/11/2026)
+
+> [!IMPORTANT]
+> **PARTE BACKEND IMPLEMENTADA EN SUPABASE (`20261103124500_dias_visita_clientes_y_reversar_entrega_od.sql`):**
+> A continuación se detalla el contrato de base de datos, las nuevas columnas, los RPCs creados/actualizados y la **guía exacta de implementación** que debe ejecutar el encargado de **Frontend Web (`src/`)** y **Frontend APK (`apps/mobile/`)** para completar las Tareas 1 y 2 de `docs/task_20261103a.md`.
+
+---
+
+### 12.1. TAREA 1: Configuración de Días de Visita en Clientes y Filtro en `Visita / Cartera` (APK)
+
+#### A. Cambios en Base de Datos (`public.clientes` y RPC `retorna_ordenes_por_liquidar`)
+
+1. **Nuevas columnas en `public.clientes`:**
+   - `dias_visita TEXT[] NOT NULL DEFAULT '{}'::TEXT[]`
+     - Valores permitidos (máximo **2 días**): `'lunes'`, `'martes'`, `'miercoles'`, `'jueves'`, `'viernes'`, `'sabado'`, `'domingo'`.
+     - Restricciones en BD:
+       - `clientes_dias_visita_max_check`: `COALESCE(array_length(dias_visita, 1), 0) <= 2`
+       - `clientes_dias_visita_valores_check`: valida que solo contenga nombres de días válidos en minúsculas sin tilde.
+   - `visita_cualquier_dia BOOLEAN NOT NULL DEFAULT TRUE`
+     - `TRUE`: El cliente puede ser visitado cualquier día de la semana (valor por defecto para clientes existentes o cuando `dias_visita` está vacío).
+     - `FALSE`: El cliente solo se atiende en los días definidos en `dias_visita` (1 o 2 días).
+   - **Trigger automático `trg_clientes_normalizar_dias_visita`:**
+     - Normaliza automáticamente a minúsculas sin tilde (`Miércoles` $\rightarrow$ `miercoles`, `Sábado` $\rightarrow$ `sabado`), elimina duplicados y garantiza que si `dias_visita` queda vacío (`'{}'`), `visita_cualquier_dia` pase automáticamente a `TRUE`.
+
+2. **Actualización del RPC `public.retorna_ordenes_por_liquidar()`:**
+   - Ahora incluye en la raíz del JSON el campo `'dia_actual'` (ej. `'martes'`) y dentro de cada ítem de `data[]` los campos del cliente:
+     ```json
+     {
+       "success": true,
+       "dia_actual": "martes",
+       "data": [
+         {
+           "cliente_id": "uuid",
+           "razon_social": "Comercial Ejemplo C.A.",
+           "rif_nit": "J-12345678-9",
+           "vendedor_id": "uuid",
+           "dias_visita": ["martes", "viernes"],
+           "visita_cualquier_dia": false,
+           "dias_vencidos": 5,
+           "cant_ordenes": 2,
+           "monto_por_liquidar": 120.50
+         }
+       ],
+       "error": null
+     }
+     ```
+
+---
+
+#### B. Tareas a Realizar por el Encargado de Frontend Web (`src/`) — Tarea 1
+
+1. **Actualizar Tipos (`src/types/database.ts`):**
+   - En `Database["public"]["Tables"]["clientes"]` (`Row`, `Insert`, `Update`), agregar:
+     ```typescript
+     dias_visita: string[];
+     visita_cualquier_dia: boolean;
+     ```
+2. **Actualizar Server Actions de Clientes (`src/lib/actions/clientes.ts`):**
+   - Leer del `FormData` (o payload) `visita_cualquier_dia` (`boolean`) y `dias_visita` (`string[]`, máximo 2 valores entre `['lunes','martes','miercoles','jueves','viernes','sabado','domingo']`).
+   - Si `visita_cualquier_dia === true`, enviar `dias_visita: []` y `visita_cualquier_dia: true`.
+   - Si `visita_cualquier_dia === false`, validar que haya **1 o 2 días** seleccionados (si hay 0, mostrar error de validación o marcar `visita_cualquier_dia: true`).
+3. **Actualizar Formularios Web de Creación y Edición de Clientes:**
+   - Archivos:
+     - `src/app/(dashboard)/clientes/nuevo/nuevo-cliente-form.tsx`
+     - `src/app/(dashboard)/clientes/[id]/cliente-editar-form.tsx`
+     - `src/app/(dashboard)/clientes/[id]/page.tsx` (incluir `dias_visita, visita_cualquier_dia` en el `SELECT` del cliente).
+   - **Comportamiento UI requerido:**
+     - Añadir sección **"Días de visita"**:
+       - Checkbox / Switch: **"Cualquier día" (`visita_cualquier_dia`)**.
+       - Botones/chips o checkboxes para los 7 días (`Lunes`, `Martes`, `Miércoles`, `Jueves`, `Viernes`, `Sábado`, `Domingo`) con valores internos `['lunes','martes','miercoles','jueves','viernes','sabado','domingo']`.
+       - Si el usuario marca **"Cualquier día"**, se desmarcan/deshabilitan los días específicos.
+       - Si desmarca **"Cualquier día"** (o toca directamente un día), puede elegir **hasta un máximo de 2 días** (al tener 2 seleccionados, los 5 restantes quedan deshabilitados hasta que desmarque uno).
+
+---
+
+#### C. Tareas a Realizar por el Encargado de Frontend APK (`apps/mobile/`) — Tarea 1
+
+1. **Actualizar Servicio de Clientes (`apps/mobile/lib/clientes.ts`) y Rendiciones (`apps/mobile/lib/rendiciones.ts`):**
+   - En `ClienteListaItem` y `ClienteVisita` (`apps/mobile/lib/clientes.ts`), añadir:
+     ```typescript
+     dias_visita?: string[] | null;
+     visita_cualquier_dia?: boolean | null;
+     ```
+   - En `listClientesForProfile`, `buscarClientesForProfile` y `getClienteVisita`, incluir `dias_visita, visita_cualquier_dia` en el `.select(...)` de `supabase.from("clientes")`.
+   - En `OrdenPorLiquidarCliente` (`apps/mobile/lib/rendiciones.ts`), mapear `dias_visita` (`string[]`) y `visita_cualquier_dia` (`boolean`) provenientes de `retorna_ordenes_por_liquidar`.
+2. **Formularios Móviles de Creación/Edición de Cliente:**
+   - Archivos:
+     - `apps/mobile/app/(app)/clientes/nuevo.tsx`
+     - `apps/mobile/app/(app)/clientes/[id]/editar.tsx`
+   - Agregar el selector de **"Días de visita"** con la opción **"Cualquier día"** o selección de **máximo 2 días de la semana**, enviando `dias_visita` y `visita_cualquier_dia` en el `insert` / `update` de `public.clientes`.
+3. **Filtro Automático por Día Actual en la Vista `Visita / Cartera` (`apps/mobile/app/(app)/visita/index.tsx`):**
+   - Obtener el día actual del sistema en formato canónico:
+     ```typescript
+     const DIAS_SEMANA = [
+       "domingo",
+       "lunes",
+       "martes",
+       "miercoles",
+       "jueves",
+       "viernes",
+       "sabado",
+     ] as const;
+     const diaActual = DIAS_SEMANA[new Date().getDay()];
+
+     function correspondeVisitaHoy(c: {
+       visita_cualquier_dia?: boolean | null;
+       dias_visita?: string[] | null;
+     }): boolean {
+       const dias = Array.isArray(c.dias_visita) ? c.dias_visita : [];
+       if (c.visita_cualquier_dia === true || dias.length === 0) return true;
+       return dias.includes(diaActual);
+     }
+     ```
+   - Aplicar `correspondeVisitaHoy(...)` tanto en `carteraFiltered` (pestaña **"Cartera"**) como en `todosFiltered` (pestaña **"Todos"** dentro de `Visita / Cartera`), de modo que la vista `Visita / Cartera` muestre exclusivamente:
+     1. Clientes cuyo día programado en `dias_visita` coincida con el día actual (`diaActual`).
+     2. Clientes configurados con `visita_cualquier_dia = true` (o sin días específicos).
+
+---
+
+### 12.2. TAREA 2: Reversión de Entrega en Despacho sin Anular la Orden
+
+#### A. Nuevo RPC en Base de Datos: `public.reversar_entrega_orden_distribucion`
+
+- **Firma:**
+  ```sql
+  public.reversar_entrega_orden_distribucion(
+      p_orden_id UUID,
+      p_motivo TEXT DEFAULT NULL
+  ) RETURNS JSONB
+  ```
+- **Reglas de Negocio y Comportamiento Transaccional:**
+  1. **Validaciones de bloqueo:**
+     - Rechaza si el usuario no está autenticado (`NO_AUTENTICADO`).
+     - Rechaza si la orden es un saldo inicial CxC (`ORDEN_SALDO_INICIAL`).
+     - Rechaza si la orden **no** está en un estado de entrega procesada (`por_liquidar`, `despachada` o `devuelta`) $\rightarrow$ código `ESTADO_INVALIDO`.
+     - Rechaza si la orden tiene una **rendición de cuentas activa** (`rc.estado <> 'reversada'`) $\rightarrow$ código `ORDEN_CON_RENDICION`.
+     - Rechaza si la orden pertenece a un **Radar que ya fue aprobado/cerrado por Gerencia** (`radars.status_radar = TRUE`) $\rightarrow$ código `RADAR_APROBADO_BLOQUEADO`.
+  2. **Reversión de Estado e Inventario según el Origen de la Orden (SIN anular la orden):**
+     | Origen detectado (`data.origen_orden`) | Condición en `ordenes_distribucion` | Nuevo estado (`data.estado_nuevo`) | Reversión de Inventario y Líneas (`detalle_distribucion`) |
+     | :--- | :--- | :--- | :--- |
+     | **`VENTA_DIRECTA_ALMACEN`** | `origen_venta = 'ALMACEN'` | `'aprobada'` | Suma `cantidad_despachada` de vuelta a `inventario_almacen.stock_disponible`. Pone `cantidad_despachada = 0`, `estado_entrega = 'pendiente'`, `motivo_rechazo = NULL`, `contenedores_retirados = 0`. |
+     | **`AUTOVENTA`** | `es_autoventa = TRUE` | `'en_transito'` | Resta `cantidad_despachada` de `inventario_movil.cantidad_entregada` (y `cantidad_devolucion` si aplica) en el camión asignado (`camion_id`). Pone `cantidad_despachada = cantidad_solicitada`, `estado_entrega = 'pendiente'`, `motivo_rechazo = NULL`, `contenedores_retirados = 0`. |
+     | **`RADAR` / `RUTA`** | `radar_id IS NOT NULL` o ruta normal | `'en_transito'` | Resta de `inventario_movil` (`cantidad_entregada` y `cantidad_devolucion`) lo asentado en la entrega. Pone `cantidad_despachada = cantidad_solicitada`, `estado_entrega = 'pendiente'`, `motivo_rechazo = NULL`, `contenedores_retirados = 0`. |
+  3. **Reversión de Contenedores / Envases:**
+     - Revierte en `public.saldo_contenedores_clientes` los envases entregados y retirados en esa orden (`saldo_pendiente - total_entregados + total_retirados`) y limpia las filas de `public.movimientos_contenedores WHERE orden_id = p_orden_id`.
+  4. **Auditoría en `public.logs_auditoria`:**
+     - Inserta un registro con `tabla_afectada = 'ordenes_distribucion'`, `accion = 'REVERSAR_ENTREGA'`, `usuario_id = auth.uid()`, `registro_id = p_orden_id`, `valores_anteriores` (snapshot completo de orden, líneas y contenedores previos) y `valores_nuevos` (nuevo estado, origen detectado, motivo y timestamp).
+- **Respuesta JSON exitosa:**
+  ```json
+  {
+    "success": true,
+    "message": "Entrega reversada exitosamente. La orden regresó a estado en_transito y la mercancía fue devuelta al inventario correspondiente.",
+    "data": {
+      "orden_id": "uuid-de-la-orden",
+      "correlativo": 1045,
+      "origen_orden": "RADAR",
+      "estado_anterior": "por_liquidar",
+      "estado_nuevo": "en_transito"
+    },
+    "error": null
+  }
+  ```
+
+#### B. Actualización en RPCs de Consulta de Radar (`retorna_radar_despachador` y `retorna_ordenes_distribucion_segun_idradar`)
+
+- **`public.retorna_radar_despachador()`:**
+  - Ahora retorna tanto las paradas en `'en_transito'` / `'despachada'` como las paradas ya entregadas (`'por_liquidar'`, `'devuelta'`) cuyo Radar siga activo/abierto (`radars.status_radar = FALSE`).
+  - Así, cuando el despachador termina una entrega en el Radar, la tarjeta de la parada permanece visible con badge **"Completado"** o **"Devuelta"** y permite mostrar el botón **"Reversar Entrega"** al lado de la parada procesada.
+- **`public.retorna_ordenes_distribucion_segun_idradar(p_radar_id)`:**
+  - Ahora incluye el campo `'estado'` de la orden en cada ítem de `data[]`.
+
+---
+
+#### C. Tareas a Realizar por el Encargado de Frontend Web (`src/`) — Tarea 2
+
+1. **Agregar Tipado y Server Action:**
+   - En `src/types/database.ts`, declarar la firma de `reversar_entrega_orden_distribucion`:
+     ```typescript
+     reversar_entrega_orden_distribucion: {
+       Args: { p_orden_id: string; p_motivo?: string | null };
+       Returns: Json;
+     };
+     ```
+   - En `src/lib/actions/ordenes.ts` (o `src/lib/actions/radar.ts`), crear `reversarEntregaOrdenAction(ordenId: string, motivo?: string)` que invoque `supabase.rpc("reversar_entrega_orden_distribucion", { p_orden_id: ordenId, p_motivo: motivo ?? null })` y haga `revalidatePath("/ordenes")`, `revalidatePath(\`/ordenes/\${ordenId}\`)` y `revalidatePath("/radar")`.
+2. **Añadir Botón "Reversar Entrega" en Vista de Detalle de Orden y Radar Web:**
+   - **En `src/app/(dashboard)/ordenes/[id]/orden-estado-actions.tsx` (o `page.tsx`):**
+     - Cuando `estadoActual` sea `'por_liquidar'`, `'despachada'` o `'devuelta'` (y no sea `es_saldo_inicial`), mostrar el botón **"Reversar Entrega"** (con modal de confirmación e input opcional para el motivo, similar al modal de anulación pero aclarando que **la orden NO se anulará**, sino que regresará a `'en_transito'` o `'aprobada'` y devolverá la mercancía al inventario).
+   - **En `src/app/(dashboard)/radar/radar-paradas-despachador.tsx` y `src/app/(dashboard)/radar/radar-paradas-view.tsx`:**
+     - En las paradas cuya entrega ya fue procesada (`!pendientes` o `orden.estado` en `['por_liquidar', 'despachada', 'devuelta']` mientras el radar no esté aprobado), mostrar el botón **"Reversar Entrega"** junto a las acciones de la parada.
+
+---
+
+#### D. Tareas a Realizar por el Encargado de Frontend APK (`apps/mobile/`) — Tarea 2
+
+1. **Agregar Función Cliente en `apps/mobile/lib/ordenes.ts`:**
+   ```typescript
+   export async function reversarEntregaOrdenDistribucion(
+     ordenId: string,
+     motivo?: string,
+   ): Promise<
+     | { ok: true; estadoNuevo: string; origenOrden: string; message: string }
+     | { ok: false; error: string }
+   > {
+     const { data, error } = await supabase.rpc(
+       "reversar_entrega_orden_distribucion",
+       {
+         p_orden_id: ordenId,
+         p_motivo: motivo?.trim() ? motivo.trim() : null,
+       },
+     );
+     if (error) return { ok: false, error: error.message };
+     const env = data as RpcEnvelope<{
+       orden_id?: string;
+       estado_nuevo?: string;
+       origen_orden?: string;
+     }> | null;
+     if (!env || env.success === false) {
+       return {
+         ok: false,
+         error:
+           env?.message ??
+           env?.error?.message ??
+           "No se pudo reversar la entrega de la orden.",
+       };
+     }
+     return {
+       ok: true,
+       estadoNuevo: env.data?.estado_nuevo ?? "",
+       origenOrden: env.data?.origen_orden ?? "",
+       message: env.message ?? "Entrega reversada exitosamente.",
+     };
+   }
+   ```
+2. **Añadir Botón "Reversar Entrega" en el Detalle de la Orden (`apps/mobile/src/features/ordenes/screens/OrdenDetalleScreen.tsx`):**
+   - Cuando `orden.estado` sea `'por_liquidar'`, `'despachada'` o `'devuelta'`, agregar en la `BottomActionBar` (o en la tarjeta de acciones de entrega) la acción **"Reversar Entrega"** (ícono `refresh-outline` o `arrow-undo-outline`).
+   - Al pulsar, mostrar `Alert.alert("¿Reversar Entrega?", "La orden NO será anulada: regresará a En Tránsito o Aprobada según su origen y los productos volverán al inventario móvil o almacén.", ...)` y ejecutar `reversarEntregaOrdenDistribucion(orden.id)`.
+3. **Añadir Botón "Reversar Entrega" en la Pantalla de Despacho / Radar (`apps/mobile/app/(app)/radar/index.tsx`):**
+   - En cada tarjeta de parada (`renderItem`), cuando `!pendientes` (es decir, la entrega ya fue procesada y aparece como `"Completado"` o `"Devuelta"`), mostrar al lado del botón `"Imprimir"` el botón **"Reversar Entrega"**, que confirme y llame a `reversarEntregaOrdenDistribucion(item.orden_id)` y recargue la lista (`void load()`).
+
+
+---
+
+### 12.3. TAREA 3 (APK): Edición Directa por Teclado de la Cantidad de Productos en Órdenes
+
+> **Contexto para el Agente Frontend (`apps/mobile`):**
+> Actualmente, en las pantallas de creación y edición de órdenes de la APK, cada línea de producto solo permite cambiar la cantidad pulsando los botones `−` y `+` (con un `<Text style={styles.qty}>{item.cantidad}</Text>` estático en el centro). Cuando un vendedor pide 50 o 100 unidades de un SKU, pulsar `+` cien veces es inviable.
+
+#### Archivos que Deben Modificarse en `apps/mobile`:
+1. `apps/mobile/app/(app)/ordenes/nueva.tsx` (alrededor de las líneas **410–427**)
+2. `apps/mobile/app/(app)/ordenes/editar/[id].tsx` (sección de líneas de productos `qtyRow`)
+3. `apps/mobile/app/(app)/ordenes/venta-directa.tsx` (sección de líneas de productos `qtyRow`)
+4. `apps/mobile/app/(app)/autoventas/nueva.tsx` (sección de líneas de productos `qtyRow`)
+
+#### Implementación Técnica Exacta:
+Reemplazar el `<Text style={styles.qty}>{item.cantidad}</Text>` por un `<TextInput>` numérico editable entre los botones `−` y `+`:
+
+```tsx
+<View style={styles.qtyRow}>
+  <Pressable
+    style={styles.qtyBtn}
+    onPress={() => updateCantidad(item.producto_id, item.cantidad - 1)}
+  >
+    <Text style={styles.qtyBtnText}>−</Text>
+  </Pressable>
+
+  <TextInput
+    style={styles.qtyInput}
+    keyboardType="number-pad"
+    selectTextOnFocus
+    value={String(item.cantidad)}
+    onChangeText={(txt) => {
+      const digits = txt.replace(/[^0-9]/g, "");
+      if (!digits) {
+        // Permitir edición temporal o fijar mínimo 1 al perder foco
+        updateCantidad(item.producto_id, 1);
+        return;
+      }
+      const parsed = parseInt(digits, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        updateCantidad(item.producto_id, parsed);
+      }
+    }}
+  />
+
+  <Pressable
+    style={styles.qtyBtn}
+    onPress={() => updateCantidad(item.producto_id, item.cantidad + 1)}
+  >
+    <Text style={styles.qtyBtnText}>+</Text>
+  </Pressable>
+
+  <Text style={styles.lineTotal}>
+    ${formatMoney(item.cantidad * item.precio)}
+  </Text>
+</View>
+```
+- **Estilo recomendado para `qtyInput`:**
+  ```ts
+  qtyInput: {
+    minWidth: 56,
+    height: 36,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  }
+  ```
+- **Nota de UX:** Si el usuario borra temporalmente todos los dígitos mientras escribe un número nuevo (ej. borra `1` para escribir `25`), manejar un estado local de texto o permitir string vacío mientras tiene el foco y al `onBlur` asegurar `Math.max(1, cantidad)` (y en Venta Directa / Auto-Venta validar que no supere `stock_disponible` si aplica).
+
+---
+
+### 12.4. TAREA 4 (APK): Impresión de Órdenes en Impresoras Wi-Fi desde el Radar
+
+> **Contexto para el Agente Frontend (`apps/mobile`):**
+> Actualmente, el botón `"Imprimir"` en `apps/mobile/app/(app)/radar/index.tsx` (líneas 48–74) y en `OrdenDetalleScreen.tsx` invoca exclusivamente `imprimirTicketOrden(ordenId)` de `apps/mobile/lib/print-orden.ts`, el cual solo envía comandos ESC/POS por **Bluetooth clásico** (`react-native-bluetooth-classic`).
+> Los **vendedores** (y usuarios en oficina/almacén) necesitan poder imprimir las órdenes desde el **Radar** hacia **impresoras conectadas por Wi-Fi / Red local**.
+
+#### Implementación Técnica Exacta:
+
+1. **Dependencia Expo (`expo-print`):**
+   - Instalar en `apps/mobile` usando `npx expo install expo-print` (compatible con el runtime nativo de Expo SDK 57).
+2. **Agregar Generador HTML e Impresión Wi-Fi en `apps/mobile/lib/print-orden.ts`:**
+   - Crear la función `buildHtmlForOrden(orden: OrdenDetalle): Promise<string>` que construya el documento HTML limpio de la orden (encabezado de la empresa actual, correlativo `#orden.correlativo`, factura origen, fecha, datos del cliente, RIF, dirección, tabla de productos con código, descripción, cantidad, precio unitario, subtotal, total en USD y tabla de estado de cuenta de envases/vacíos).
+   - Crear la función exportada `imprimirOrdenWifi(ordenOId: string | OrdenDetalle)`:
+     ```typescript
+     import * as Print from "expo-print";
+
+     export async function imprimirOrdenWifi(
+       ordenOId: string | OrdenDetalle,
+     ): Promise<{ ok: true } | { ok: false; error: string }> {
+       try {
+         let orden: OrdenDetalle;
+         if (typeof ordenOId === "string") {
+           const res = await getOrdenDetalle(ordenOId);
+           if (!res.ok) return { ok: false, error: res.error };
+           orden = res.orden;
+         } else {
+           orden = ordenOId;
+         }
+         const html = await buildHtmlForOrden(orden);
+         await Print.printAsync({ html });
+         return { ok: true };
+       } catch (err) {
+         const msg = err instanceof Error ? err.message : String(err);
+         // Si el usuario cancela el diálogo nativo de impresión, no tratarlo como fallo crítico
+         if (msg.toLowerCase().includes("cancel") || msg.toLowerCase().includes("did not complete")) {
+           return { ok: true };
+         }
+         return { ok: false, error: msg || "No se pudo imprimir por Wi-Fi." };
+       }
+     }
+     ```
+3. **Actualizar `apps/mobile/app/(app)/radar/index.tsx` y `apps/mobile/src/features/ordenes/screens/OrdenDetalleScreen.tsx`:**
+   - En `radar/index.tsx` (`onImprimirOrden`):
+     - Si el usuario tiene rol `vendedor` (o al tocar **"Imprimir"** en una parada del Radar), mostrar un selector rápido (`Alert.alert("Imprimir Orden", "Selecciona el método de impresión:", ...)`) con dos opciones:
+       1. **🖨️ Impresora Wi-Fi / Red** $\rightarrow$ ejecuta `await imprimirOrdenWifi(ordenId)` (abre el spooler nativo de Android que detecta todas las impresoras Wi-Fi de la red).
+       2. **🔵 Impresora Térmica Bluetooth** $\rightarrow$ ejecuta `await imprimirTicketOrden(ordenId)`.
+     - Hacer lo mismo en `OrdenDetalleScreen.tsx` para que desde el detalle de cualquier orden también se pueda imprimir tanto por **Wi-Fi** como por **Bluetooth**.
+
+---
+
+### 12.5. TAREA 5 (APK): Cobranzas — Subir Capture (Galería), Tomar Foto (Cámara) y Separador de Miles en Montos
+
+#### A. Subir Capture y Tomar Foto del Comprobante en Cobranzas (`apps/mobile/app/(app)/rendiciones/nueva.tsx`)
+
+> **Contrato Backend en Supabase (YA ACTIVO):**
+> - **Bucket de Storage:** `rendiciones-captures` (público para lectura, permite `INSERT`/`UPDATE` a usuarios `authenticated` hasta 10 MB; soporta `image/jpeg`, `image/png`, `image/webp`).
+> - **Campo en el RPC `public.registrar_rendicion_cuentas`:** Cada objeto dentro del array `p_pagos` recibe la propiedad `"capture_url": "https://.../storage/v1/object/public/rendiciones-captures/..."` y la guarda en `public.detalle_formas_pago.capture_url`.
+
+1. **Dependencia Expo (`expo-image-picker`):**
+   - Instalar en `apps/mobile` con `npx expo install expo-image-picker`.
+2. **Función de Subida a Supabase Storage (`apps/mobile/lib/rendiciones.ts`):**
+   - Añadir helper `uploadCaptureRendicionMobile(uri: string, userId: string)`:
+     ```typescript
+     export async function uploadCaptureRendicionMobile(
+       localUri: string,
+       userId: string,
+     ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+       try {
+         const ext = localUri.split(".").pop()?.toLowerCase() || "jpg";
+         const cleanExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+         const contentType = cleanExt === "png" ? "image/png" : cleanExt === "webp" ? "image/webp" : "image/jpeg";
+         const filePath = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${cleanExt}`;
+
+         const response = await fetch(localUri);
+         const arrayBuffer = await response.arrayBuffer();
+
+         const { error } = await supabase.storage
+           .from("rendiciones-captures")
+           .upload(filePath, arrayBuffer, {
+             contentType,
+             cacheControl: "3600",
+             upsert: false,
+           });
+
+         if (error) return { ok: false, error: error.message };
+
+         const { data } = supabase.storage
+           .from("rendiciones-captures")
+           .getPublicUrl(filePath);
+
+         return { ok: true, url: data.publicUrl };
+       } catch (e) {
+         return {
+           ok: false,
+           error: e instanceof Error ? e.message : "Error subiendo imagen del comprobante.",
+         };
+       }
+     }
+     ```
+3. **Interfaz en cada Forma de Pago (`apps/mobile/app/(app)/rendiciones/nueva.tsx`):**
+   - En el estado de cada línea de pago (`PagoLine`), agregar:
+     - `capture_url?: string | null` (URL pública en Supabase Storage)
+     - `capture_local_uri?: string | null` (URI local para preview inmediato)
+     - `uploadingCapture?: boolean`
+   - Debajo de los campos de la forma de pago, añadir la sección **"Comprobante / Capture de pago"** con dos botones claros:
+     - **📷 Tomar foto**: solicita permiso con `ImagePicker.requestCameraPermissionsAsync()` y abre `ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.75 })`.
+     - **🖼️ Subir capture (Galería)**: abre `ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.75 })`.
+   - Al obtener la imagen, subirla con `uploadCaptureRendicionMobile(asset.uri, profile.id)`, mostrar miniatura (`<Image source={{ uri }} />`) con botón de eliminar (`✕`), y enviar `capture_url: p.capture_url ?? null` dentro de cada elemento de `p_pagos` al llamar a `registrarRendicionCuentas`.
+   - En la vista de detalle de rendición (`apps/mobile/app/(app)/rendiciones/[id].tsx`), si un pago tiene `capture_url`, mostrar miniatura o botón **"Ver comprobante"** para abrir la imagen.
+
+---
+
+#### B. Separador de Miles en los Montos (`apps/mobile/app/(app)/rendiciones/nueva.tsx` y `apps/mobile/lib/format.ts`)
+
+> **Problema actual en `apps/mobile/app/(app)/rendiciones/nueva.tsx`:**
+> 1. Varios estados y helpers (`selectOrderTotal`, `syncPaymentWithTotal`, `fillRemainingPayment`, `addPago`) asignan a los inputs valores con `.toFixed(2)` (ej. `"12500.50"` sin separador de miles).
+> 2. Cuando el usuario escribe montos altos en Bolívares o USD en los `<TextInput>` de abono por orden o de monto de pago (ej. `1540000,50`), el número se muestra corrido sin separadores de miles (`1540000.50`), dificultando su lectura y causando errores de digitación.
+
+#### Implementación Técnica Exacta:
+1. **Crear helpers de formateo y parseo de inputs monetarios en `apps/mobile/lib/format.ts`:**
+   ```typescript
+   /**
+    * Convierte cualquier string monetario (con puntos de miles y coma decimal,
+    * o formato estándar con punto decimal) en un número flotante confiable.
+    */
+   export function parseMoneyInput(raw: string | number | null | undefined): number {
+     if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
+     if (!raw) return 0;
+     const s = String(raw).trim();
+     if (!s) return 0;
+     // Si contiene coma decimal (formato es-VE: "1.234,56"), quitar puntos de miles y cambiar coma por punto
+     if (s.includes(",")) {
+       const normalized = s.replace(/\./g, "").replace(",", ".");
+       const n = Number(normalized);
+       return Number.isFinite(n) ? n : 0;
+     }
+     // Si tiene múltiples puntos (ej. "1.234.567"), son separadores de miles
+     const parts = s.split(".");
+     if (parts.length > 2) {
+       const n = Number(parts.join(""));
+       return Number.isFinite(n) ? n : 0;
+     }
+     const n = Number(s);
+     return Number.isFinite(n) ? n : 0;
+   }
+
+   /**
+    * Formatea en vivo el texto de un TextInput monetario con separador de miles (.)
+    * y coma decimal (,) para que el usuario vea "1.250,50" mientras escribe.
+    */
+   export function formatMoneyInputLive(raw: string): string {
+     // Permitir dígitos y una coma o punto como separador decimal al escribir
+     const cleaned = raw.replace(/[^0-9.,]/g, "");
+     if (!cleaned) return "";
+
+     // Detectar el último separador como decimal si el usuario está escribiendo decimales
+     const lastComma = cleaned.lastIndexOf(",");
+     const lastDot = cleaned.lastIndexOf(".");
+     let intPart = cleaned;
+     let decPart: string | null = null;
+
+     if (lastComma !== -1 && lastComma > lastDot) {
+       intPart = cleaned.slice(0, lastComma).replace(/[.,]/g, "");
+       decPart = cleaned.slice(lastComma + 1).replace(/[.,]/g, "").slice(0, 2);
+     } else if (lastDot !== -1 && cleaned.length - lastDot - 1 <= 2 && cleaned.indexOf(".") === lastDot) {
+       // Un único punto con 0-2 dígitos detrás se trata como decimal
+       intPart = cleaned.slice(0, lastDot).replace(/[.,]/g, "");
+       decPart = cleaned.slice(lastDot + 1).replace(/[.,]/g, "").slice(0, 2);
+     } else {
+       intPart = cleaned.replace(/[.,]/g, "");
+     }
+
+     // Quitar ceros a la izquierda innecesarios (dejando al menos un "0" si hay decimales)
+     intPart = intPart.replace(/^0+(?=\d)/, "");
+     if (!intPart && decPart !== null) intPart = "0";
+
+     const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+     return decPart !== null ? `${intFormatted},${decPart}` : intFormatted;
+   }
+
+   /**
+    * Formatea un número fijo (ej. al autocompletar un pago) como "1.250,50".
+    */
+   export function numberToMoneyInput(n: number): string {
+     if (!Number.isFinite(n) || n <= 0) return "";
+     const [intPart, decPart] = n.toFixed(2).split(".");
+     const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+     return `${intFormatted},${decPart}`;
+   }
+   ```
+2. **Aplicar en `apps/mobile/app/(app)/rendiciones/nueva.tsx`:**
+   - Reemplazar todos los `.toFixed(2)` que llenan el estado de los inputs (`selectOrderTotal`, `selectAllOrders`, `syncPaymentWithTotal`, `fillRemainingPayment`, `addPago`) por `numberToMoneyInput(...)`.
+   - Reemplazar todos los `Number(String(...).replace(",", "."))` por `parseMoneyInput(...)`.
+   - En el `onChangeText` del input de **abono parcial por orden** y del input de **monto de cada forma de pago**, aplicar `formatMoneyInputLive(v)` para que mientras el usuario digita vea el separador de miles en tiempo real (ej. `12.500,00`).
+
+---
+
+### 12.6. Resumen Ejecutivo de Tareas para el Agente Frontend (Checklist)
+
+| # | Módulo / Plataforma | Tarea a Ejecutar por el Agente Frontend | Estado Backend (Supabase) |
+| :-: | :--- | :--- | :--- |
+| **1** | **Web + APK** (`clientes` y `visita/index.tsx`) | Selector de **Días de visita** (máx. 2 días o `"Cualquier día"`) en formularios de cliente y filtro automático por día actual en la vista **Visita / Cartera** de la APK. | ✅ **Listo en BD** (`clientes.dias_visita`, `clientes.visita_cualquier_dia`, `retorna_ordenes_por_liquidar`) |
+| **2** | **Web + APK** (`ordenes/[id]` y `radar`) | Botón **"Reversar Entrega"** junto a las entregas procesadas que invoque el RPC `reversar_entrega_orden_distribucion` (regresa a `'en_transito'` o `'aprobada'` sin anular la orden). | ✅ **Listo en BD** (`reversar_entrega_orden_distribucion`, `logs_auditoria`, `retorna_radar_despachador`) |
+| **3** | **APK** (`ordenes/nueva`, `editar`, `venta-directa`, `autoventas`) | Permitir **editar con teclado numérico** (`TextInput`) la cantidad de productos en las líneas de la orden, además de los botones `−` y `+`. | ✅ No requiere cambios adicionales en BD |
+| **4** | **APK** (`radar/index.tsx`, `lib/print-orden.ts`) | Permitir a los vendedores **imprimir en impresoras Wi-Fi** desde el Radar (y detalle de orden) mediante `expo-print` (`Print.printAsync`). | ✅ No requiere cambios adicionales en BD |
+| **5** | **APK** (`rendiciones/nueva.tsx`, `lib/format.ts`) | En Cobranzas: **1)** Botones para **Subir capture (Galería)** y **Tomar foto (Cámara)** hacia el bucket `rendiciones-captures` (`capture_url`), **2)** **Separador de miles** en vivo en los inputs de montos (`formatMoneyInputLive` / `parseMoneyInput`), y **3)** Corrección de saldo a favor de la **Sección 11**. | ✅ **Listo en BD** (Bucket `rendiciones-captures` y `capture_url` en `registrar_rendicion_cuentas`) |
