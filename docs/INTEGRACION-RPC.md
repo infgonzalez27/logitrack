@@ -1379,3 +1379,289 @@ Reemplazar el `<Text style={styles.qty}>{item.cantidad}</Text>` por un `<TextInp
 | **3** | **APK** (`ordenes/nueva`, `editar`, `venta-directa`, `autoventas`) | Permitir **editar con teclado numérico** (`TextInput`) la cantidad de productos en las líneas de la orden, además de los botones `−` y `+`. | ✅ No requiere cambios adicionales en BD |
 | **4** | **APK** (`radar/index.tsx`, `lib/print-orden.ts`) | Permitir a los vendedores **imprimir en impresoras Wi-Fi** desde el Radar (y detalle de orden) mediante `expo-print` (`Print.printAsync`). | ✅ No requiere cambios adicionales en BD |
 | **5** | **APK** (`rendiciones/nueva.tsx`, `lib/format.ts`) | En Cobranzas: **1)** Botones para **Subir capture (Galería)** y **Tomar foto (Cámara)** hacia el bucket `rendiciones-captures` (`capture_url`), **2)** **Separador de miles** en vivo en los inputs de montos (`formatMoneyInputLive` / `parseMoneyInput`), y **3)** Corrección de saldo a favor de la **Sección 11**. | ✅ **Listo en BD** (Bucket `rendiciones-captures` y `capture_url` en `registrar_rendicion_cuentas`) |
+| **6** | **APK + Web** (`contenedores`) | **Módulo de Retiro de Contenedores a Clientes sin Orden de Distribución** usando el nuevo RPC `registrar_movimiento_contenedores_a_clientes` (**PRIORIDAD CRÍTICA: debe quedar 100% activo y operativo en la APK**). | ✅ **Listo en BD** (`registrar_movimiento_contenedores_a_clientes` y actualización de `retorna_movimientos_contenedores_segun_cliente_id_rango_fechas`) |
+
+---
+
+## 13. Módulo de Retiro / Movimiento de Contenedores a Clientes sin Orden de Distribución (`registrar_movimiento_contenedores_a_clientes`) — Web y APK
+
+> **🚨 ÉNFASIS CRÍTICO PARA EL ENCARGADO DE FRONTEND (ESPECIALMENTE EN LA APP MÓVIL / APK):**
+> Este módulo **DEBE QUEDAR ACTIVO, VISIBLE Y TOTALMENTE OPERATIVO EN LA APK (`apps/mobile`)** además de la aplicación Web (`src/`).
+> En campo, los choferes, despachadores, vendedores, cobradores y gerentes necesitan poder **retirar envases/contenedores vacíos a cualquier cliente sin necesidad de crear una Orden de Distribución**.
+> Por ello, en la APK no basta con la vista de solo lectura actual (`/(app)/contenedores`): **es obligatorio habilitar la pantalla y botones de "Retirar Contenedores" dentro de `apps/mobile/app/(app)/contenedores/` y dejar el acceso activo en el menú lateral y accesos rápidos de la APK**.
+
+**Parche de Base de Datos asociado:**
+- `supabase/tenant_patches/20261104093000_registrar_movimiento_contenedores_a_clientes.sql`
+- `supabase/migrations/20261104093000_registrar_movimiento_contenedores_a_clientes.sql`
+
+---
+
+### 13.1. Contrato Backend en Supabase: `public.registrar_movimiento_contenedores_a_clientes`
+
+#### A. Firma SQL de la Función RPC
+```sql
+public.registrar_movimiento_contenedores_a_clientes(
+    p_cliente_id UUID,
+    p_movimientos JSONB DEFAULT '[]'::jsonb,
+    p_observaciones TEXT DEFAULT NULL,
+    p_creado_por UUID DEFAULT NULL
+) RETURNS JSONB
+```
+
+#### B. Parámetros de Entrada
+| Parámetro | Tipo | Obligatorio | Descripción |
+| :--- | :--- | :-: | :--- |
+| `p_cliente_id` | `UUID` | **Sí** | ID del cliente (`public.clientes.id`) al que se le retiran (o ajustan) los contenedores. |
+| `p_movimientos` | `JSONB` | **Sí** | Lista (array JSON) de movimientos por tipo de contenedor. También soporta recibir un objeto JSON único. |
+| `p_observaciones` | `TEXT` | No | Nota u observación del retiro (ej. `"Retiro de vacíos en visita sin pedido"`). Se guarda en `public.movimientos_contenedores.observaciones`. |
+| `p_creado_por` | `UUID` | No | ID del usuario que registra el movimiento. Si se omite (`NULL`), la función toma automáticamente `auth.uid()`. |
+
+#### C. Estructura de `p_movimientos` (Payload JSONB)
+Cada elemento del arreglo `p_movimientos` admite los siguientes campos:
+```json
+[
+  {
+    "contenedor_id": "uuid-del-tipo-contenedor",
+    "cantidad_retirada": 10,
+    "cantidad_entregada": 0
+  }
+]
+```
+- `contenedor_id` (`UUID`, obligatorio): ID existente en `public.tipos_contenedores`.
+- `cantidad_retirada` (`INT >= 0`): Cantidad de envases retirados al cliente (también acepta los alias `"retirados"` o `"cantidad"`).
+- `cantidad_entregada` (`INT >= 0`, opcional, por defecto `0`): Cantidad de envases entregados al cliente en caso de ajuste manual (también acepta el alias `"entregados"`).
+- **Regla de saldo:** Calcula `saldo_actual = saldo_anterior + entregados - retirados` y actualiza `public.saldo_contenedores_clientes`. Permite saldos negativos (`< 0`, saldo a favor del cliente) si el cliente entrega más envases de los que tenía pendientes.
+- **Sin Orden de Distribución:** Inserta en `public.movimientos_contenedores` con `orden_id = NULL`, `saldo_anterior`, `saldo_actual` y `observaciones`.
+
+#### D. Estructura de Respuesta JSON (Contrato)
+```json
+{
+  "success": true,
+  "message": "Movimiento de contenedores registrado exitosamente.",
+  "data": {
+    "cliente_id": "uuid-del-cliente",
+    "rif_nit": "J-12345678-9",
+    "razon_social": "Comercial Ejemplo C.A.",
+    "total_entregados": 0,
+    "total_retirados": 10,
+    "observaciones": "Retiro de vacíos en ruta sin orden de distribución",
+    "fecha_movimiento": "2026-11-04T13:30:00.000Z",
+    "contenedores": [
+      {
+        "movimiento_id": "uuid-del-movimiento",
+        "contenedor_id": "uuid-del-contenedor",
+        "codigo": "CAJA-24",
+        "nombre": "Caja Plástica 24 Unid",
+        "saldo_anterior": 15,
+        "entregados": 0,
+        "retirados": 10,
+        "saldo_actual": 5
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+#### E. Códigos de Error Controlados (`error.code`)
+- `PARAMETRO_INVALIDO`: Falta `p_cliente_id` o `p_movimientos` está vacío.
+- `CLIENTE_INEXISTENTE`: El `p_cliente_id` no existe en `public.clientes`.
+- `CONTENEDORES_INVALIDOS`: Algún ítem no tiene `contenedor_id`, o tiene cantidades negativas o decimales.
+- `CANTIDADES_CERO`: Todas las líneas enviadas tienen `cantidad_retirada = 0` y `cantidad_entregada = 0`.
+- `ERROR_INTERNO`: El `contenedor_id` no existe en `tipos_contenedores` u ocurrió una excepción SQL.
+
+#### F. Actualización en `public.retorna_movimientos_contenedores_segun_cliente_id_rango_fechas`
+Cada ítem dentro de `data.movimientos[]` ahora retorna adicionalmente:
+- `es_movimiento_directo` (`boolean`): `true` cuando el movimiento se hizo sin Orden de Distribución (`orden_id IS NULL`).
+- `saldo_anterior` (`number | null`): Saldo del cliente antes del movimiento.
+- `saldo_actual` (`number | null`): Saldo resultante después del movimiento.
+- `observaciones` (`string | null`): Nota registrada en el movimiento directo.
+
+---
+
+### 13.2. Implementación Obligatoria en la App Móvil / APK (`apps/mobile`)
+
+> **⚠️ IMPORTANTE:** El módulo de retiro de contenedores sin orden **DEBE quedar activo en la APK** tanto desde la pantalla general de **Contenedores** (`/(app)/contenedores`) como desde el **Detalle de Contenedores de un Cliente** (`/(app)/contenedores/[clienteId]`), y habilitado para todos los roles operativos (`admin`, `gerente`, `vendedor`, `despachador`, `cobrador`, `chofer`).
+
+#### Paso 1: Actualizar `apps/mobile/lib/contenedores.ts`
+1. En el tipo `MovimientoContenedorRow`, añadir los nuevos campos:
+   ```typescript
+   export type MovimientoContenedorRow = {
+     id: string;
+     fecha_movimiento: string;
+     orden_id: string | null;
+     correlativo_orden: number | null;
+     factura_origen_numero: string | null;
+     es_movimiento_directo?: boolean;
+     contenedor_id: string;
+     codigo_contenedor: string | null;
+     nombre_contenedor: string | null;
+     cantidad_entregada: number;
+     cantidad_retirada: number;
+     saldo_anterior?: number | null;
+     saldo_actual?: number | null;
+     observaciones?: string | null;
+   };
+   ```
+2. En `obtenerHistoricoContenedoresCliente`, mapear `es_movimiento_directo`, `saldo_anterior`, `saldo_actual` y `observaciones`:
+   ```typescript
+   es_movimiento_directo: Boolean(row.es_movimiento_directo ?? row.orden_id == null),
+   saldo_anterior: row.saldo_anterior != null ? Number(row.saldo_anterior) : null,
+   saldo_actual: row.saldo_actual != null ? Number(row.saldo_actual) : null,
+   observaciones: row.observaciones ? String(row.observaciones) : null,
+   ```
+3. Agregar la función exportada `registrarMovimientoContenedoresAClientes`:
+   ```typescript
+   export type ItemMovimientoContenedorInput = {
+     contenedor_id: string;
+     cantidad_retirada: number;
+     cantidad_entregada?: number;
+   };
+
+   export type ResultadoMovimientoContenedoresCliente = {
+     cliente_id: string;
+     rif_nit: string;
+     razon_social: string;
+     total_entregados: number;
+     total_retirados: number;
+     observaciones: string | null;
+     fecha_movimiento: string;
+     contenedores: Array<{
+       movimiento_id: string;
+       contenedor_id: string;
+       codigo: string | null;
+       nombre: string;
+       saldo_anterior: number;
+       entregados: number;
+       retirados: number;
+       saldo_actual: number;
+     }>;
+   };
+
+   export async function registrarMovimientoContenedoresAClientes(input: {
+     clienteId: string;
+     movimientos: ItemMovimientoContenedorInput[];
+     observaciones?: string | null;
+   }): Promise<
+     | { ok: true; data: ResultadoMovimientoContenedoresCliente; message: string }
+     | { ok: false; error: string }
+   > {
+     const limpios = input.movimientos
+       .map((m) => ({
+         contenedor_id: m.contenedor_id.trim(),
+         cantidad_retirada: Math.max(0, Math.floor(Number(m.cantidad_retirada) || 0)),
+         cantidad_entregada: Math.max(0, Math.floor(Number(m.cantidad_entregada) || 0)),
+       }))
+       .filter((m) => m.contenedor_id && (m.cantidad_retirada > 0 || m.cantidad_entregada > 0));
+
+     if (!input.clienteId?.trim()) {
+       return { ok: false, error: "Debes seleccionar un cliente." };
+     }
+     if (limpios.length === 0) {
+       return {
+         ok: false,
+         error: "Indica al menos una cantidad de contenedores a retirar mayor a 0.",
+       };
+     }
+
+     const { data, error } = await supabase.rpc(
+       "registrar_movimiento_contenedores_a_clientes",
+       {
+         p_cliente_id: input.clienteId.trim(),
+         p_movimientos: limpios,
+         p_observaciones: input.observaciones?.trim() || null,
+       },
+     );
+
+     if (error) return { ok: false, error: error.message };
+     if (!isRpcSuccess(data)) {
+       return {
+         ok: false,
+         error: rpcFailMessage(
+           data,
+           "No se pudo registrar el retiro de contenedores.",
+         ),
+       };
+     }
+
+     const raw = unwrapRpcData<ResultadoMovimientoContenedoresCliente>(data);
+     if (!raw) {
+       return { ok: false, error: "Respuesta vacía del servidor." };
+     }
+
+     return {
+       ok: true,
+       data: raw,
+       message: "Retiro de contenedores registrado exitosamente.",
+     };
+   }
+   ```
+
+#### Paso 2: Crear Pantalla de Retiro en la APK (`apps/mobile/app/(app)/contenedores/retirar.tsx`) y registrarla en `_layout.tsx`
+1. En `apps/mobile/app/(app)/contenedores/_layout.tsx`, añadir la ruta `retirar`:
+   ```tsx
+   <Stack screenOptions={appHeaderScreenOptions}>
+     <Stack.Screen name="index" options={stackIndexOptions("Contenedores")} />
+     <Stack.Screen name="retirar" options={stackChildOptions("Retirar contenedores")} />
+     <Stack.Screen name="[clienteId]" options={stackChildOptions("Detalle")} />
+   </Stack>
+   ```
+2. Crear `apps/mobile/app/(app)/contenedores/retirar.tsx` con las siguientes capacidades:
+   - Acepta parámetro opcional `useLocalSearchParams<{ clienteId?: string }>()`.
+   - **Si no recibe `clienteId` (o el usuario desea cambiarlo):** muestra un buscador de clientes (`buscarClientesForProfile` / `listClientesForProfile` de `@/lib/clientes`) para elegir **cualquier cliente activo**, incluso si actualmente no tiene saldo de contenedores registrado (`saldo = 0`) o ya tiene saldo negativo (`< 0`).
+   - **Una vez seleccionado el cliente:** llama a `obtenerSaldosEnvasesCliente(selectedClienteId)` de `@/lib/contenedores`, que devuelve todos los `tipos_contenedores` junto con el `saldo` actual del cliente.
+   - **🚨 REGLA OBLIGATORIA DE SALDOS EN NEGATIVO EN LA APK (`saldo_actual < 0`):**
+     - **NUNCA bloquear ni limitar `cantidad_retirada` al `saldo` actual del cliente.**
+     - Un cliente con `saldo = 0` (o incluso con `saldo = -5`) o con `saldo = 10` puede entregar cualquier cantidad mayor (ej. `cantidad_retirada = 15`), quedando con **`nuevo_saldo = -5` (saldo a favor del cliente)**.
+     - La base de datos y el RPC `registrar_movimiento_contenedores_a_clientes` soportan saldos negativos nativamente (`v_saldo_act := v_saldo_ant + entregados - retirados`), y la APK **DEBE permitir ingresarlo y guardarlo sin ningún tope máximo**.
+   - **Por cada tipo de contenedor:** muestra:
+     - Nombre y código del contenedor (`t.codigo — t.nombre`).
+     - Badge con el **Saldo actual**:
+       - Si `saldo > 0`: `"Pendiente: ${saldo}"`.
+       - Si `saldo < 0`: `"${saldo} (Saldo a favor del cliente: ${Math.abs(saldo)})"` (en color verde `#059669`).
+       - Si `saldo === 0`: `"Saldo: 0"`.
+     - Controles para ingresar la **Cantidad a retirar**: botones `−` y `+` **y un `<TextInput keyboardType="number-pad">` editable en el centro** (sin límite superior respecto al saldo, más un botón rápido `"Todo"` solo cuando `saldo > 0` para autocompletar el saldo pendiente).
+     - Vista previa en vivo del **Nuevo saldo** (`nuevoSaldo = saldo - cantidad_retirada`): si `nuevoSaldo < 0`, mostrar claramente `"Nuevo saldo: ${nuevoSaldo} (A favor del cliente)"`.
+   - Campo opcional de **Observaciones** (`TextInput` multilínea, ej. `"Retiro de vacíos sin orden"`).
+   - Botón principal **"Confirmar retiro de contenedores"** que invoca `registrarMovimientoContenedoresAClientes`, muestra alerta de éxito con el resumen actualizado y redirige a `/(app)/contenedores/${selectedClienteId}`.
+
+#### Paso 3: Conectar Botones de Acción y Visualización de Saldos Negativos en `apps/mobile/app/(app)/contenedores/index.tsx` y `[clienteId].tsx`
+1. **En `apps/mobile/app/(app)/contenedores/index.tsx`:**
+   - Agregar un botón destacado en la parte superior **"+ Retirar contenedores a cliente"** que navegue a `router.push("/(app)/contenedores/retirar" as Href)`.
+   - `listarSaldosContenedores({ soloConSaldo: true })` ya filtra con `.neq("saldo_pendiente", 0)`, por lo que incluye tanto saldos positivos (`> 0`) como saldos negativos (`< 0`). En la tarjeta de cada cliente, si `item.total_saldo < 0`, mostrar `"Saldo: ${item.total_saldo} (A favor del cliente)"`.
+2. **En `apps/mobile/app/(app)/contenedores/[clienteId].tsx`:**
+   - Debajo de los datos del cliente (o fijo abajo), agregar un botón primario **"Retirar contenedores"** que navegue a `router.push(\`/(app)/contenedores/retirar?clienteId=\${clienteId}\` as Href)`.
+   - En las tarjetas de **Saldos**, si `s.saldo_pendiente < 0`, mostrar `"Saldo: ${s.saldo_pendiente} (A favor del cliente)"`.
+   - En la lista de **Movimientos**, cuando `m.orden_id == null` (o `m.es_movimiento_directo`), mostrar la etiqueta `"Retiro directo (sin orden)"`, el cambio de saldo (`Ant. ${m.saldo_anterior} → Actual ${m.saldo_actual}`) y, si `m.observaciones` existe, mostrar la nota debajo de la fecha.
+
+#### Paso 4: Asegurar Visibilidad del Módulo en Roles y Menú de la APK (`apps/mobile/lib/auth.ts`, `nav.ts`, `HomeScreen.tsx`)
+1. En `apps/mobile/lib/auth.ts`:
+   - Incluir `"/contenedores"` también en `ROLE_ALLOWED_HREFS.chofer` (para que todos los roles de ruta y campo —`admin`, `gerente`, `vendedor`, `despachador`, `chofer`, `cobrador`— tengan acceso al módulo en la APK).
+2. En `apps/mobile/lib/nav.ts` y `apps/mobile/lib/auth.ts`:
+   - Cambiar el label de `"Consulta de contenedores"` a **`"Contenedores (retiro y saldos)"`** para que quede claro en el Drawer que allí se retiran contenedores.
+3. En `apps/mobile/src/features/shell/HomeScreen.tsx`:
+   - Añadir un acceso directo (`ShortcutItem`) a **`/(app)/contenedores`** (`label: "Contenedores / Vacíos"`, `sub: "Retirar contenedores a clientes y consultar saldos"`, `icon: "layers-outline"`) para que el módulo esté inmediatamente accesible desde la pantalla de inicio de la APK.
+
+---
+
+### 13.3. Implementación en el Frontend Web (`src/`)
+
+1. **Actualizar Tipos (`src/types/database.ts`):**
+   - En `Database["public"]["Functions"]`, agregar:
+     ```typescript
+     registrar_movimiento_contenedores_a_clientes: {
+       Args: {
+         p_cliente_id: string;
+         p_movimientos?: Json;
+         p_observaciones?: string | null;
+         p_creado_por?: string | null;
+       };
+       Returns: Json;
+     };
+     ```
+2. **Crear Server Action (`src/lib/actions/contenedores.ts` o en `src/lib/actions/ordenes.ts`):**
+   - Crear `registrarMovimientoContenedoresAClientesAction(input: { cliente_id: string; movimientos: Array<{ contenedor_id: string; cantidad_retirada: number; cantidad_entregada?: number }>; observaciones?: string })` que llame a `callDbProcedure("registrar_movimiento_contenedores_a_clientes", { p_cliente_id: input.cliente_id, p_movimientos: input.movimientos, p_observaciones: input.observaciones ?? null, p_creado_por: user.id })` y ejecute `revalidatePath("/contenedores")` y `revalidatePath(\`/contenedores/\${input.cliente_id}\`)`.
+3. **Actualizar Vistas Web (`src/app/(dashboard)/contenedores/page.tsx` y `src/app/(dashboard)/contenedores/[clienteId]/page.tsx`):**
+   - Añadir el botón y modal/formulario **"Retirar contenedores (sin orden)"** que permita elegir cliente (o usar el cliente actual en `[clienteId]`), ingresar las cantidades retiradas por tipo de contenedor y observación opcional, e invocar `registrarMovimientoContenedoresAClientesAction`.
+   - En la tabla de historial de movimientos (`src/app/(dashboard)/contenedores/[clienteId]/page.tsx`), mostrar `"Retiro directo"` cuando `orden_id` sea `null`, junto con las `observaciones` del movimiento.
+
