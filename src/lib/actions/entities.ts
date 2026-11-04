@@ -79,6 +79,16 @@ export async function createClienteAction(
       ? Math.floor(maxFacturasRaw)
       : 0;
 
+  const visitaCualquierDia =
+    String(formData.get("visita_cualquier_dia") || "true") === "true";
+  let diasVisita: string[] = [];
+  if (!visitaCualquierDia) {
+    const rawDias = formData
+      .getAll("dias_visita")
+      .map((d) => String(d).trim().toLowerCase());
+    diasVisita = Array.from(new Set(rawDias)).filter(Boolean).slice(0, 2);
+  }
+
   const { data, error } = await supabase
     .from("clientes")
     .insert({
@@ -94,6 +104,8 @@ export async function createClienteAction(
       limite_credito: limiteCredito,
       max_facturas_vencidas: maxFacturas,
       permiso_despacho_manual: permisoRaw === "true",
+      dias_visita: diasVisita,
+      visita_cualquier_dia: visitaCualquierDia,
       activo: true,
     })
     .select("id")

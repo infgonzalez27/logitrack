@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClienteAction } from "@/lib/actions/entities";
 import { DescuentosClientePanel } from "@/components/clientes/descuentos-cliente-panel";
+import { SelectorDiasVisita } from "@/components/clientes/selector-dias-visita";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -145,6 +146,8 @@ export function NuevoClienteForm({
           ) : null}
         </div>
       </Card>
+
+      <SelectorDiasVisita defaultCualquierDia={true} defaultDias={[]} />
 
       <Card title="Políticas de crédito y despacho">
         <div className="space-y-4">

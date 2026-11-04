@@ -1,51 +1,63 @@
+"use client";
+
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { formatDateOnly, formatNumber } from "@/lib/format";
-import type { RadarDetalle, RadarOrden } from "@/types/database";
+import { BotonReversarEntrega } from "@/components/ordenes/boton-reversar-entrega";
+import type { RadarOrden } from "@/types/database";
+import { formatDateOnly } from "@/lib/format";
 
 function paradaEstado(orden: RadarOrden): {
   label: string;
-  tone: "success" | "warning" | "default" | "danger";
+  tone: "neutral" | "warning" | "success" | "danger";
 } {
-  // Temporal (00931f3): no bloquear por crédito en radar.
-  const detalles = orden.detalles ?? [];
-  if (!detalles.length) return { label: "Sin líneas", tone: "default" };
-  const pendientes = detalles.filter(
+  const lineas = orden.detalles ?? [];
+  const pendientes = lineas.filter(
     (d) => (d.estado_entrega ?? "pendiente") === "pendiente",
-  );
-  if (pendientes.length === 0) {
-    const todosRechazados = detalles.every(
-      (d) => d.estado_entrega === "rechazado",
-    );
-    if (todosRechazados) return { label: "Devuelta", tone: "danger" };
+  ).length;
+  const entregadas = lineas.filter(
+    (d) => d.estado_entrega === "entregado",
+  ).length;
+  const rechazadas = lineas.filter(
+    (d) => d.estado_entrega === "rechazado",
+  ).length;
+
+  if (pendientes === lineas.length) {
+    return { label: "Pendiente", tone: "warning" };
+  }
+  if (pendientes > 0) {
+    return { label: "En progreso", tone: "warning" };
+  }
+  if (entregadas > 0 && rechazadas === 0) {
     return { label: "Completado", tone: "success" };
   }
-  const enProceso = detalles.some(
-    (d) =>
-      d.estado_entrega === "entregado" ||
-      d.estado_entrega === "entregado_parcial",
-  );
-  if (enProceso) return { label: "En proceso", tone: "warning" };
-  return { label: "Pendiente", tone: "warning" };
+  if (rechazadas > 0 && entregadas === 0) {
+    return { label: "Devuelta", tone: "danger" };
+  }
+  return { label: "Parcial", tone: "neutral" };
 }
 
-function resumenCarga(detalles: RadarDetalle[]): string {
-  const items = detalles.reduce(
-    (s, d) => s + Number(d.cantidad_solicitada ?? 0),
-    0,
-  );
-  if (!detalles.length) return "Sin productos";
-  return `${formatNumber(items)} Cant. Despachada · ${detalles.length} SKU`;
-}
-
-function despachoPermitido(_orden: RadarOrden): boolean {
-  // Temporal (00931f3): bypass de crédito en radar.
+function despachoPermitido(orden: RadarOrden): boolean {
+  if (orden.despacho_permitido !== undefined) {
+    return orden.despacho_permitido;
+  }
   return true;
 }
 
-export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) {
+function resumenCarga(detalles: RadarOrden["detalles"]): string {
+  const total = (detalles ?? []).reduce(
+    (sum, d) => sum + (d.cantidad_solicitada ?? 0),
+    0,
+  );
+  return `${total} bulto${total === 1 ? "" : "s"} (${detalles?.length ?? 0} ítems)`;
+}
+
+export function RadarParadasDespachador({
+  ordenes,
+}: {
+  ordenes: RadarOrden[];
+}) {
   const fecha =
     ordenes[0]?.fecha_despacho != null
       ? formatDateOnly(ordenes[0].fecha_despacho)
@@ -114,12 +126,17 @@ export function RadarParadasDespachador({ ordenes }: { ordenes: RadarOrden[] }) 
                   </p>
                 ) : null}
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                   {permitido && pendientes ? (
                     <Button href={`/radar/entrega/${orden.orden_id}`}>
                       Iniciar entrega
                     </Button>
-                  ) : permitido ? null : (
+                  ) : permitido && !pendientes ? (
+                    <BotonReversarEntrega
+                      ordenId={orden.orden_id}
+                      correlativo={orden.correlativo}
+                    />
+                  ) : (
                     <Button type="button" disabled>
                       Entrega bloqueada
                     </Button>

@@ -7,6 +7,7 @@ import {
   type ClienteEditarInput,
 } from "@/lib/actions/clientes";
 import { OtorgarExcepcionDespachoButton } from "@/components/clientes/otorgar-excepcion-despacho-button";
+import { SelectorDiasVisita } from "@/components/clientes/selector-dias-visita";
 import { DescuentosClientePanel } from "@/components/clientes/descuentos-cliente-panel";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,12 @@ export function ClienteEditarForm({
   const [permisoDespachoManual, setPermisoDespachoManual] = useState(
     cliente.permiso_despacho_manual,
   );
+  const [visitaCualquierDia, setVisitaCualquierDia] = useState<boolean>(
+    cliente.visita_cualquier_dia ?? true,
+  );
+  const [diasVisita, setDiasVisita] = useState<string[]>(
+    cliente.dias_visita ?? [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -85,6 +92,8 @@ export function ClienteEditarForm({
       max_facturas_vencidas: Number(maxFacturas),
       permiso_despacho_manual: permisoDespachoManual,
       excepcion_despacho_gerencia: cliente.excepcion_despacho_gerencia,
+      visita_cualquier_dia: visitaCualquierDia,
+      dias_visita: diasVisita,
     });
 
     if (!result.ok) {
@@ -182,6 +191,15 @@ export function ClienteEditarForm({
           />
         </div>
       </Card>
+
+      <SelectorDiasVisita
+        defaultCualquierDia={visitaCualquierDia}
+        defaultDias={diasVisita}
+        onChange={({ visitaCualquierDia, diasVisita }) => {
+          setVisitaCualquierDia(visitaCualquierDia);
+          setDiasVisita(diasVisita);
+        }}
+      />
 
       <Card title="Políticas de crédito y despacho">
         <div className="space-y-4">

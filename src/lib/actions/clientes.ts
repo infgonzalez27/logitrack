@@ -30,6 +30,8 @@ export type ClienteEditarInput = {
   max_facturas_vencidas: number | null;
   permiso_despacho_manual: boolean;
   excepcion_despacho_gerencia: boolean;
+  dias_visita?: string[];
+  visita_cualquier_dia?: boolean;
 };
 
 export async function obtenerClienteParaEditarAction(
@@ -46,7 +48,7 @@ export async function obtenerClienteParaEditarAction(
   const { data, error } = await supabase
     .from("clientes")
     .select(
-      "id, rif_nit, razon_social, direccion_fiscal, telefono, movil1, correo_e, vendedor_id, despachador_id, id_ruta, activo, limite_credito, max_facturas_vencidas, permiso_despacho_manual, excepcion_despacho_gerencia",
+      "id, rif_nit, razon_social, direccion_fiscal, telefono, movil1, correo_e, vendedor_id, despachador_id, id_ruta, activo, limite_credito, max_facturas_vencidas, permiso_despacho_manual, excepcion_despacho_gerencia, dias_visita, visita_cualquier_dia",
     )
     .eq("id", clienteId)
     .single();
@@ -78,6 +80,8 @@ export async function obtenerClienteParaEditarAction(
           : null,
       permiso_despacho_manual: row.permiso_despacho_manual ?? true,
       excepcion_despacho_gerencia: row.excepcion_despacho_gerencia ?? false,
+      dias_visita: Array.isArray(row.dias_visita) ? row.dias_visita : [],
+      visita_cualquier_dia: row.visita_cualquier_dia ?? true,
     },
   };
 }
@@ -157,6 +161,17 @@ export async function actualizarClienteAction(
       code: response.error?.code,
     };
   }
+
+  const supabase = await createClient();
+  const visitaCualquierDia = input.visita_cualquier_dia ?? true;
+  const diasVisita = visitaCualquierDia ? [] : (input.dias_visita ?? []).slice(0, 2);
+  await supabase
+    .from("clientes")
+    .update({
+      dias_visita: diasVisita,
+      visita_cualquier_dia: visitaCualquierDia,
+    })
+    .eq("id", id);
 
   revalidatePath("/clientes");
   revalidatePath(`/clientes/${id}`);

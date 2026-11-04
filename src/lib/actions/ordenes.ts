@@ -766,3 +766,55 @@ export async function actualizaOrdenDistribucionAction(input: {
   redirect("/ordenes");
 }
 
+
+export async function reversarEntregaOrdenAction(
+  ordenId: string,
+  motivo?: string,
+): Promise<{ ok: true; message: string; data?: unknown } | { ok: false; error: string }> {
+  const ordenIdTrim = ordenId?.trim();
+  if (!ordenIdTrim || !isUuid(ordenIdTrim)) {
+    return { ok: false, error: "ID de orden inválido." };
+  }
+
+  const user = await getSessionUser();
+  if (!user) {
+    return { ok: false, error: "No autenticado." };
+  }
+
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  const rolesPermitidos = ["admin", "gerente", "despachador", "vendedor"];
+  if (!rol || !rolesPermitidos.includes(rol)) {
+    return {
+      ok: false,
+      error: "No tienes permisos para reversar la entrega de esta orden.",
+    };
+  }
+
+  const response = await callDbProcedure<unknown>(
+    "reversar_entrega_orden_distribucion",
+    {
+      p_orden_id: ordenIdTrim,
+      p_motivo: motivo?.trim() || null,
+    },
+  );
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(
+        response,
+        "No se pudo reversar la entrega de la orden.",
+      ),
+    };
+  }
+
+  revalidatePath("/ordenes");
+  revalidatePath(`/ordenes/${ordenIdTrim}`);
+  revalidatePath("/radar");
+  return {
+    ok: true,
+    message: response.message || "Entrega reversada exitosamente.",
+    data: response.data,
+  };
+}
