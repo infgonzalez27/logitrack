@@ -9,6 +9,10 @@ export default function ContenedoresLayout() {
   return (
     <Stack screenOptions={appHeaderScreenOptions}>
       <Stack.Screen name="index" options={stackIndexOptions("Contenedores")} />
+      <Stack.Screen
+        name="retirar"
+        options={stackChildOptions("Retirar contenedores")}
+      />
       <Stack.Screen name="[clienteId]" options={stackChildOptions("Detalle")} />
     </Stack>
   );

@@ -201,8 +201,22 @@ export const HomeScreen: React.FC = function HomeScreen() {
       iconBg: "#D1FAE5",
       href: "/(app)/rendiciones" as Href,
     });
+    const canContenedores = sections.some((s) =>
+      s.items.some((i) => i.href === "/contenedores"),
+    );
+    if (canContenedores) {
+      items.push({
+        key: "contenedores",
+        label: "Contenedores",
+        sub: "Retiro y saldos por cliente",
+        icon: "cube-outline",
+        iconColor: "#0D9488",
+        iconBg: "#CCFBF1",
+        href: "/(app)/contenedores" as Href,
+      });
+    }
     return items;
-  }, [tabs]);
+  }, [tabs, sections]);
 
   const handleNavigate = useCallback(
     (href: Href) => {

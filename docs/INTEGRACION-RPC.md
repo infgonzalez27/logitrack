@@ -1665,3 +1665,19 @@ Cada ítem dentro de `data.movimientos[]` ahora retorna adicionalmente:
    - Añadir el botón y modal/formulario **"Retirar contenedores (sin orden)"** que permita elegir cliente (o usar el cliente actual en `[clienteId]`), ingresar las cantidades retiradas por tipo de contenedor y observación opcional, e invocar `registrarMovimientoContenedoresAClientesAction`.
    - En la tabla de historial de movimientos (`src/app/(dashboard)/contenedores/[clienteId]/page.tsx`), mostrar `"Retiro directo"` cuando `orden_id` sea `null`, junto con las `observaciones` del movimiento.
 
+
+
+### 13.4. Estado de Implementación (Completado)
+- **APK (`apps/mobile`):**
+  - Pantalla `apps/mobile/app/(app)/contenedores/retirar.tsx` implementada con selección de cliente reactiva, selector de cantidades sin tope superior (admite saldos negativos / a favor del cliente), cálculo en vivo, observaciones y confirmación de retiro.
+  - Registro de ruta en `apps/mobile/app/(app)/contenedores/_layout.tsx`.
+  - Integración en `apps/mobile/app/(app)/contenedores/index.tsx` con botón `+ Retirar contenedores a cliente` y badges de saldo positivo/negativo.
+  - Integración en `apps/mobile/app/(app)/contenedores/[clienteId].tsx` con botón `Retirar`, visualización de saldos a favor en verde y detalle de movimientos directos con notas.
+  - Soporte de rol chofer en `apps/mobile/lib/auth.ts` y acceso directo desde `apps/mobile/src/features/shell/HomeScreen.tsx`.
+  - Typecheck móvil verificado con 0 errores (`npx tsc --noEmit`).
+- **Web (`src/`):**
+  - Server Action `registrarMovimientoContenedoresAClientesAction` en `src/lib/actions/contenedores.ts`.
+  - Modal `ModalRetirarContenedores` en `src/app/(dashboard)/contenedores/modal-retirar-contenedores.tsx`.
+  - Vistas y tablas actualizadas en `src/app/(dashboard)/contenedores/[clienteId]/page.tsx` mostrando saldo neto a favor/pendiente y trazabilidad de movimientos directos.
+  - Tipos en `src/types/database.ts` y `supabase/schema_base.sql` sincronizados.
+  - Typecheck web verificado con 0 errores (`npx tsc --noEmit`).

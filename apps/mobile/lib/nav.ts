@@ -90,7 +90,7 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         href: "/contenedores",
-        label: "Consulta de contenedores",
+        label: "Contenedores (retiro y saldos)",
         route: "/(app)/contenedores",
       },
     ],

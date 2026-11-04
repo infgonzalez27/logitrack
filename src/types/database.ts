@@ -312,6 +312,10 @@ export type HistoricoContenedoresData = {
     nombre_contenedor: string | null;
     cantidad_entregada: number;
     cantidad_retirada: number;
+    es_movimiento_directo?: boolean;
+    saldo_anterior?: number | null;
+    saldo_actual?: number | null;
+    observaciones?: string | null;
   }>;
 };
 
@@ -827,6 +831,20 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      registrar_movimiento_contenedores_a_clientes: {
+        Args: {
+          p_cliente_id: string;
+          p_movimientos?: unknown;
+          p_observaciones?: string | null;
+          p_creado_por?: string | null;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data?: unknown;
+          error?: { code: string; message: string; details?: string } | null;
+        };
+      };
       reversar_entrega_orden_distribucion: {
         Args: {
           p_orden_id: string;

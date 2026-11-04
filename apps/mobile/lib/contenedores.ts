@@ -29,6 +29,10 @@ export type MovimientoContenedorRow = {
   nombre_contenedor: string | null;
   cantidad_entregada: number;
   cantidad_retirada: number;
+  es_movimiento_directo?: boolean;
+  saldo_anterior?: number | null;
+  saldo_actual?: number | null;
+  observaciones?: string | null;
 };
 
 export type HistoricoContenedores = {
@@ -265,6 +269,13 @@ export async function obtenerHistoricoContenedoresCliente(
             : null,
           cantidad_entregada: Number(row.cantidad_entregada) || 0,
           cantidad_retirada: Number(row.cantidad_retirada) || 0,
+          es_movimiento_directo: Boolean(row.es_movimiento_directo ?? !row.orden_id),
+          saldo_anterior:
+            row.saldo_anterior != null ? Number(row.saldo_anterior) : null,
+          saldo_actual:
+            row.saldo_actual != null ? Number(row.saldo_actual) : null,
+          observaciones:
+            row.observaciones != null ? String(row.observaciones) : null,
         };
       }),
     },
@@ -314,4 +325,49 @@ export async function obtenerClienteContenedoresResumen(
       historicoError: historicoRes.ok ? null : historicoRes.error,
     },
   };
+}
+
+
+export type ItemRetiroContenedor = {
+  contenedor_id: string;
+  cantidad_entregada?: number;
+  cantidad_retirada?: number;
+};
+
+export type RegistrarMovimientoContenedoresInput = {
+  cliente_id: string;
+  items: ItemRetiroContenedor[];
+  observaciones?: string | null;
+  usuario_id?: string | null;
+};
+
+export async function registrarMovimientoContenedoresAClientes(
+  input: RegistrarMovimientoContenedoresInput,
+): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
+  const { data, error } = await supabase.rpc(
+    "registrar_movimiento_contenedores_a_clientes",
+    {
+      p_cliente_id: input.cliente_id,
+      p_items: input.items.map((i) => ({
+        contenedor_id: i.contenedor_id,
+        cantidad_entregada: Number(i.cantidad_entregada) || 0,
+        cantidad_retirada: Number(i.cantidad_retirada) || 0,
+      })),
+      p_observaciones: input.observaciones?.trim() || null,
+      p_usuario_id: input.usuario_id || null,
+    },
+  );
+
+  if (error) return { ok: false, error: error.message };
+  if (!isRpcSuccess(data)) {
+    return {
+      ok: false,
+      error: rpcFailMessage(
+        data,
+        "No se pudo registrar el retiro de contenedores.",
+      ),
+    };
+  }
+
+  return { ok: true, data: unwrapRpcData(data) };
 }

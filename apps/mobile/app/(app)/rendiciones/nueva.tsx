@@ -1466,6 +1466,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
+  selectedBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
   badgeTotal: { backgroundColor: "#DBEAFE" },
   badgeTotalText: { color: "#1D4ED8", fontSize: 10, fontWeight: "700" },
   badgePartial: { backgroundColor: "#FEF3C7" },

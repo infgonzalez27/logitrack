@@ -76,7 +76,7 @@ const ROLE_ALLOWED_HREFS: Record<AppRole, string[] | "*"> = {
     "/impresora",
     "/cuenta",
   ],
-  chofer: ["/ordenes", "/inventario-movil", "/impresora", "/cuenta"],
+  chofer: ["/ordenes", "/inventario-movil", "/contenedores", "/impresora", "/cuenta"],
   cobrador: [
     "/visita",
     "/rendiciones",
