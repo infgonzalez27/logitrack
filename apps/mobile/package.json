@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "expo start --dev-client",
+    "start": "npx expo start",
+    "start:go": "npx expo start --go",
+    "start:dev": "npx expo start --dev-client",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "prebuild": "expo prebuild --platform android",

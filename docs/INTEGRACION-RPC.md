@@ -1681,3 +1681,138 @@ Cada ítem dentro de `data.movimientos[]` ahora retorna adicionalmente:
   - Vistas y tablas actualizadas en `src/app/(dashboard)/contenedores/[clienteId]/page.tsx` mostrando saldo neto a favor/pendiente y trazabilidad de movimientos directos.
   - Tipos en `src/types/database.ts` y `supabase/schema_base.sql` sincronizados.
   - Typecheck web verificado con 0 errores (`npx tsc --noEmit`).
+
+
+---
+
+## 14. INFORME DE VERIFICACIÓN Y REQUERIMIENTO DIRECTO PARA FRONTEND APK (`apps/mobile`) — Tareas Pendientes del Documento `task_20261103a.md` (05/11/2026)
+
+> **Destinatario:** Encargado del Frontend Móvil / Desarrollador de la APK (`apps/mobile`)  
+> **Estado:** ⚠️ **PENDIENTE DE IMPLEMENTACIÓN EN LA APK** (Comprobado al 05/11/2026: La versión Web y los RPCs/BD ya están operativos, pero la UI de la APK carece de las implementaciones requeridas).
+
+A continuación se detalla el estado actual y las especificaciones exactas que deben ser implementadas en el código de la APK:
+
+---
+
+### 14.1. Tarea 1: Asignación de Días de Visita y Filtro en APK (`Cartera / Clientes / Visita`)
+
+#### Diagnóstico en el Código Móvil:
+- En `apps/mobile/lib/clientes.ts` ya se incluyeron `dias_visita` y `visita_cualquier_dia` en el `.select()`.
+- **Falta en UI:**
+  1. En `apps/mobile/app/(app)/clientes/nuevo.tsx` y formularios de cliente, no hay selectores para que el usuario elija los días de visita (máximo 2 días) o marque "Cualquier día".
+  2. En `apps/mobile/app/(app)/clientes/index.tsx` (lista de cartera/clientes) y en `apps/mobile/app/(app)/visita/index.tsx` (módulo Visita/Cartera), **no se está aplicando el filtro por el día actual de la semana**.
+
+#### Instrucciones de Implementación para el Frontend Móvil:
+1. **Formularios de Cliente (`apps/mobile/app/(app)/clientes/nuevo.tsx`):**
+   - Incorporar un selector/checkbox **"Cualquier día"** (`visita_cualquier_dia: boolean`, por defecto `true`).
+   - Si se desmarca "Cualquier día", mostrar los 7 días de la semana (`['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']`) permitiendo seleccionar **hasta un máximo de 2 días** (`dias_visita: string[]`).
+   - Al enviar, guardar ambos campos en `supabase.from("clientes").insert(...)`.
+
+2. **Filtro Automático por Día Actual (`apps/mobile/app/(app)/visita/index.tsx` y `clientes/index.tsx`):**
+   - Calcular el día actual:
+     ```typescript
+     const DIAS_SEMANA = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"] as const;
+     const diaActual = DIAS_SEMANA[new Date().getDay()];
+
+     function correspondeVisitaHoy(c: { visita_cualquier_dia?: boolean | null; dias_visita?: string[] | null }): boolean {
+       const dias = Array.isArray(c.dias_visita) ? c.dias_visita : [];
+       if (c.visita_cualquier_dia === true || dias.length === 0) return true;
+       return dias.includes(diaActual);
+     }
+     ```
+   - Filtrar la lista mostrada por defecto al vendedor para que solo aparezcan clientes donde `correspondeVisitaHoy(cliente) === true`.
+   - Añadir un toggle o pestaña tipo *"Ver solo ruta de hoy ({diaActual})"* / *"Ver todos"*, permitiendo al vendedor alternar si necesita consultar un cliente fuera de ruta.
+
+---
+
+### 14.2. Tarea 2: Botón "Reversar Entrega" en Despacho / Órdenes (`apps/mobile`)
+
+#### Diagnóstico en el Código Móvil:
+- La función de servicio `reversarEntregaOrdenDistribucion` ya está lista en `apps/mobile/lib/ordenes.ts` llamando al RPC `reversar_entrega_orden_distribucion`.
+- **Falta en UI:**
+  - Ninguna pantalla de la APK la invoca. No existe el botón ni en la vista de detalle de la orden ni en el módulo de Radar.
+
+#### Instrucciones de Implementación para el Frontend Móvil:
+1. En `apps/mobile/src/features/ordenes/OrdenDetalleScreen.tsx` (y en las paradas entregadas de `apps/mobile/app/(app)/radar/index.tsx`):
+   - Cuando una orden esté en estado entregado (`completada` / `entregada`) y el usuario tenga rol con permiso (`admin`, `gerente`, `despachador`), mostrar el botón/ícono **"Reversar Entrega"**.
+   - Al presionarlo, solicitar confirmación con alerta: `¿Desea reversar la entrega de esta orden? La orden regresará al estado de tránsito o aprobada y el inventario será restituido.`
+   - Ejecutar `reversarEntregaOrdenDistribucion(orden.id, "Reversión manual desde APK")`.
+   - Al completar exitosamente, recargar los datos de la orden o radar y mostrar notificación de éxito.
+
+---
+
+### 14.3. Tarea 3: Edición Directa por Teclado de Cantidades en Líneas de Órdenes
+
+#### Diagnóstico en el Código Móvil:
+- En `apps/mobile/app/(app)/ordenes/nueva.tsx`, `editar/[id].tsx`, `venta-directa.tsx` y `autoventas/nueva.tsx`, el número de cantidad es solo un componente `<Text>{item.cantidad}</Text>`. El usuario está obligado a presionar decenas de veces los botones `+` / `−`.
+
+#### Instrucciones de Implementación para el Frontend Móvil:
+- Reemplazar el `<Text style={styles.qty}>{item.cantidad}</Text>` central por un `<TextInput>` numérico:
+  ```tsx
+  <TextInput
+    style={styles.qtyInput}
+    keyboardType="number-pad"
+    value={String(item.cantidad)}
+    onChangeText={(val) => {
+      const num = parseInt(val.replace(/\D/g, ""), 10);
+      updateCantidad(item.producto_id, isNaN(num) ? 0 : num);
+    }}
+    selectTextOnFocus
+  />
+  ```
+- Mantener los botones `−` y `+` a los costados para sumar/restar 1 unidad.
+- Al tipear cualquier número entero (ej. `50`), actualizar en tiempo real el subtotal de la línea y el monto total de la orden.
+
+---
+
+### 14.4. Tarea 4: Impresión por Impresoras Wi-Fi desde Radar (`expo-print`)
+
+#### Diagnóstico en el Código Móvil:
+- No está instalado `expo-print`. La aplicación móvil solo cuenta con la librería para impresoras térmicas Bluetooth en `apps/mobile/lib/bluetooth-print.ts`.
+
+#### Instrucciones de Implementación para el Frontend Móvil:
+1. Instalar la librería requerida en `apps/mobile`:
+   ```bash
+   npx expo install expo-print
+   ```
+2. En `apps/mobile/lib/print-orden.ts`:
+   - Crear la función `imprimirOrdenWifi(orden: OrdenDetalle)` que genere el HTML de la nota de entrega / orden de distribución y ejecute:
+     ```typescript
+     import * as Print from "expo-print";
+     await Print.printAsync({ html });
+     ```
+3. En `apps/mobile/app/(app)/radar/index.tsx` y en el detalle de la orden:
+   - Ofrecer la opción de imprimir vía **"Impresora Wi-Fi / Sistema"** o **"Impresora Bluetooth"** mediante un selector o menú de opciones de impresión.
+
+---
+
+### 14.5. Tarea 5: Mejoras en Cobranzas / Rendiciones (Captures, Cámara y Separador de Miles)
+
+#### Diagnóstico en el Código Móvil:
+- En `apps/mobile/app/(app)/rendiciones/nueva.tsx`, los pagos solo admiten texto/referencia. No se permite adjuntar fotos ni seleccionar archivos de la galería. Además, los inputs numéricos carecen de formato de separador de miles.
+
+#### Instrucciones de Implementación para el Frontend Móvil:
+1. **Captura / Cámara con `expo-image-picker`:**
+   - En cada fila de forma de pago (transferencia, cheque, etc.), agregar botones:
+     - 📷 **"Tomar foto"** (`ImagePicker.launchCameraAsync`).
+     - 🖼️ **"Subir capture"** (`ImagePicker.launchImageLibraryAsync`).
+   - Subir la imagen en base64 o archivo blob al bucket de Supabase Storage **`rendiciones-captures`** en la ruta `${user.id}/${Date.now()}.jpg`.
+   - Almacenar la URL pública obtenida en la propiedad `capture_url` del pago correspondiente para enviarlo a `registrar_rendicion_cuentas`.
+   - Mostrar una miniatura (`<Image>`) con botón de eliminar/reemplazar.
+2. **Separador de Miles en Vivo:**
+   - Integrar máscara de formato numérico (`formatMoneyInputLive`) en los `TextInput` de abono y pagos, garantizando que el usuario visualice los miles separados (ej. `1.250,50`) sin que se altere el valor numérico flotante enviado al backend.
+
+---
+
+### 14.6. Tarea 6: Corrección de Generación de Saldo a Favor en Cobranzas
+
+#### Diagnóstico en el Código Móvil:
+- Sigue presente en `apps/mobile/app/(app)/rendiciones/nueva.tsx` el recorte por `montoAplicable` que trunca los excedentes de pago a la deuda total, impidiendo que el backend (`registrar_rendicion_cuentas`) reciba el sobrepago para abonarlo a `clientes.saldo_favor`.
+
+#### Instrucciones de Implementación para el Frontend Móvil:
+- Aplicar estrictamente lo documentado en la **Sección 11.3** de este archivo (`INTEGRACION-RPC.md`):
+  1. No restringir el pago ingresado al total adeudado cuando el cliente paga de más.
+  2. Separar `totalCobrarUsd` de `totalDigitadoUsd`.
+  3. Preservar montos mayores en `syncPaymentWithTotal` y alimentar `fillRemainingPayment` con el total digitado real.
+
+---
