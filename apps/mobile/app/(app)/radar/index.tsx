@@ -23,7 +23,8 @@ import {
   type RadarOrden,
   type RadarParadaResumen,
 } from "@/lib/radar";
-import { imprimirTicketOrden } from "@/lib/print-orden";
+import { reversarEntregaOrdenDistribucion } from "@/lib/ordenes";
+import { imprimirOrdenWifi, imprimirTicketOrden } from "@/lib/print-orden";
 import { formatDate, formatMoney } from "@/lib/format";
 
 export default function RadarScreen() {
@@ -44,8 +45,9 @@ export default function RadarScreen() {
   const [paradas, setParadas] = useState<RadarParadaResumen[]>([]);
   const [approving, setApproving] = useState(false);
   const [imprimiendoId, setImprimiendoId] = useState<string | null>(null);
+  const [reversandoId, setReversandoId] = useState<string | null>(null);
 
-  const onImprimirOrden = async (ordenId: string) => {
+  const onImprimirBluetooth = async (ordenId: string) => {
     setImprimiendoId(ordenId);
     try {
       const res = await imprimirTicketOrden(ordenId);
@@ -66,11 +68,41 @@ export default function RadarScreen() {
           Alert.alert("Error de impresión", res.error);
         }
       } else {
-        Alert.alert("Éxito", "Ticket enviado a la impresora.");
+        Alert.alert("Éxito", "Ticket enviado a la impresora Bluetooth.");
       }
     } finally {
       setImprimiendoId(null);
     }
+  };
+
+  const onImprimirWifi = async (ordenId: string) => {
+    setImprimiendoId(ordenId);
+    try {
+      const res = await imprimirOrdenWifi(ordenId);
+      if (!res.ok) {
+        Alert.alert("Error de impresión Wi-Fi", res.error);
+      }
+    } finally {
+      setImprimiendoId(null);
+    }
+  };
+
+  const onImprimirOrden = (ordenId: string) => {
+    Alert.alert("Imprimir Orden", "Selecciona el método de impresión:", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Impresora Wi-Fi / Red",
+        onPress: () => {
+          void onImprimirWifi(ordenId);
+        },
+      },
+      {
+        text: "Impresora Bluetooth",
+        onPress: () => {
+          void onImprimirBluetooth(ordenId);
+        },
+      },
+    ]);
   };
 
   const load = useCallback(async () => {
@@ -95,6 +127,35 @@ export default function RadarScreen() {
     setLoading(false);
     setRefreshing(false);
   }, [isDespachador]);
+
+  const onReversarOrden = (ordenId: string, correlativo: number) => {
+    Alert.alert(
+      "Reversar Entrega",
+      `¿Deseas reversar la entrega de la Orden #${correlativo}? La orden no será anulada: volverá a estar pendiente de entrega y se restaurarán los saldos de inventario y envases.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Confirmar Reverso",
+          style: "destructive",
+          onPress: async () => {
+            setReversandoId(ordenId);
+            const res = await reversarEntregaOrdenDistribucion(
+              ordenId,
+              "Reverso desde Radar Móvil",
+            );
+            setReversandoId(null);
+            if (!res.ok) {
+              Alert.alert("Error al reversar", res.error);
+              return;
+            }
+            Alert.alert("Entrega reversada", res.message);
+            setRefreshing(true);
+            void load();
+          },
+        },
+      ],
+    );
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -211,7 +272,7 @@ export default function RadarScreen() {
                       imprimiendoId === item.orden_id && { opacity: 0.6 },
                     ]}
                     disabled={imprimiendoId === item.orden_id}
-                    onPress={() => void onImprimirOrden(item.orden_id)}
+                    onPress={() => onImprimirOrden(item.orden_id)}
                   >
                     {imprimiendoId === item.orden_id ? (
                       <ActivityIndicator size="small" color="#0B3A5C" />
@@ -234,7 +295,27 @@ export default function RadarScreen() {
                     >
                       <Text style={styles.btnText}>Entregar</Text>
                     </Pressable>
-                  ) : null}
+                  ) : (
+                    <Pressable
+                      style={[
+                        styles.btnReversar,
+                        reversandoId === item.orden_id && { opacity: 0.6 },
+                      ]}
+                      disabled={reversandoId === item.orden_id}
+                      onPress={() =>
+                        onReversarOrden(item.orden_id, item.correlativo)
+                      }
+                    >
+                      {reversandoId === item.orden_id ? (
+                        <ActivityIndicator size="small" color="#B45309" />
+                      ) : (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <Ionicons name="refresh-outline" size={16} color="#B45309" />
+                          <Text style={styles.btnReversarText}>Reversar</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  )}
                 </View>
               </View>
             );
@@ -301,7 +382,7 @@ export default function RadarScreen() {
                     imprimiendoId === item.id_orden_distribucion && { opacity: 0.6 },
                   ]}
                   disabled={imprimiendoId === item.id_orden_distribucion}
-                  onPress={() => void onImprimirOrden(item.id_orden_distribucion)}
+                  onPress={() => onImprimirOrden(item.id_orden_distribucion)}
                 >
                   {imprimiendoId === item.id_orden_distribucion ? (
                     <ActivityIndicator size="small" color="#0B3A5C" />
@@ -412,6 +493,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   btnGhostText: { color: "#0B3A5C", fontWeight: "600" },
+  btnReversar: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+  },
+  btnReversarText: { color: "#B45309", fontWeight: "700" },
   empty: { textAlign: "center", color: "#5B6B7C", marginTop: 32 },
   error: { color: "#B42318", marginBottom: 8 },
   back: { color: "#0B3A5C", fontWeight: "600", marginBottom: 10 },

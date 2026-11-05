@@ -31,3 +31,79 @@ export function defaultFechaDespachoLocal(): string {
   const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}T08:00`;
 }
+
+/**
+ * Parsea un string de monto (con o sin separadores de miles `.` y decimales `,`)
+ * a un número flotante seguro.
+ */
+export function parseMoneyInput(val: string | number | null | undefined): number {
+  if (typeof val === "number") return Number.isFinite(val) ? val : 0;
+  const raw = String(val ?? "").trim();
+  if (!raw) return 0;
+
+  if (raw.includes(",")) {
+    const normalized = raw.replace(/\./g, "").replace(",", ".");
+    const num = Number(normalized);
+    return Number.isFinite(num) ? num : 0;
+  }
+
+  const parts = raw.split(".");
+  if (parts.length > 2) {
+    const num = Number(raw.replace(/\./g, ""));
+    return Number.isFinite(num) ? num : 0;
+  }
+  if (parts.length === 2 && parts[1].length === 3 && parts[0].length >= 1) {
+    const num = Number(raw.replace(/\./g, ""));
+    return Number.isFinite(num) ? num : 0;
+  }
+
+  const num = Number(raw);
+  return Number.isFinite(num) ? num : 0;
+}
+
+/**
+ * Formatea en vivo lo que escribe el usuario agregando separador de miles (`.`)
+ * y permitiendo `,` para los decimales (máx. 2 decimales).
+ */
+export function formatMoneyInputLive(text: string): string {
+  if (!text) return "";
+  let cleaned = text.replace(/[^0-9.,]/g, "");
+  if (!cleaned) return "";
+
+  if (!cleaned.includes(",") && cleaned.includes(".")) {
+    const lastDot = cleaned.lastIndexOf(".");
+    const afterDot = cleaned.slice(lastDot + 1);
+    const beforeDot = cleaned.slice(0, lastDot).replace(/\./g, "");
+    if (afterDot.length <= 2) {
+      cleaned = `${beforeDot},${afterDot}`;
+    } else {
+      cleaned = cleaned.replace(/\./g, "");
+    }
+  } else {
+    const [intRaw, ...decParts] = cleaned.split(",");
+    cleaned =
+      decParts.length > 0
+        ? `${intRaw.replace(/\./g, "")},${decParts.join("").replace(/\./g, "")}`
+        : intRaw.replace(/\./g, "");
+  }
+
+  const hasComma = cleaned.includes(",");
+  const [intPartRaw, decPartRaw = ""] = cleaned.split(",");
+  const intTrimmed = intPartRaw.replace(/^0+(?=\d)/, "");
+  const intFormatted = (intTrimmed || (hasComma ? "0" : "")).replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    ".",
+  );
+  const decFormatted = decPartRaw.slice(0, 2);
+
+  return hasComma ? `${intFormatted},${decFormatted}` : intFormatted;
+}
+
+/** Convierte un número calculado a string formateado para el TextInput */
+export function numberToMoneyInput(num: number): string {
+  if (!Number.isFinite(num) || num <= 0) return "";
+  const rounded = Math.round(num * 100) / 100;
+  const [intPart, decPart] = rounded.toFixed(2).split(".");
+  const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return decPart === "00" ? intFormatted : `${intFormatted},${decPart}`;
+}

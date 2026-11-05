@@ -17,9 +17,13 @@ import {
 import {
   anularOrdenDistribucion,
   getOrdenDetalle,
+  reversarEntregaOrdenDistribucion,
   type OrdenDetalle,
 } from "@/lib/ordenes";
-import { buildTicketForOrden } from "@/lib/print-orden";
+import {
+  buildTicketForOrden,
+  imprimirOrdenWifi,
+} from "@/lib/print-orden";
 import {
   getPreferredPrinterMac,
   printTextToBluetooth,
@@ -34,6 +38,8 @@ import { ErrorState } from "@/src/ui/EmptyState";
 import { BottomActionBar } from "@/src/ui/BottomActionBar";
 import { mapOrdenStatus } from "@/src/features/ordenes/status";
 
+const ESTADOS_REVERSABLES = new Set(["por_liquidar", "despachada", "devuelta"]);
+
 export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -47,6 +53,7 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
   const [ticketText, setTicketText] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [anulando, setAnulando] = useState(false);
+  const [reversando, setReversando] = useState(false);
   const logoSource = useMemo(() => getEmpresaLogoSource(getEmpresaActual()?.codigo), []);
 
   const load = useCallback(
@@ -101,13 +108,46 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
     );
   }, [orden, load]);
 
+  const onReversar = useCallback(() => {
+    if (!orden) return;
+    Alert.alert(
+      "Reversar Entrega",
+      `¿Deseas reversar la entrega de la orden #${orden.correlativo}? La orden no será anulada: volverá a estado editable y se restaurarán los saldos de inventario y envases.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Confirmar Reverso",
+          style: "destructive",
+          onPress: async () => {
+            setReversando(true);
+            setError(null);
+            setMessage(null);
+            const res = await reversarEntregaOrdenDistribucion(
+              orden.id,
+              "Reverso desde detalle móvil",
+            );
+            setReversando(false);
+            if (!res.ok) {
+              setError(res.error);
+              Alert.alert("Error al reversar", res.error);
+              return;
+            }
+            setMessage(res.message);
+            Alert.alert("Entrega reversada", res.message);
+            void load("refresh");
+          },
+        },
+      ],
+    );
+  }, [orden, load]);
+
   useFocusEffect(
     useCallback(() => {
       void load("initial");
     }, [load]),
   );
 
-  const onPrint = useCallback(async () => {
+  const onPrintBluetooth = useCallback(async () => {
     if (!ticketText) return;
     setPrinting(true);
     setError(null);
@@ -125,8 +165,42 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
       setError(result.error);
       return;
     }
-    setMessage("Ticket enviado a la impresora.");
+    setMessage("Ticket enviado a la impresora Bluetooth.");
   }, [ticketText, router]);
+
+  const onPrintWifi = useCallback(async () => {
+    if (!orden) return;
+    setPrinting(true);
+    setError(null);
+    setMessage(null);
+    const res = await imprimirOrdenWifi(orden);
+    setPrinting(false);
+    if (!res.ok) {
+      setError(res.error);
+      Alert.alert("Error de impresión Wi-Fi", res.error);
+      return;
+    }
+    setMessage("Orden enviada al diálogo de impresión del sistema.");
+  }, [orden]);
+
+  const onPrint = useCallback(() => {
+    if (!orden) return;
+    Alert.alert("Imprimir Orden", "Selecciona el método de impresión:", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Impresora Wi-Fi / Red",
+        onPress: () => {
+          void onPrintWifi();
+        },
+      },
+      {
+        text: "Impresora Bluetooth",
+        onPress: () => {
+          void onPrintBluetooth();
+        },
+      },
+    ]);
+  }, [orden, onPrintWifi, onPrintBluetooth]);
 
   const onEdit = useCallback(() => {
     if (!orden) return;
@@ -156,6 +230,7 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
 
   const canEdit =
     orden?.estado === "borrador" || orden?.estado === "aprobada";
+  const canReversar = orden ? ESTADOS_REVERSABLES.has(orden.estado) : false;
 
   if (loading && !orden) {
     return (
@@ -356,6 +431,18 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
                 },
               ]
             : []),
+          ...(canReversar
+            ? [
+                {
+                  key: "reversar",
+                  label: "Reversar Entrega",
+                  icon: "refresh-outline" as const,
+                  variant: "secondary" as const,
+                  loading: reversando,
+                  onPress: onReversar,
+                },
+              ]
+            : []),
           ...(orden.estado !== "anulada"
             ? [
                 {
@@ -375,9 +462,7 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
             variant: "primary",
             loading: printing,
             disabled: !ticketText,
-            onPress: () => {
-              void onPrint();
-            },
+            onPress: onPrint,
           },
         ]}
       />

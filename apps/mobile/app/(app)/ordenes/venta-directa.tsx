@@ -126,6 +126,18 @@ export default function VentaDirectaScreen() {
     );
   }
 
+  function stepCantidad(index: number, delta: number) {
+    setLineas((prev) =>
+      prev
+        .map((l, i) => {
+          if (i !== index) return l;
+          const next = Math.max(0, (Number(l.cantidad) || 0) + delta);
+          return { ...l, cantidad: String(next) };
+        })
+        .filter((l) => (Number(l.cantidad) || 0) > 0),
+    );
+  }
+
   const total = esCortesia ? 0 : lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * l.precio, 0);
 
   async function registrar() {
@@ -299,19 +311,31 @@ export default function VentaDirectaScreen() {
                 <Text style={[styles.hint, excede && styles.excede]}>
                   Disponible: {formatNumber(l.producto.stock_disponible)} · ${formatMoney(esCortesia ? 0 : l.precio)} c/u
                 </Text>
-                <View style={styles.lineaCampos}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.campoLabel}>Cantidad</Text>
-                    <TextInput
-                      style={[styles.input, excede && styles.inputExcede]}
-                      keyboardType="number-pad"
-                      value={l.cantidad}
-                      onChangeText={(v) => editarCantidad(i, v)}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
+                <View style={styles.qtyRow}>
+                  <Pressable
+                    style={styles.qtyBtn}
+                    onPress={() => stepCantidad(i, -1)}
+                  >
+                    <Text style={styles.qtyBtnText}>−</Text>
+                  </Pressable>
+                  <TextInput
+                    style={[styles.qtyInput, excede && styles.inputExcede]}
+                    keyboardType="number-pad"
+                    value={l.cantidad}
+                    onChangeText={(v) => editarCantidad(i, v)}
+                    selectTextOnFocus
+                  />
+                  <Pressable
+                    style={styles.qtyBtn}
+                    onPress={() => stepCantidad(i, 1)}
+                  >
+                    <Text style={styles.qtyBtnText}>+</Text>
+                  </Pressable>
+                  <View style={{ marginLeft: "auto", alignItems: "flex-end" }}>
                     <Text style={styles.campoLabel}>Subtotal</Text>
-                    <Text style={styles.subtotal}>${formatMoney(esCortesia ? 0 : cant * l.precio)}</Text>
+                    <Text style={styles.subtotal}>
+                      ${formatMoney(esCortesia ? 0 : cant * l.precio)}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -433,8 +457,37 @@ const styles = StyleSheet.create({
   },
   lineaTitulo: { color: "#0B3A5C", fontWeight: "700", flexShrink: 1 },
   lineaCampos: { flexDirection: "row", gap: 8, marginTop: 4 },
-  campoLabel: { color: "#5B6B7C", fontSize: 12, marginBottom: 4 },
-  subtotal: { color: "#0B3A5C", fontWeight: "700", fontSize: 15, paddingVertical: 10 },
+  qtyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 8,
+  },
+  qtyBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#E8EEF3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qtyBtnText: { fontSize: 20, color: "#0B3A5C", fontWeight: "600" },
+  qtyInput: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#0B3A5C",
+    minWidth: 56,
+    height: 36,
+    borderWidth: 1,
+    borderColor: "#D0D7DE",
+    borderRadius: 8,
+    textAlign: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: 6,
+    paddingVertical: 0,
+  },
+  campoLabel: { color: "#5B6B7C", fontSize: 12, marginBottom: 2 },
+  subtotal: { color: "#0B3A5C", fontWeight: "700", fontSize: 15 },
   total: {
     color: "#0B3A5C",
     fontWeight: "700",

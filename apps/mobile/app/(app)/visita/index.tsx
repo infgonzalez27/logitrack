@@ -12,6 +12,9 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import {
+  correspondeVisitaHoy,
+  getDiaActualLabel,
+  getDiaActualTexto,
   listClientesForProfile,
   type ClienteListaItem,
 } from "@/lib/clientes";
@@ -29,6 +32,8 @@ type CarteraRow = {
   monto_por_liquidar: number;
   cant_ordenes: number;
   dias_vencidos: number;
+  dias_visita?: string[] | null;
+  visita_cualquier_dia?: boolean | null;
 };
 
 export default function VisitaCarteraScreen() {
@@ -41,6 +46,9 @@ export default function VisitaCarteraScreen() {
   const [cartera, setCartera] = useState<OrdenPorLiquidarCliente[]>([]);
   const [clientes, setClientes] = useState<ClienteListaItem[]>([]);
   const [mode, setMode] = useState<"cartera" | "todos">("cartera");
+  const [soloHoy, setSoloHoy] = useState(true);
+  const diaHoy = useMemo(() => getDiaActualTexto(), []);
+  const diaHoyLabel = useMemo(() => getDiaActualLabel(), []);
 
   const load = useCallback(async () => {
     if (!profile) return;
@@ -68,20 +76,31 @@ export default function VisitaCarteraScreen() {
   const term = q.trim().toLowerCase();
 
   const carteraFiltered = useMemo(() => {
-    let rows: CarteraRow[] = cartera.map((c) => ({
-      cliente_id: c.cliente_id,
-      razon_social: c.razon_social,
-      rif_nit: c.rif_nit,
-      monto_por_liquidar: c.monto_por_liquidar,
-      cant_ordenes: c.cant_ordenes,
-      dias_vencidos: c.dias_vencidos,
-    }));
+    const cliMap = new Map(clientes.map((c) => [c.id, c]));
+    let rows: CarteraRow[] = cartera.map((c) => {
+      const cli = cliMap.get(c.cliente_id);
+      return {
+        cliente_id: c.cliente_id,
+        razon_social: c.razon_social,
+        rif_nit: c.rif_nit,
+        monto_por_liquidar: c.monto_por_liquidar,
+        cant_ordenes: c.cant_ordenes,
+        dias_vencidos: c.dias_vencidos,
+        dias_visita: c.dias_visita ?? cli?.dias_visita,
+        visita_cualquier_dia:
+          c.visita_cualquier_dia ?? cli?.visita_cualquier_dia,
+      };
+    });
 
     if (profile?.rol === "vendedor") {
       const ids = new Set(clientes.map((c) => c.id));
       if (ids.size) {
         rows = rows.filter((r) => ids.has(r.cliente_id));
       }
+    }
+
+    if (soloHoy) {
+      rows = rows.filter((r) => correspondeVisitaHoy(r, diaHoy));
     }
 
     if (term) {
@@ -92,16 +111,20 @@ export default function VisitaCarteraScreen() {
       );
     }
     return rows.filter((r) => r.monto_por_liquidar > 0);
-  }, [cartera, clientes, term, profile?.rol]);
+  }, [cartera, clientes, term, profile?.rol, soloHoy, diaHoy]);
 
   const todosFiltered = useMemo(() => {
-    if (!term) return clientes;
-    return clientes.filter(
+    let rows = clientes;
+    if (soloHoy) {
+      rows = rows.filter((c) => correspondeVisitaHoy(c, diaHoy));
+    }
+    if (!term) return rows;
+    return rows.filter(
       (c) =>
         c.razon_social.toLowerCase().includes(term) ||
         c.rif_nit.toLowerCase().includes(term),
     );
-  }, [clientes, term]);
+  }, [clientes, term, soloHoy, diaHoy]);
 
   // Totales financieros de la cartera
   const metrics = useMemo(() => {
@@ -160,6 +183,46 @@ export default function VisitaCarteraScreen() {
             <Ionicons name="close-circle" size={18} color="#94A3B8" />
           </Pressable>
         ) : null}
+      </View>
+
+      {/* Filtro Ruta del Día vs Todos los Días */}
+      <View style={styles.dayFilterRow}>
+        <Pressable
+          style={[styles.dayFilterChip, soloHoy && styles.dayFilterChipActive]}
+          onPress={() => setSoloHoy(true)}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={15}
+            color={soloHoy ? "#FFFFFF" : "#0B3A5C"}
+          />
+          <Text
+            style={[
+              styles.dayFilterText,
+              soloHoy && styles.dayFilterTextActive,
+            ]}
+          >
+            Ruta de hoy ({diaHoyLabel})
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.dayFilterChip, !soloHoy && styles.dayFilterChipActive]}
+          onPress={() => setSoloHoy(false)}
+        >
+          <Ionicons
+            name="globe-outline"
+            size={15}
+            color={!soloHoy ? "#FFFFFF" : "#0B3A5C"}
+          />
+          <Text
+            style={[
+              styles.dayFilterText,
+              !soloHoy && styles.dayFilterTextActive,
+            ]}
+          >
+            Todos los días
+          </Text>
+        </Pressable>
       </View>
 
       {/* Tabs segmentadas con badges */}
@@ -475,6 +538,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#0F172A",
     padding: 0,
+  },
+  dayFilterRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+  },
+  dayFilterChip: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  dayFilterChipActive: {
+    backgroundColor: "#0B3A5C",
+    borderColor: "#0B3A5C",
+  },
+  dayFilterText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0B3A5C",
+  },
+  dayFilterTextActive: {
+    color: "#FFFFFF",
   },
   tabBar: {
     flexDirection: "row",

@@ -8,6 +8,7 @@ import {
   type CatalogOption,
 } from "@/lib/clientes";
 import { listRutas } from "@/lib/rutas";
+import { SelectorDiasVisita } from "@/components/selector-dias-visita";
 import {
   ErrorText,
   FormField,
@@ -28,6 +29,8 @@ export default function NuevoClienteScreen() {
   const [despachadorId, setDespachadorId] = useState("");
   const [rutaId, setRutaId] = useState("");
   const [activo, setActivo] = useState("true");
+  const [diasVisita, setDiasVisita] = useState<string[]>([]);
+  const [visitaCualquierDia, setVisitaCualquierDia] = useState(true);
   const [vendedores, setVendedores] = useState<CatalogOption[]>([]);
   const [despachadores, setDespachadores] = useState<CatalogOption[]>([]);
   const [rutas, setRutas] = useState<CatalogOption[]>([]);
@@ -72,6 +75,8 @@ export default function NuevoClienteScreen() {
       despachador_id: despachadorId || null,
       id_ruta: rutaId || null,
       activo: activo === "true",
+      dias_visita: visitaCualquierDia ? [] : diasVisita,
+      visita_cualquier_dia: visitaCualquierDia,
     });
     setSaving(false);
     if (!res.ok) {
@@ -139,6 +144,14 @@ export default function NuevoClienteScreen() {
             { value: "true", label: "Activo" },
             { value: "false", label: "Inactivo" },
           ]}
+        />
+        <SelectorDiasVisita
+          diasVisita={diasVisita}
+          visitaCualquierDia={visitaCualquierDia}
+          onChange={(next) => {
+            setDiasVisita(next.dias_visita);
+            setVisitaCualquierDia(next.visita_cualquier_dia);
+          }}
         />
         <PrimaryButton
           label="Guardar cliente"

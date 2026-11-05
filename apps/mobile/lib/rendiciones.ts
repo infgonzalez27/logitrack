@@ -55,6 +55,7 @@ export type PagoInput = {
   cuenta_bancaria_id?: string | null;
   referencia_bancaria?: string | null;
   fpago_info: boolean;
+  capture_url?: string | null;
 };
 
 const BANCOS_BCV_FALLBACK: EntidadBancaria[] = [
@@ -256,6 +257,55 @@ export async function solicitaAbonosCliente(
   };
 }
 
+/**
+ * Sube una imagen/capture desde el móvil al bucket `rendiciones-captures`
+ * y devuelve su URL pública.
+ */
+export async function uploadCaptureRendicionMobile(
+  localUri: string,
+  userId: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const cleanUri = localUri.split("?")[0] ?? localUri;
+    const ext = (cleanUri.split(".").pop() || "jpg").toLowerCase();
+    const contentType =
+      ext === "png"
+        ? "image/png"
+        : ext === "webp"
+          ? "image/webp"
+          : "image/jpeg";
+    const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const response = await fetch(localUri);
+    const arrayBuffer = await response.arrayBuffer();
+
+    const { error: uploadError } = await supabase.storage
+      .from("rendiciones-captures")
+      .upload(path, arrayBuffer, {
+        contentType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      return { ok: false, error: uploadError.message };
+    }
+
+    const { data: pub } = supabase.storage
+      .from("rendiciones-captures")
+      .getPublicUrl(path);
+
+    return { ok: true, url: pub.publicUrl };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Error al subir el comprobante.",
+    };
+  }
+}
+
 export async function registrarRendicion(input: {
   clienteId: string;
   userId: string;
@@ -389,7 +439,7 @@ export async function registrarRendicion(input: {
           ? p.referencia_bancaria?.trim() || null
           : null,
         cuenta_bancaria: null,
-        capture_url: null,
+        capture_url: p.capture_url ?? null,
       };
     }),
   });
@@ -474,6 +524,7 @@ export type RendicionDetalle = RendicionListaItem & {
     nombre_banco: string | null;
     referencia_bancaria: string | null;
     cuenta_bancaria_destino: string | null;
+    capture_url: string | null;
   }>;
 };
 
@@ -525,7 +576,7 @@ export async function listRendiciones(): Promise<
     return {
       id: r.id,
       cliente_id: r.cliente_id,
-      cliente_razon: cliente?.razon_social ?? "â€”",
+      cliente_razon: cliente?.razon_social ?? "—",
       fecha_rendicion: r.fecha_rendicion,
       total_efectivo_recaudado: Number(r.total_efectivo_recaudado) || 0,
       total_transferencias_recaudado:
@@ -558,7 +609,7 @@ export async function getRendicionDetalle(
         ordenes_distribucion(correlativo)
       ),
       detalle_rendicion_fpagos(
-        id, monto, monto_usd, monto_bs, codigo_banco, referencia_bancaria,
+        id, monto, monto_usd, monto_bs, codigo_banco, referencia_bancaria, capture_url,
         fpagos(fpago_concepto),
         entidades_bancarias(codigo_eb, nombre_eb, nombre_corto),
         cuentas_bancarias_empresa(banco, numero_cuenta)
@@ -587,7 +638,7 @@ export async function getRendicionDetalle(
     rendicion: {
       id: data.id,
       cliente_id: data.cliente_id,
-      cliente_razon: cliente?.razon_social ?? "â€”",
+      cliente_razon: cliente?.razon_social ?? "—",
       fecha_rendicion: data.fecha_rendicion,
       tasa_cambio: data.tasa_cambio != null ? Number(data.tasa_cambio) : null,
       total_efectivo_recaudado: Number(data.total_efectivo_recaudado) || 0,
@@ -661,6 +712,8 @@ export async function getRendicionDetalle(
             null,
           referencia_bancaria: p.referencia_bancaria ?? null,
           cuenta_bancaria_destino: cb?.banco ?? null,
+          capture_url:
+            (p as { capture_url?: string | null }).capture_url ?? null,
         };
       }),
     },
@@ -916,10 +969,10 @@ export async function reporteFormasPago(input?: {
           tasa_cambio:
             row.tasa_cambio != null ? Number(row.tasa_cambio) : null,
           cliente_id: String(row.cliente_id ?? ""),
-          cliente_nombre: String(row.cliente_nombre ?? "â€”"),
-          cliente_rif: String(row.cliente_rif ?? "â€”"),
+          cliente_nombre: String(row.cliente_nombre ?? "—"),
+          cliente_rif: String(row.cliente_rif ?? "—"),
           fpago_id: String(row.fpago_id ?? ""),
-          fpago_concepto: String(row.fpago_concepto ?? "â€”"),
+          fpago_concepto: String(row.fpago_concepto ?? "—"),
           es_bancario: Boolean(row.es_bancario),
           codigo_banco: row.codigo_banco ? String(row.codigo_banco) : null,
           nombre_banco: row.nombre_banco ? String(row.nombre_banco) : null,
@@ -936,4 +989,3 @@ export async function reporteFormasPago(input?: {
     },
   };
 }
-

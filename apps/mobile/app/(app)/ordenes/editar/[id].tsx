@@ -393,7 +393,40 @@ export default function EditarOrdenScreen() {
                     >
                       <Text style={styles.qtyBtnText}>−</Text>
                     </Pressable>
-                    <Text style={styles.qty}>{item.cantidad}</Text>
+                    <TextInput
+                      style={styles.qtyInput}
+                      keyboardType="number-pad"
+                      value={String(item.cantidad)}
+                      onChangeText={(txt) => {
+                        const digits = txt.replace(/[^0-9]/g, "");
+                        if (!digits) {
+                          setLineas((prev) =>
+                            prev.map((l) =>
+                              l.producto_id === item.producto_id
+                                ? { ...l, cantidad: 0 }
+                                : l,
+                            ),
+                          );
+                          return;
+                        }
+                        const n = Number.parseInt(digits, 10);
+                        if (Number.isFinite(n)) {
+                          setLineas((prev) =>
+                            prev.map((l) =>
+                              l.producto_id === item.producto_id
+                                ? { ...l, cantidad: n }
+                                : l,
+                            ),
+                          );
+                        }
+                      }}
+                      onBlur={() => {
+                        if (item.cantidad <= 0) {
+                          updateCantidad(item.producto_id, 0);
+                        }
+                      }}
+                      selectTextOnFocus
+                    />
                     <Pressable
                       style={styles.qtyBtn}
                       onPress={() =>
@@ -571,6 +604,20 @@ const styles = StyleSheet.create({
   },
   qtyBtnText: { fontSize: 18, fontWeight: "700", color: "#0B3A5C" },
   qty: { fontSize: 16, fontWeight: "700", minWidth: 24, textAlign: "center", color: "#0B3A5C" },
+  qtyInput: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0B3A5C",
+    minWidth: 56,
+    height: 36,
+    borderWidth: 1,
+    borderColor: "#D0D7DE",
+    borderRadius: 8,
+    textAlign: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: 6,
+    paddingVertical: 0,
+  },
   unitPrice: { fontSize: 12, color: "#5B6B7C" },
   lineTotal: { fontSize: 15, fontWeight: "700", color: "#0B3A5C" },
   totalRow: {

@@ -1816,3 +1816,24 @@ A continuación se detalla el estado actual y las especificaciones exactas que d
   3. Preservar montos mayores en `syncPaymentWithTotal` y alimentar `fillRemainingPayment` con el total digitado real.
 
 ---
+
+
+### 14.7. Estado de Implementación en APK Móvil (`apps/mobile`) — Completado (2026-11-05)
+
+Todas las 6 tareas de la Sección 14 han sido implementadas y verificadas con `tsc --noEmit` (0 errores):
+
+- **Tarea 1 (Días de Visita y Filtro en Cartera/Visita):**
+  - Creado `apps/mobile/components/selector-dias-visita.tsx` e integrado en `apps/mobile/app/(app)/clientes/nuevo.tsx` y `apps/mobile/app/(app)/clientes/[id]/editar.tsx`.
+  - Actualizado `apps/mobile/lib/clientes.ts` (`correspondeVisitaHoy`, `getDiaActualTexto`, `getDiaActualLabel`, `createCliente`, `updateCliente`).
+  - Aplicado filtro por día actual por defecto con selector `"Ruta de hoy (<Día>)"` vs `"Todos"` en `apps/mobile/app/(app)/visita/index.tsx` y `apps/mobile/app/(app)/clientes/index.tsx`.
+- **Tarea 2 (Reversión de Entrega Parcial en Despacho):**
+  - Añadido botón **"Reversar Entrega"** con confirmación en `apps/mobile/src/features/ordenes/screens/OrdenDetalleScreen.tsx` y en paradas entregadas de `apps/mobile/app/(app)/radar/index.tsx`, invocando `reversarEntregaOrdenDistribucion(...)`.
+- **Tarea 3 (Edición de Cantidades por Teclado en Órdenes):**
+  - Reemplazado el texto estático central por `<TextInput keyboardType="number-pad" selectTextOnFocus />` entre `−` y `+` en `apps/mobile/app/(app)/ordenes/nueva.tsx`, `apps/mobile/app/(app)/ordenes/editar/[id].tsx`, `apps/mobile/app/(app)/ordenes/venta-directa.tsx` y `apps/mobile/app/(app)/autoventas/nueva.tsx`.
+- **Tarea 4 (Impresión Wi-Fi desde Radar y Detalle con `expo-print`):**
+  - Instalado `expo-print`, implementadas `buildHtmlForOrden` e `imprimirOrdenWifi` en `apps/mobile/lib/print-orden.ts`, y añadido selector entre **"Impresora Wi-Fi / Red"** e **"Impresora Bluetooth"** en `apps/mobile/app/(app)/radar/index.tsx` y `apps/mobile/src/features/ordenes/screens/OrdenDetalleScreen.tsx`.
+- **Tarea 5 (Cobranzas - Fotos, Captures y Separador de Miles):**
+  - Instalado `expo-image-picker`, añadidas `parseMoneyInput`, `formatMoneyInputLive` y `numberToMoneyInput` en `apps/mobile/lib/format.ts`, y `uploadCaptureRendicionMobile` en `apps/mobile/lib/rendiciones.ts`.
+  - Integrados botones **"Tomar foto"** y **"Subir capture"** con vista previa y formato de miles en vivo en `apps/mobile/app/(app)/rendiciones/nueva.tsx`, y visualización de comprobantes en `apps/mobile/app/(app)/rendiciones/[id].tsx`.
+- **Tarea 6 (Saldo a Favor en Cobranzas - Sección 11.3):**
+  - Separados `totalCobrarUsd` y `totalDigitadoUsd` (`computeTotalDigitado`) en `apps/mobile/app/(app)/rendiciones/nueva.tsx`, preservando sobrepagos en `syncPaymentWithTotal`, `addPago` y `fillRemainingPayment` para que viajen completos a `registrar_rendicion_cuentas`.

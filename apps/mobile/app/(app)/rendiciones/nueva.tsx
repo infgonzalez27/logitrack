@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -13,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
@@ -24,13 +26,20 @@ import {
   listarFormasPago,
   registrarRendicion,
   solicitaAbonosCliente,
+  uploadCaptureRendicionMobile,
   type CuentaBancaria,
   type EntidadBancaria,
   type Fpago,
   type OrdenParaRendicion,
 } from "@/lib/rendiciones";
 import { convertirBsAUsd, convertirUsdABs, esFormaPagoEnBs } from "@/lib/moneda";
-import { formatDate, formatMoney } from "@/lib/format";
+import {
+  formatDate,
+  formatMoney,
+  formatMoneyInputLive,
+  numberToMoneyInput,
+  parseMoneyInput,
+} from "@/lib/format";
 
 /** Determina qué parte del monto digitado amortiza la orden y cuánto genera saldo a favor */
 function montoAplicable(monto: number, saldoPendiente: number): number {
@@ -62,6 +71,8 @@ type PagoDraft = {
   codigo_banco: string;
   referencia: string;
   cuenta_id: string;
+  capture_url?: string | null;
+  uploading_capture?: boolean;
 };
 
 export default function NuevaRendicionScreen() {
@@ -145,8 +156,6 @@ export default function NuevaRendicionScreen() {
       } else {
         setSaldoFavor(Number(aRes.abonos.saldo_favor) || 0);
         setOrdenes(ords);
-        // Las órdenes inician listas para que el usuario pulse "Cobrar total"
-        // o "Cobrar todas", acumulando la suma de manera limpia.
         setSelectedOrders({});
         setMontos({});
         setPartialMode({});
@@ -162,7 +171,6 @@ export default function NuevaRendicionScreen() {
       const entidadesList = ebRes.ok && Array.isArray(ebRes.entidades) ? ebRes.entidades : [];
       setEntidades(entidadesList);
 
-      // Primer pago listo para auto-completar al totalizar órdenes
       if (formasList.length > 0) {
         const firstForma = formasList[0];
         setPagos([
@@ -173,6 +181,7 @@ export default function NuevaRendicionScreen() {
             codigo_banco: entidadesList[0]?.codigo_eb ?? "0102",
             referencia: "",
             cuenta_id: cuentasList[0]?.id ?? "",
+            capture_url: null,
           },
         ]);
       }
@@ -192,12 +201,21 @@ export default function NuevaRendicionScreen() {
     void load();
   }, [load]);
 
-  // Total a cobrar según órdenes activas y montos seleccionados
+  // Total que amortiza las órdenes seleccionadas (tope = saldo_pendiente de cada orden)
   const totalCobrarUsd = useMemo(() => {
     return ordenes.reduce((acc, o) => {
       if (!selectedOrders[o.id]) return acc;
-      const v = Number(String(montos[o.id] ?? "0").replace(",", ".")) || 0;
+      const v = parseMoneyInput(montos[o.id]);
       return acc + montoAplicable(v, Number(o.saldo_pendiente) || 0);
+    }, 0);
+  }, [ordenes, selectedOrders, montos]);
+
+  // Total digitado por el cobrador en las órdenes (incluye sobrepagos destinados a saldo a favor)
+  const totalDigitadoUsd = useMemo(() => {
+    return ordenes.reduce((acc, o) => {
+      if (!selectedOrders[o.id]) return acc;
+      const v = parseMoneyInput(montos[o.id]);
+      return acc + Math.max(0, v);
     }, 0);
   }, [ordenes, selectedOrders, montos]);
 
@@ -205,7 +223,7 @@ export default function NuevaRendicionScreen() {
   const totalPagosUsd = useMemo(() => {
     return pagos.reduce((acc, p) => {
       const forma = formas.find((f) => f.fpago_id === p.fpago_id);
-      const monto = Number(String(p.monto ?? "0").replace(",", ".")) || 0;
+      const monto = parseMoneyInput(p.monto);
       if (!forma || monto <= 0) return acc;
       if (esFormaPagoEnBs(forma.fpago_concepto) && tasa && tasa > 0) {
         return acc + monto / tasa;
@@ -214,12 +232,10 @@ export default function NuevaRendicionScreen() {
     }, 0);
   }, [pagos, formas, tasa]);
 
-  // Cantidad de facturas seleccionadas
   const selectedCount = useMemo(() => {
     return ordenes.filter((o) => selectedOrders[o.id]).length;
   }, [ordenes, selectedOrders]);
 
-  // Lista de bancos filtrada para el modal
   const entidadesFiltradas = useMemo(() => {
     const q = (filtroBanco || "").toLowerCase().trim();
     if (!q) return entidades;
@@ -231,45 +247,63 @@ export default function NuevaRendicionScreen() {
     );
   }, [entidades, filtroBanco]);
 
-  // Sincroniza automáticamente el pago único con el total actual según su moneda
-  const syncPaymentWithTotal = (newTotalUsd: number) => {
+  // Sincroniza automáticamente el pago único con el total digitado según su moneda
+  // Si el usuario ya ingresó manualmente un pago mayor, lo preserva para generar saldo a favor
+  const syncPaymentWithTotal = (
+    newTotalDigitadoUsd: number,
+    options?: { allowReduce?: boolean },
+  ) => {
+    const allowReduce = options?.allowReduce ?? false;
     setPagos((prev) => {
       if (prev.length !== 1) return prev;
       const p = prev[0];
       const forma = formas.find((f) => f.fpago_id === p.fpago_id);
       const enBs = forma ? esFormaPagoEnBs(forma.fpago_concepto) : false;
+
+      const montoActual = parseMoneyInput(p.monto);
+      const montoActualUsd =
+        enBs && tasa && tasa > 0 ? montoActual / tasa : montoActual;
+
+      if (
+        !allowReduce &&
+        newTotalDigitadoUsd > 0 &&
+        montoActualUsd > newTotalDigitadoUsd + 0.009
+      ) {
+        return prev;
+      }
+
       let valor = "";
-      if (newTotalUsd > 0) {
+      if (newTotalDigitadoUsd > 0) {
         if (enBs && tasa && tasa > 0) {
-          valor = String(convertirUsdABs(newTotalUsd, tasa));
+          valor = numberToMoneyInput(convertirUsdABs(newTotalDigitadoUsd, tasa));
         } else {
-          valor = String(Math.round(newTotalUsd * 100) / 100);
+          valor = numberToMoneyInput(Math.round(newTotalDigitadoUsd * 100) / 100);
         }
       }
       return [{ ...p, monto: valor }];
     });
   };
 
-  const computeTotal = (
+  const computeTotalDigitado = (
     ordersList: OrdenParaRendicion[],
     sel: Record<string, boolean>,
     m: Record<string, string>,
   ) => {
     return ordersList.reduce((acc, o) => {
       if (!sel[o.id]) return acc;
-      const v = Number(String(m[o.id] ?? "0").replace(",", ".")) || 0;
-      return acc + montoAplicable(v, Number(o.saldo_pendiente) || 0);
+      const v = parseMoneyInput(m[o.id]);
+      return acc + Math.max(0, v);
     }, 0);
   };
 
-  // 1. Cobrar total de una orden individual (Acumula sucesivamente)
+  // 1. Cobrar total de una orden individual
   const selectOrderTotal = (ordenId: string, saldoPendiente: number) => {
     setSelectedOrders((prevSel) => {
       const nextSel = { ...prevSel, [ordenId]: true };
       setPartialMode((prevPart) => ({ ...prevPart, [ordenId]: false }));
       setMontos((prevM) => {
-        const nextM = { ...prevM, [ordenId]: String(saldoPendiente) };
-        const nextTotal = computeTotal(ordenes, nextSel, nextM);
+        const nextM = { ...prevM, [ordenId]: numberToMoneyInput(saldoPendiente) };
+        const nextTotal = computeTotalDigitado(ordenes, nextSel, nextM);
         syncPaymentWithTotal(nextTotal);
         return nextM;
       });
@@ -277,16 +311,19 @@ export default function NuevaRendicionScreen() {
     });
   };
 
-  // 2. Abono parcial de una orden (Permite ingresar monto específico)
+  // 2. Abono parcial (o con sobrepago) de una orden
   const selectOrderPartial = (ordenId: string, saldoPendiente: number) => {
     setSelectedOrders((prevSel) => {
       const nextSel = { ...prevSel, [ordenId]: true };
       setPartialMode((prevPart) => ({ ...prevPart, [ordenId]: true }));
       setMontos((prevM) => {
         const existing = prevM[ordenId];
-        const initialPartial = existing && existing !== "0" ? existing : String(saldoPendiente);
+        const initialPartial =
+          existing && parseMoneyInput(existing) > 0
+            ? existing
+            : numberToMoneyInput(saldoPendiente);
         const nextM = { ...prevM, [ordenId]: initialPartial };
-        const nextTotal = computeTotal(ordenes, nextSel, nextM);
+        const nextTotal = computeTotalDigitado(ordenes, nextSel, nextM);
         syncPaymentWithTotal(nextTotal);
         return nextM;
       });
@@ -294,27 +331,28 @@ export default function NuevaRendicionScreen() {
     });
   };
 
-  // 3. Quitar / Deseleccionar orden (Revierte la acumulación)
+  // 3. Quitar / Deseleccionar orden
   const deselectOrder = (ordenId: string) => {
     setSelectedOrders((prevSel) => {
       const nextSel = { ...prevSel, [ordenId]: false };
       setPartialMode((prevPart) => ({ ...prevPart, [ordenId]: false }));
       setMontos((prevM) => {
         const nextM = { ...prevM, [ordenId]: "" };
-        const nextTotal = computeTotal(ordenes, nextSel, nextM);
-        syncPaymentWithTotal(nextTotal);
+        const nextTotal = computeTotalDigitado(ordenes, nextSel, nextM);
+        syncPaymentWithTotal(nextTotal, { allowReduce: true });
         return nextM;
       });
       return nextSel;
     });
   };
 
-  // 4. Edición de monto parcial en vivo
+  // 4. Edición de monto parcial en vivo con separador de miles
   const handleOrderMontoChange = (ordenId: string, val: string) => {
+    const formatted = formatMoneyInputLive(val);
     setMontos((prevM) => {
-      const nextM = { ...prevM, [ordenId]: val };
-      const nextTotal = computeTotal(ordenes, selectedOrders, nextM);
-      syncPaymentWithTotal(nextTotal);
+      const nextM = { ...prevM, [ordenId]: formatted };
+      const nextTotal = computeTotalDigitado(ordenes, selectedOrders, nextM);
+      syncPaymentWithTotal(nextTotal, { allowReduce: true });
       return nextM;
     });
   };
@@ -326,13 +364,13 @@ export default function NuevaRendicionScreen() {
     const nextPart: Record<string, boolean> = {};
     for (const o of ordenes) {
       nextSel[o.id] = true;
-      nextM[o.id] = String(o.saldo_pendiente);
+      nextM[o.id] = numberToMoneyInput(o.saldo_pendiente);
       nextPart[o.id] = false;
     }
     setSelectedOrders(nextSel);
     setMontos(nextM);
     setPartialMode(nextPart);
-    const nextTotal = computeTotal(ordenes, nextSel, nextM);
+    const nextTotal = computeTotalDigitado(ordenes, nextSel, nextM);
     syncPaymentWithTotal(nextTotal);
   };
 
@@ -341,11 +379,12 @@ export default function NuevaRendicionScreen() {
     setSelectedOrders({});
     setMontos({});
     setPartialMode({});
-    syncPaymentWithTotal(0);
+    syncPaymentWithTotal(0, { allowReduce: true });
   };
 
   // Selección de método de pago con conversión automática entre USD y Bolívares
   const onSelectPaymentMethod = (pKey: string, newFpagoId: string) => {
+    const objetivoUsd = Math.max(totalCobrarUsd, totalDigitadoUsd);
     setPagos((prev) =>
       prev.map((p) => {
         if (p.key !== pKey) return p;
@@ -357,26 +396,25 @@ export default function NuevaRendicionScreen() {
         const newEnBs = newForma ? esFormaPagoEnBs(newForma.fpago_concepto) : false;
 
         let newMonto = p.monto;
-        const montoNum = Number(String(p.monto ?? "0").replace(",", ".")) || 0;
+        const montoNum = parseMoneyInput(p.monto);
 
         if (oldEnBs && !newEnBs) {
-          // Cambió de Bolívares a Dólares
           if (tasa && tasa > 0 && montoNum > 0) {
-            newMonto = String(convertirBsAUsd(montoNum, tasa));
-          } else if (totalCobrarUsd > 0) {
-            newMonto = String(Math.round(totalCobrarUsd * 100) / 100);
+            newMonto = numberToMoneyInput(convertirBsAUsd(montoNum, tasa));
+          } else if (objetivoUsd > 0) {
+            newMonto = numberToMoneyInput(Math.round(objetivoUsd * 100) / 100);
           }
         } else if (!oldEnBs && newEnBs) {
-          // Cambió de Dólares a Bolívares
           if (tasa && tasa > 0 && montoNum > 0) {
-            newMonto = String(convertirUsdABs(montoNum, tasa));
-          } else if (totalCobrarUsd > 0 && tasa && tasa > 0) {
-            newMonto = String(convertirUsdABs(totalCobrarUsd, tasa));
+            newMonto = numberToMoneyInput(convertirUsdABs(montoNum, tasa));
+          } else if (objetivoUsd > 0 && tasa && tasa > 0) {
+            newMonto = numberToMoneyInput(convertirUsdABs(objetivoUsd, tasa));
           }
-        } else if (montoNum === 0 && totalCobrarUsd > 0) {
-          newMonto = newEnBs && tasa && tasa > 0
-            ? String(convertirUsdABs(totalCobrarUsd, tasa))
-            : String(Math.round(totalCobrarUsd * 100) / 100);
+        } else if (montoNum === 0 && objetivoUsd > 0) {
+          newMonto =
+            newEnBs && tasa && tasa > 0
+              ? numberToMoneyInput(convertirUsdABs(objetivoUsd, tasa))
+              : numberToMoneyInput(Math.round(objetivoUsd * 100) / 100);
         }
 
         return {
@@ -396,13 +434,15 @@ export default function NuevaRendicionScreen() {
       setError("No hay formas de pago configuradas en el sistema.");
       return;
     }
-    const restanteUsd = Math.max(0, totalCobrarUsd - totalPagosUsd);
+    const objetivoUsd = Math.max(totalCobrarUsd, totalDigitadoUsd);
+    const restanteUsd = Math.max(0, objetivoUsd - totalPagosUsd);
     const enBs = esFormaPagoEnBs(first.fpago_concepto);
-    const montoSugerido = enBs && tasa && tasa > 0
-      ? String(convertirUsdABs(restanteUsd, tasa))
-      : restanteUsd > 0
-        ? String(Math.round(restanteUsd * 100) / 100)
-        : "";
+    const montoSugerido =
+      enBs && tasa && tasa > 0
+        ? numberToMoneyInput(convertirUsdABs(restanteUsd, tasa))
+        : restanteUsd > 0
+          ? numberToMoneyInput(Math.round(restanteUsd * 100) / 100)
+          : "";
 
     setPagos((prev) => [
       ...prev,
@@ -413,6 +453,7 @@ export default function NuevaRendicionScreen() {
         codigo_banco: entidades[0]?.codigo_eb ?? "0102",
         referencia: "",
         cuenta_id: cuentas[0]?.id ?? "",
+        capture_url: null,
       },
     ]);
   };
@@ -422,20 +463,88 @@ export default function NuevaRendicionScreen() {
     const otrosPagosUsd = pagos.reduce((acc, p) => {
       if (p.key === pagoKey) return acc;
       const f = formas.find((item) => item.fpago_id === p.fpago_id);
-      const m = Number(String(p.monto ?? "0").replace(",", ".")) || 0;
+      const m = parseMoneyInput(p.monto);
       if (!f || m <= 0) return acc;
       if (esFormaPagoEnBs(f.fpago_concepto) && tasa && tasa > 0) return acc + m / tasa;
       return acc + m;
     }, 0);
 
-    const restanteUsd = Math.max(0, totalCobrarUsd - otrosPagosUsd);
-    const valor = enBs && tasa && tasa > 0
-      ? String(convertirUsdABs(restanteUsd, tasa))
-      : String(Math.round(restanteUsd * 100) / 100);
+    const objetivoUsd = Math.max(totalCobrarUsd, totalDigitadoUsd);
+    const restanteUsd = Math.max(0, objetivoUsd - otrosPagosUsd);
+    const valor =
+      enBs && tasa && tasa > 0
+        ? numberToMoneyInput(convertirUsdABs(restanteUsd, tasa))
+        : numberToMoneyInput(Math.round(restanteUsd * 100) / 100);
 
     setPagos((prev) =>
       prev.map((p) => (p.key === pagoKey ? { ...p, monto: valor } : p)),
     );
+  };
+
+  // Adjuntar foto desde cámara o galería
+  const adjuntarCapture = async (
+    pagoKey: string,
+    origen: "camera" | "gallery",
+  ) => {
+    if (!profile) return;
+
+    if (origen === "camera") {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Permiso requerido",
+          "Autoriza el acceso a la cámara para fotografiar el comprobante.",
+        );
+        return;
+      }
+    } else {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Permiso requerido",
+          "Autoriza el acceso a la galería para subir el capture.",
+        );
+        return;
+      }
+    }
+
+    const pickerRes =
+      origen === "camera"
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            quality: 0.75,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            quality: 0.75,
+          });
+
+    if (pickerRes.canceled || !pickerRes.assets?.[0]?.uri) return;
+    const localUri = pickerRes.assets[0].uri;
+
+    setPagos((prev) =>
+      prev.map((p) =>
+        p.key === pagoKey ? { ...p, uploading_capture: true } : p,
+      ),
+    );
+
+    const up = await uploadCaptureRendicionMobile(localUri, profile.id);
+
+    setPagos((prev) =>
+      prev.map((p) =>
+        p.key === pagoKey
+          ? {
+              ...p,
+              uploading_capture: false,
+              capture_url: up.ok ? up.url : p.capture_url,
+            }
+          : p,
+      ),
+    );
+
+    if (!up.ok) {
+      Alert.alert("Error al subir imagen", up.error);
+    }
   };
 
   const submit = async () => {
@@ -444,7 +553,7 @@ export default function NuevaRendicionScreen() {
       const ordenesPayload = ordenes
         .filter((o) => selectedOrders[o.id])
         .map((o) => {
-          const v = Number(String(montos[o.id] ?? "0").replace(",", ".")) || 0;
+          const v = parseMoneyInput(montos[o.id]);
           return {
             orden_id: o.id,
             monto_recaudado: montoAplicable(v, Number(o.saldo_pendiente) || 0),
@@ -458,6 +567,10 @@ export default function NuevaRendicionScreen() {
       }
       if (!pagos.length) {
         setError("Agrega al menos una forma de pago.");
+        return;
+      }
+      if (pagos.some((p) => p.uploading_capture)) {
+        setError("Espera a que termine de subirse la foto del comprobante.");
         return;
       }
 
@@ -474,12 +587,13 @@ export default function NuevaRendicionScreen() {
           const forma = formas.find((f) => f.fpago_id === p.fpago_id);
           return {
             fpago_id: p.fpago_id,
-            monto: Number(String(p.monto ?? "0").replace(",", ".")) || 0,
+            monto: parseMoneyInput(p.monto),
             en_bs: forma ? esFormaPagoEnBs(forma.fpago_concepto) : false,
             fpago_info: !!forma?.fpago_info,
             codigo_banco: p.codigo_banco,
             referencia_bancaria: p.referencia,
             cuenta_bancaria_id: p.cuenta_id,
+            capture_url: p.capture_url ?? null,
           };
         }),
       });
@@ -518,6 +632,8 @@ export default function NuevaRendicionScreen() {
   }
 
   const diferencia = totalPagosUsd - totalCobrarUsd;
+  const excedenteDigitadoOrdenesUsd = Math.max(0, totalDigitadoUsd - totalCobrarUsd);
+  const objetivoUsdGlobal = Math.max(totalCobrarUsd, totalDigitadoUsd);
 
   return (
     <KeyboardAvoidingView
@@ -525,7 +641,6 @@ export default function NuevaRendicionScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
     >
-      {/* ScrollView estable que retiene la posición sin saltar al inicio */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -616,7 +731,7 @@ export default function NuevaRendicionScreen() {
             {ordenes.map((item) => {
               const isSelected = !!selectedOrders[item.id];
               const isPartial = !!partialMode[item.id];
-              const montoDigitado = Number(String(montos[item.id] ?? "0").replace(",", ".")) || 0;
+              const montoDigitado = parseMoneyInput(montos[item.id]);
               const pendiente = Number(item.saldo_pendiente) || 0;
               const pendienteBs = tasa && tasa > 0 ? convertirUsdABs(pendiente, tasa) : null;
 
@@ -661,7 +776,7 @@ export default function NuevaRendicionScreen() {
                                   isPartial ? styles.badgePartialText : styles.badgeTotalText,
                                 ]}
                               >
-                                {isPartial ? "Abono parcial" : "Total"}
+                                {isPartial ? "Abono / Otro monto" : "Total"}
                               </Text>
                             </View>
                           ) : null}
@@ -685,7 +800,6 @@ export default function NuevaRendicionScreen() {
 
                   {/* Acciones de la Orden */}
                   {!isSelected ? (
-                    // Estado no seleccionado: Botones directos para cobrar total o parcial
                     <View style={styles.orderUnselectedActions}>
                       <Pressable
                         style={styles.cobrarTotalPrimaryBtn}
@@ -702,11 +816,10 @@ export default function NuevaRendicionScreen() {
                         onPress={() => selectOrderPartial(item.id, pendiente)}
                       >
                         <Ionicons name="create-outline" size={16} color="#0B3A5C" />
-                        <Text style={styles.abonoParcialSecondaryBtnText}>Abono parcial</Text>
+                        <Text style={styles.abonoParcialSecondaryBtnText}>Abono / Otro monto</Text>
                       </Pressable>
                     </View>
                   ) : (
-                    // Estado seleccionado: Selector entre Total, Abono Parcial y opción de Quitar
                     <View style={styles.orderActionsContainer}>
                       <View style={styles.segmentedButtons}>
                         <Pressable
@@ -723,7 +836,7 @@ export default function NuevaRendicionScreen() {
                           onPress={() => selectOrderPartial(item.id, pendiente)}
                         >
                           <Text style={[styles.segmentBtnText, isPartial && styles.segmentBtnTextActive]}>
-                            Abono parcial
+                            Abono / Otro monto
                           </Text>
                         </Pressable>
 
@@ -752,7 +865,7 @@ export default function NuevaRendicionScreen() {
                             <TextInput
                               style={styles.partialInput}
                               keyboardType="decimal-pad"
-                              placeholder="0.00"
+                              placeholder="0,00"
                               placeholderTextColor="#94A3B8"
                               value={montos[item.id] ?? ""}
                               onChangeText={(v) => handleOrderMontoChange(item.id, v)}
@@ -804,7 +917,7 @@ export default function NuevaRendicionScreen() {
           <View style={styles.totalizerAmountRow}>
             <View>
               <Text style={styles.totalizerCurrencyLabel}>En Divisas</Text>
-              <Text style={styles.totalizerUsdText}>${formatMoney(totalCobrarUsd)}</Text>
+              <Text style={styles.totalizerUsdText}>${formatMoney(objetivoUsdGlobal)}</Text>
             </View>
 
             <View style={styles.totalizerVerticalDivider} />
@@ -813,7 +926,7 @@ export default function NuevaRendicionScreen() {
               <Text style={styles.totalizerCurrencyLabel}>En Bolívares (BCV)</Text>
               <Text style={styles.totalizerBsText}>
                 {tasa && tasa > 0
-                  ? `Bs ${formatMoney(convertirUsdABs(totalCobrarUsd, tasa))}`
+                  ? `Bs ${formatMoney(convertirUsdABs(objetivoUsdGlobal, tasa))}`
                   : "—"}
               </Text>
             </View>
@@ -835,7 +948,7 @@ export default function NuevaRendicionScreen() {
           const enBs = forma ? esFormaPagoEnBs(forma.fpago_concepto) : false;
           const cuenta = cuentas.find((c) => c.id === p.cuenta_id);
           const entidad = entidades.find((eb) => eb.codigo_eb === p.codigo_banco);
-          const montoActual = Number(String(p.monto ?? "0").replace(",", ".")) || 0;
+          const montoActual = parseMoneyInput(p.monto);
           const montoEquivalenteUsd = enBs && tasa && tasa > 0 ? montoActual / tasa : montoActual;
           const montoEquivalenteBs = !enBs && tasa && tasa > 0 ? convertirUsdABs(montoActual, tasa) : montoActual;
 
@@ -895,16 +1008,16 @@ export default function NuevaRendicionScreen() {
                 <Ionicons name="chevron-down" size={20} color="#0B3A5C" />
               </Pressable>
 
-              {/* Entrada de Monto con auto-conversión */}
+              {/* Entrada de Monto con separador de miles en vivo */}
               <View style={{ marginTop: 8 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <Text style={styles.fieldLabel}>
                     {enBs ? "Monto a recibir en Bolívares (Bs) *" : "Monto a recibir en USD ($) *"}
                   </Text>
-                  {totalCobrarUsd > 0 && Math.abs(totalCobrarUsd - totalPagosUsd) > 0.01 ? (
+                  {objetivoUsdGlobal > 0 && Math.abs(objetivoUsdGlobal - totalPagosUsd) > 0.01 ? (
                     <Pressable onPress={() => fillRemainingPayment(p.key, enBs)}>
                       <Text style={styles.fillRemainingText}>
-                        Llenar restante ({enBs && tasa ? `Bs ${formatMoney(convertirUsdABs(Math.max(0, totalCobrarUsd - totalPagosUsd), tasa))}` : `$${formatMoney(Math.max(0, totalCobrarUsd - totalPagosUsd))}`})
+                        Llenar restante ({enBs && tasa ? `Bs ${formatMoney(convertirUsdABs(Math.max(0, objetivoUsdGlobal - totalPagosUsd), tasa))}` : `$${formatMoney(Math.max(0, objetivoUsdGlobal - totalPagosUsd))}`})
                       </Text>
                     </Pressable>
                   ) : null}
@@ -915,14 +1028,17 @@ export default function NuevaRendicionScreen() {
                   <TextInput
                     style={styles.amountInput}
                     keyboardType="decimal-pad"
-                    placeholder="0.00"
+                    placeholder="0,00"
                     placeholderTextColor="#94A3B8"
                     value={p.monto}
-                    onChangeText={(v) =>
+                    onChangeText={(v) => {
+                      const formatted = formatMoneyInputLive(v);
                       setPagos((prev) =>
-                        prev.map((x) => (x.key === p.key ? { ...x, monto: v } : x)),
-                      )
-                    }
+                        prev.map((x) =>
+                          x.key === p.key ? { ...x, monto: formatted } : x,
+                        ),
+                      );
+                    }}
                   />
                 </View>
 
@@ -1006,6 +1122,64 @@ export default function NuevaRendicionScreen() {
                   />
                 </View>
               ) : null}
+
+              {/* Comprobante / Capture (Cámara o Galería) */}
+              <View style={styles.captureSection}>
+                <Text style={styles.fieldLabel}>Comprobante / Capture (Opcional)</Text>
+                {p.uploading_capture ? (
+                  <View style={styles.captureUploadingBox}>
+                    <ActivityIndicator size="small" color="#0B3A5C" />
+                    <Text style={styles.captureUploadingText}>
+                      Subiendo comprobante...
+                    </Text>
+                  </View>
+                ) : p.capture_url ? (
+                  <View style={styles.capturePreviewRow}>
+                    <Image
+                      source={{ uri: p.capture_url }}
+                      style={styles.captureThumb}
+                      resizeMode="cover"
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.captureUploadedTitle}>
+                        Comprobante adjunto
+                      </Text>
+                      <Text style={styles.captureUploadedSub} numberOfLines={1}>
+                        Imagen subida correctamente
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={styles.captureRemoveBtn}
+                      onPress={() =>
+                        setPagos((prev) =>
+                          prev.map((x) =>
+                            x.key === p.key ? { ...x, capture_url: null } : x,
+                          ),
+                        )
+                      }
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.captureButtonsRow}>
+                    <Pressable
+                      style={styles.captureBtn}
+                      onPress={() => void adjuntarCapture(p.key, "camera")}
+                    >
+                      <Ionicons name="camera-outline" size={18} color="#0B3A5C" />
+                      <Text style={styles.captureBtnText}>Tomar foto</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.captureBtn}
+                      onPress={() => void adjuntarCapture(p.key, "gallery")}
+                    >
+                      <Ionicons name="image-outline" size={18} color="#0B3A5C" />
+                      <Text style={styles.captureBtnText}>Subir capture</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
             </View>
           );
         })}
@@ -1032,7 +1206,7 @@ export default function NuevaRendicionScreen() {
           <Text style={styles.summaryTitle}>Resumen de la cobranza</Text>
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total facturas a cobrar:</Text>
+            <Text style={styles.summaryLabel}>Total facturas a amortizar:</Text>
             <Text style={styles.summaryValue}>
               ${formatMoney(totalCobrarUsd)}
               {tasa && tasa > 0 ? (
@@ -1040,6 +1214,15 @@ export default function NuevaRendicionScreen() {
               ) : null}
             </Text>
           </View>
+
+          {excedenteDigitadoOrdenesUsd > 0.009 ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Excedente digitado (saldo a favor):</Text>
+              <Text style={[styles.summaryValue, { color: "#026AA2", fontWeight: "700" }]}>
+                +${formatMoney(excedenteDigitadoOrdenesUsd)}
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total pagos registrados:</Text>
@@ -1065,7 +1248,7 @@ export default function NuevaRendicionScreen() {
             <View style={[styles.balancePill, styles.balanceExcess]}>
               <Ionicons name="information-circle" size={18} color="#026AA2" />
               <Text style={[styles.balanceText, { color: "#026AA2" }]}>
-                Pago mayor al saldo: Generará ${formatMoney(diferencia)} de saldo a favor.
+                Pago mayor al saldo: Generará ${formatMoney(diferencia)} USD de saldo a favor para el cliente.
               </Text>
             </View>
           ) : (
@@ -1093,8 +1276,8 @@ export default function NuevaRendicionScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
               <Text style={styles.submitBtnText}>
-                Registrar Cobranza · ${formatMoney(totalCobrarUsd)} USD
-                {tasa && tasa > 0 ? ` (Bs ${formatMoney(convertirUsdABs(totalCobrarUsd, tasa))})` : ""}
+                Registrar Cobranza · ${formatMoney(totalPagosUsd)} USD
+                {tasa && tasa > 0 ? ` (Bs ${formatMoney(convertirUsdABs(totalPagosUsd, tasa))})` : ""}
               </Text>
             </View>
           )}
@@ -1475,7 +1658,6 @@ const styles = StyleSheet.create({
   badgePartial: { backgroundColor: "#FEF3C7" },
   badgePartialText: { color: "#B45309", fontSize: 10, fontWeight: "700" },
 
-  // Estado No Seleccionado: Botones de Acción Inmediata
   orderUnselectedActions: {
     flexDirection: "row",
     gap: 8,
@@ -1521,7 +1703,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // Estado Seleccionado: Segmented Controls
   orderActionsContainer: {
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
@@ -1561,7 +1742,6 @@ const styles = StyleSheet.create({
   },
   segmentBtnDeselectText: { fontSize: 12, fontWeight: "600", color: "#DC2626" },
 
-  // Abono Parcial Input
   partialInputWrapper: {
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
@@ -1596,9 +1776,7 @@ const styles = StyleSheet.create({
   },
   excessBadge: { fontSize: 11, color: "#026AA2", fontStyle: "italic", marginTop: 2 },
 
-  // ============================================================
   // TOTALIZADOR CARD
-  // ============================================================
   totalizerCard: {
     backgroundColor: "#0B3A5C",
     borderRadius: 16,
@@ -1650,9 +1828,7 @@ const styles = StyleSheet.create({
   totalizerBsText: { fontSize: 18, fontWeight: "800", color: "#FCD34D", marginTop: 2 },
   totalizerVerticalDivider: { width: 1, height: 32, backgroundColor: "rgba(255,255,255,0.15)" },
 
-  // ============================================================
   // PAGOS
-  // ============================================================
   paymentCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
@@ -1697,7 +1873,6 @@ const styles = StyleSheet.create({
   },
   deletePaymentText: { color: "#B42318", fontSize: 12, fontWeight: "600" },
 
-  // Form Fields & Selectors
   fieldLabel: {
     fontSize: 12,
     fontWeight: "600",
@@ -1769,6 +1944,76 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: "#0F172A",
+  },
+
+  // Capture / Comprobante
+  captureSection: {
+    marginTop: 4,
+    gap: 6,
+  },
+  captureButtonsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  captureBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  captureBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0B3A5C",
+  },
+  captureUploadingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  captureUploadingText: {
+    fontSize: 12,
+    color: "#475569",
+    fontWeight: "600",
+  },
+  capturePreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 10,
+    padding: 8,
+  },
+  captureThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: "#E2E8F0",
+  },
+  captureUploadedTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  captureUploadedSub: {
+    fontSize: 11,
+    color: "#15803D",
+  },
+  captureRemoveBtn: {
+    padding: 8,
   },
 
   // Add Payment Button

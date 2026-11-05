@@ -1,6 +1,16 @@
 import { useCallback, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Image,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import {
   aprobarRendicion,
@@ -126,7 +136,7 @@ export default function RendicionDetalleScreen() {
 
       <SectionTitle>Pagos</SectionTitle>
       {item.pagos.map((p) => (
-        <View key={p.id} style={{ marginTop: 4 }}>
+        <View key={p.id} style={styles.paymentItem}>
           <Text style={styles.meta}>
             {p.fpago_concepto ?? "Pago"} · ${formatMoney(p.monto_usd ?? p.monto)}
             {p.monto_bs != null && p.monto_bs > 0
@@ -144,6 +154,23 @@ export default function RendicionDetalleScreen() {
                 ? ` → Destino: ${p.cuenta_bancaria_destino}`
                 : ""}
             </Text>
+          ) : null}
+          {p.capture_url ? (
+            <Pressable
+              style={styles.captureRow}
+              onPress={() => void Linking.openURL(p.capture_url!)}
+            >
+              <Image
+                source={{ uri: p.capture_url }}
+                style={styles.captureThumb}
+                resizeMode="cover"
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.captureLink}>Ver comprobante adjunto</Text>
+                <Text style={styles.captureHint}>Toca para abrir imagen completa</Text>
+              </View>
+              <Ionicons name="open-outline" size={16} color="#0B3A5C" />
+            </Pressable>
           ) : null}
         </View>
       ))}
@@ -172,4 +199,38 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F4F6F8", padding: 16 },
   title: { fontSize: 20, fontWeight: "700", color: "#0B3A5C" },
   meta: { color: "#5B6B7C", fontSize: 14, marginTop: 4 },
+  paymentItem: {
+    marginTop: 6,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  captureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 8,
+    backgroundColor: "#F8FAFC",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  captureThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    backgroundColor: "#E2E8F0",
+  },
+  captureLink: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0B3A5C",
+  },
+  captureHint: {
+    fontSize: 11,
+    color: "#64748B",
+  },
 });

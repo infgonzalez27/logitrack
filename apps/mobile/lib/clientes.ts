@@ -6,6 +6,48 @@ import {
   unwrapRpcData,
 } from "./rpc";
 
+export const DIAS_SEMANA = [
+  "domingo",
+  "lunes",
+  "martes",
+  "miercoles",
+  "jueves",
+  "viernes",
+  "sabado",
+] as const;
+
+export const DIAS_SEMANA_OPCIONES = [
+  { value: "lunes", label: "Lunes", short: "Lun" },
+  { value: "martes", label: "Martes", short: "Mar" },
+  { value: "miercoles", label: "Miércoles", short: "Mié" },
+  { value: "jueves", label: "Jueves", short: "Jue" },
+  { value: "viernes", label: "Viernes", short: "Vie" },
+  { value: "sabado", label: "Sábado", short: "Sáb" },
+  { value: "domingo", label: "Domingo", short: "Dom" },
+] as const;
+
+export function getDiaActualTexto(): string {
+  return DIAS_SEMANA[new Date().getDay()];
+}
+
+export function getDiaActualLabel(): string {
+  const dia = getDiaActualTexto();
+  return DIAS_SEMANA_OPCIONES.find((d) => d.value === dia)?.label ?? dia;
+}
+
+export function correspondeVisitaHoy(
+  c: {
+    visita_cualquier_dia?: boolean | null;
+    dias_visita?: string[] | null;
+  },
+  diaActualParam?: string,
+): boolean {
+  const dias = Array.isArray(c.dias_visita) ? c.dias_visita : [];
+  if (c.visita_cualquier_dia === true || dias.length === 0) return true;
+  const diaActual = diaActualParam ?? getDiaActualTexto();
+  return dias.includes(diaActual);
+}
+
 export type ClienteListaItem = {
   id: string;
   razon_social: string;
@@ -13,8 +55,8 @@ export type ClienteListaItem = {
   despachador_id: string | null;
   id_ruta: string | null;
   vendedor_id: string | null;
-  dias_visita?: string[];
-  visita_cualquier_dia?: boolean;
+  dias_visita?: string[] | null;
+  visita_cualquier_dia?: boolean | null;
 };
 
 export type ClienteVisita = ClienteListaItem & {
@@ -106,7 +148,7 @@ export async function getClienteVisita(
   const { data, error } = await supabase
     .from("clientes")
     .select(
-      "id, razon_social, rif_nit, despachador_id, id_ruta, vendedor_id, direccion_fiscal, telefono, movil1",
+      "id, razon_social, rif_nit, despachador_id, id_ruta, vendedor_id, direccion_fiscal, telefono, movil1, dias_visita, visita_cualquier_dia",
     )
     .eq("id", clienteId)
     .maybeSingle();
@@ -176,6 +218,8 @@ export type ClienteEditar = {
   despachador_id: string | null;
   id_ruta: string | null;
   activo: boolean;
+  dias_visita?: string[] | null;
+  visita_cualquier_dia?: boolean | null;
 };
 
 export type CatalogOption = { id: string; label: string };
@@ -186,7 +230,7 @@ export async function getClienteEditar(
   const { data, error } = await supabase
     .from("clientes")
     .select(
-      "id, rif_nit, razon_social, direccion_fiscal, telefono, vendedor_id, despachador_id, id_ruta, activo",
+      "id, rif_nit, razon_social, direccion_fiscal, telefono, vendedor_id, despachador_id, id_ruta, activo, dias_visita, visita_cualquier_dia",
     )
     .eq("id", id)
     .maybeSingle();
@@ -205,6 +249,8 @@ export async function createCliente(input: {
   despachador_id?: string | null;
   id_ruta?: string | null;
   activo?: boolean;
+  dias_visita?: string[];
+  visita_cualquier_dia?: boolean;
 }): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const rif = input.rif_nit.trim();
   const razon = input.razon_social.trim();
@@ -212,6 +258,11 @@ export async function createCliente(input: {
   if (!rif) return { ok: false, error: "El RIF/NIT es requerido." };
   if (!razon) return { ok: false, error: "La razón social es requerida." };
   if (!direccion) return { ok: false, error: "La dirección fiscal es requerida." };
+
+  const visitaCualquierDia = input.visita_cualquier_dia ?? true;
+  const diasVisita = visitaCualquierDia
+    ? []
+    : (input.dias_visita ?? []).slice(0, 2);
 
   const { data, error } = await supabase
     .from("clientes")
@@ -227,6 +278,8 @@ export async function createCliente(input: {
       limite_credito: 0,
       max_facturas_vencidas: 0,
       permiso_despacho_manual: false,
+      dias_visita: diasVisita,
+      visita_cualquier_dia: visitaCualquierDia,
     })
     .select("id")
     .single();
@@ -245,6 +298,8 @@ export async function updateCliente(input: {
   despachador_id?: string | null;
   id_ruta?: string | null;
   activo: boolean;
+  dias_visita?: string[];
+  visita_cualquier_dia?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const rif = input.rif_nit.trim();
   const razon = input.razon_social.trim();
@@ -286,6 +341,20 @@ export async function updateCliente(input: {
       error: rpcFailMessage(data, "No se pudo actualizar el cliente."),
     };
   }
+
+  const visitaCualquierDia = input.visita_cualquier_dia ?? true;
+  const diasVisita = visitaCualquierDia
+    ? []
+    : (input.dias_visita ?? []).slice(0, 2);
+
+  await supabase
+    .from("clientes")
+    .update({
+      dias_visita: diasVisita,
+      visita_cualquier_dia: visitaCualquierDia,
+    })
+    .eq("id", input.id);
+
   return { ok: true };
 }
 

@@ -171,7 +171,8 @@ export default function NuevaOrdenScreen() {
       setError("Selecciona un camión.");
       return;
     }
-    if (lineas.length === 0) {
+    const lineasValidas = lineas.filter((l) => l.cantidad > 0);
+    if (lineasValidas.length === 0) {
       setError("Agrega al menos un producto.");
       return;
     }
@@ -184,7 +185,7 @@ export default function NuevaOrdenScreen() {
       camionId,
       fechaDespachoIso: fechaIso,
       tasaCambio: tasa,
-      lineas: lineas.map((l) => ({
+      lineas: lineasValidas.map((l) => ({
         producto_id: l.producto_id,
         cantidad_solicitada: l.cantidad,
         valor_unitario_usd: l.precio,
@@ -353,6 +354,7 @@ export default function NuevaOrdenScreen() {
       style={styles.root}
       data={lineas}
       keyExtractor={(l) => l.producto_id}
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
       ListHeaderComponent={
         <View style={{ gap: 10 }}>
@@ -414,7 +416,40 @@ export default function NuevaOrdenScreen() {
             >
               <Text style={styles.qtyBtnText}>−</Text>
             </Pressable>
-            <Text style={styles.qty}>{item.cantidad}</Text>
+            <TextInput
+              style={styles.qtyInput}
+              keyboardType="number-pad"
+              value={String(item.cantidad)}
+              onChangeText={(txt) => {
+                const digits = txt.replace(/[^0-9]/g, "");
+                if (!digits) {
+                  setLineas((prev) =>
+                    prev.map((l) =>
+                      l.producto_id === item.producto_id
+                        ? { ...l, cantidad: 0 }
+                        : l,
+                    ),
+                  );
+                  return;
+                }
+                const n = Number.parseInt(digits, 10);
+                if (Number.isFinite(n)) {
+                  setLineas((prev) =>
+                    prev.map((l) =>
+                      l.producto_id === item.producto_id
+                        ? { ...l, cantidad: n }
+                        : l,
+                    ),
+                  );
+                }
+              }}
+              onBlur={() => {
+                if (item.cantidad <= 0) {
+                  updateCantidad(item.producto_id, 0);
+                }
+              }}
+              selectTextOnFocus
+            />
             <Pressable
               style={styles.qtyBtn}
               onPress={() => updateCantidad(item.producto_id, item.cantidad + 1)}
@@ -527,6 +562,20 @@ const styles = StyleSheet.create({
   },
   qtyBtnText: { fontSize: 20, color: "#0B3A5C", fontWeight: "600" },
   qty: { fontSize: 16, fontWeight: "600", minWidth: 24, textAlign: "center" },
+  qtyInput: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#0B3A5C",
+    minWidth: 56,
+    height: 36,
+    borderWidth: 1,
+    borderColor: "#D0D7DE",
+    borderRadius: 8,
+    textAlign: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: 6,
+    paddingVertical: 0,
+  },
   lineTotal: { marginLeft: "auto", fontWeight: "700", color: "#0B3A5C" },
   total: { fontSize: 20, fontWeight: "700", color: "#0B3A5C", textAlign: "right" },
   row: {

@@ -148,7 +148,7 @@ export default function AutoventaNuevaScreen() {
     setEnvasesLoading(true);
     const res = await obtenerSaldosEnvasesCliente(cliente.id);
     setEnvasesLoading(false);
-    
+
     if (!res.ok) {
       setError(res.error);
       return;
@@ -190,7 +190,7 @@ export default function AutoventaNuevaScreen() {
 
   const addProducto = async (row: InventarioMovilRow & { disponible: number }) => {
     if (!clienteId) return;
-    
+
     const existing = lineas.find((l) => l.producto_id === row.producto_id);
     if (existing) {
       setLineas((prev) =>
@@ -249,6 +249,7 @@ export default function AutoventaNuevaScreen() {
 
   const registrar = async () => {
     if (!profile) return;
+    const lineasValidas = lineas.filter((l) => l.cantidad > 0);
     setSaving(true);
     setError(null);
     const res = await registrarVentaEnRuta({
@@ -258,7 +259,7 @@ export default function AutoventaNuevaScreen() {
       tasaCambio: tasa,
       esCortesia,
       observaciones: obs || undefined,
-      productos: lineas.map((l) => ({
+      productos: lineasValidas.map((l) => ({
         producto_id: l.producto_id,
         cantidad: l.cantidad,
         precio_unitario: l.precio,
@@ -308,11 +309,10 @@ export default function AutoventaNuevaScreen() {
       setError("Selecciona un camión.");
       return;
     }
-    if (!lineas.length) {
+    if (!lineas.some((l) => l.cantidad > 0)) {
       setError("Agrega al menos un producto del inventario móvil.");
       return;
     }
-    // Se permite registrar la venta con saldo negativo (saldo a favor del cliente en envases)
     void registrar();
   };
 
@@ -409,7 +409,7 @@ export default function AutoventaNuevaScreen() {
           contentContainerStyle={{ padding: 16 }}
           ListEmptyComponent={
             addingProduct ? (
-               <ActivityIndicator color="#0B3A5C" style={{ marginTop: 16 }} />
+              <ActivityIndicator color="#0B3A5C" style={{ marginTop: 16 }} />
             ) : (
               <Text style={styles.meta}>
                 No hay stock disponible en este camión. Carga inventario desde la
@@ -499,7 +499,7 @@ export default function AutoventaNuevaScreen() {
       renderItem={({ item }) => (
         <View style={styles.card}>
           <Text style={styles.name}>{item.nombre}</Text>
-          
+
           <View style={{ marginTop: 6, marginBottom: 4 }}>
             {item.aplica_descuento ? (
               <>
@@ -530,7 +530,38 @@ export default function AutoventaNuevaScreen() {
             >
               <Text style={styles.qtyBtnText}>−</Text>
             </Pressable>
-            <Text style={styles.qty}>{item.cantidad}</Text>
+            <TextInput
+              style={styles.qtyInput}
+              keyboardType="number-pad"
+              value={String(item.cantidad)}
+              onChangeText={(txt) => {
+                const digits = soloEnteros(txt);
+                if (!digits) {
+                  setLineas((prev) =>
+                    prev.map((l) =>
+                      l.producto_id === item.producto_id
+                        ? { ...l, cantidad: 0 }
+                        : l,
+                    ),
+                  );
+                  return;
+                }
+                const n = Number.parseInt(digits, 10);
+                if (Number.isFinite(n)) {
+                  setLineas((prev) =>
+                    prev.map((l) =>
+                      l.producto_id === item.producto_id
+                        ? { ...l, cantidad: Math.min(l.disponible, n) }
+                        : l,
+                    ),
+                  );
+                }
+              }}
+              onBlur={() => {
+                setLineas((prev) => prev.filter((l) => l.cantidad > 0));
+              }}
+              selectTextOnFocus
+            />
             <Pressable
               style={styles.qtyBtn}
               onPress={() =>
@@ -669,6 +700,20 @@ const styles = StyleSheet.create({
   },
   qtyBtnText: { fontSize: 20, color: "#0B3A5C", fontWeight: "600" },
   qty: { fontSize: 16, fontWeight: "600", minWidth: 24, textAlign: "center" },
+  qtyInput: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#0B3A5C",
+    minWidth: 56,
+    height: 36,
+    borderWidth: 1,
+    borderColor: "#D0D7DE",
+    borderRadius: 8,
+    textAlign: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: 6,
+    paddingVertical: 0,
+  },
   lineTotalBlock: { marginLeft: "auto", alignItems: "flex-end" },
   lineSubTotal: { fontSize: 12, color: "#5B6B7C", marginBottom: 2 },
   lineTotal: { fontWeight: "700", color: "#0B3A5C" },
