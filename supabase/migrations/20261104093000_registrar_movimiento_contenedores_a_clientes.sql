@@ -38,12 +38,15 @@ COMMENT ON COLUMN public.movimientos_contenedores.observaciones IS
 -- 2. Función RPC: public.registrar_movimiento_contenedores_a_clientes
 -- ------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.registrar_movimiento_contenedores_a_clientes(UUID, JSONB, TEXT, UUID);
+DROP FUNCTION IF EXISTS public.registrar_movimiento_contenedores_a_clientes(UUID, JSONB, TEXT, UUID, JSONB, UUID);
 
 CREATE OR REPLACE FUNCTION public.registrar_movimiento_contenedores_a_clientes(
     p_cliente_id UUID,
-    p_movimientos JSONB DEFAULT '[]'::jsonb,
+    p_movimientos JSONB DEFAULT NULL,
     p_observaciones TEXT DEFAULT NULL,
-    p_creado_por UUID DEFAULT NULL
+    p_creado_por UUID DEFAULT NULL,
+    p_items JSONB DEFAULT NULL,
+    p_usuario_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -92,11 +95,11 @@ BEGIN
     END IF;
 
     -- 2. Resolver usuario ejecutor y observación
-    v_usuario_id := COALESCE(p_creado_por, auth.uid());
+    v_usuario_id := COALESCE(p_creado_por, p_usuario_id, auth.uid());
     v_obs := NULLIF(TRIM(COALESCE(p_observaciones, '')), '');
 
     -- 3. Normalizar p_movimientos (acepta array JSONB u objeto único JSONB)
-    v_movimientos_norm := COALESCE(p_movimientos, '[]'::jsonb);
+    v_movimientos_norm := COALESCE(p_movimientos, p_items, '[]'::jsonb);
     IF jsonb_typeof(v_movimientos_norm) = 'object' THEN
         v_movimientos_norm := jsonb_build_array(v_movimientos_norm);
     END IF;
@@ -323,10 +326,10 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
-COMMENT ON FUNCTION public.registrar_movimiento_contenedores_a_clientes(UUID, JSONB, TEXT, UUID) IS
+COMMENT ON FUNCTION public.registrar_movimiento_contenedores_a_clientes(UUID, JSONB, TEXT, UUID, JSONB, UUID) IS
     'Registra retiros (o entregas/ajustes) de contenedores directamente a un cliente sin necesidad de crear una Orden de Distribución (orden_id = NULL). Actualiza saldo_contenedores_clientes e inserta el historial en movimientos_contenedores.';
 
-GRANT EXECUTE ON FUNCTION public.registrar_movimiento_contenedores_a_clientes(UUID, JSONB, TEXT, UUID)
+GRANT EXECUTE ON FUNCTION public.registrar_movimiento_contenedores_a_clientes(UUID, JSONB, TEXT, UUID, JSONB, UUID)
     TO anon, authenticated, service_role;
 
 -- ------------------------------------------------------------------------------

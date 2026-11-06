@@ -837,6 +837,8 @@ export interface Database {
           p_movimientos?: unknown;
           p_observaciones?: string | null;
           p_creado_por?: string | null;
+          p_items?: unknown;
+          p_usuario_id?: string | null;
         };
         Returns: {
           success: boolean;

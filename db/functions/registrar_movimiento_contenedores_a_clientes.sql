@@ -1,12 +1,18 @@
 -- Función RPC: public.registrar_movimiento_contenedores_a_clientes
 -- Registra retiros (o entregas/ajustes) de contenedores directamente a un cliente
 -- sin necesidad de crear una Orden de Distribución (orden_id = NULL).
+-- Soporta tanto (p_movimientos, p_creado_por) como (p_items, p_usuario_id).
+
+DROP FUNCTION IF EXISTS public.registrar_movimiento_contenedores_a_clientes(UUID, JSONB, TEXT, UUID);
+DROP FUNCTION IF EXISTS public.registrar_movimiento_contenedores_a_clientes(UUID, JSONB, TEXT, UUID, JSONB, UUID);
 
 CREATE OR REPLACE FUNCTION public.registrar_movimiento_contenedores_a_clientes(
     p_cliente_id UUID,
-    p_movimientos JSONB DEFAULT '[]'::jsonb,
+    p_movimientos JSONB DEFAULT NULL,
     p_observaciones TEXT DEFAULT NULL,
-    p_creado_por UUID DEFAULT NULL
+    p_creado_por UUID DEFAULT NULL,
+    p_items JSONB DEFAULT NULL,
+    p_usuario_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -53,10 +59,10 @@ BEGIN
         );
     END IF;
 
-    v_usuario_id := COALESCE(p_creado_por, auth.uid());
+    v_usuario_id := COALESCE(p_creado_por, p_usuario_id, auth.uid());
     v_obs := NULLIF(TRIM(COALESCE(p_observaciones, '')), '');
 
-    v_movimientos_norm := COALESCE(p_movimientos, '[]'::jsonb);
+    v_movimientos_norm := COALESCE(p_movimientos, p_items, '[]'::jsonb);
     IF jsonb_typeof(v_movimientos_norm) = 'object' THEN
         v_movimientos_norm := jsonb_build_array(v_movimientos_norm);
     END IF;
@@ -67,7 +73,7 @@ BEGIN
             'data', NULL,
             'error', jsonb_build_object(
                 'code', 'PARAMETRO_INVALIDO',
-                'message', 'Debe enviar al menos un contenedor en p_movimientos.'
+                'message', 'Debe enviar al menos un contenedor en p_movimientos / p_items.'
             )
         );
     END IF;

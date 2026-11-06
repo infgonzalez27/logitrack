@@ -1402,9 +1402,11 @@ Reemplazar el `<Text style={styles.qty}>{item.cantidad}</Text>` por un `<TextInp
 ```sql
 public.registrar_movimiento_contenedores_a_clientes(
     p_cliente_id UUID,
-    p_movimientos JSONB DEFAULT '[]'::jsonb,
+    p_movimientos JSONB DEFAULT NULL,
     p_observaciones TEXT DEFAULT NULL,
-    p_creado_por UUID DEFAULT NULL
+    p_creado_por UUID DEFAULT NULL,
+    p_items JSONB DEFAULT NULL,
+    p_usuario_id UUID DEFAULT NULL
 ) RETURNS JSONB
 ```
 

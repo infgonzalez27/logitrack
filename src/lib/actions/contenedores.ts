@@ -52,9 +52,9 @@ export async function registrarMovimientoContenedoresAClientesAction(
     "registrar_movimiento_contenedores_a_clientes",
     {
       p_cliente_id: clienteId,
-      p_items: limpios,
+      p_movimientos: limpios,
       p_observaciones: input.observaciones?.trim() || null,
-      p_usuario_id: profile.id,
+      p_creado_por: profile.id,
     },
   );
 

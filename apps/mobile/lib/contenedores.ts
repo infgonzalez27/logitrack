@@ -348,13 +348,13 @@ export async function registrarMovimientoContenedoresAClientes(
     "registrar_movimiento_contenedores_a_clientes",
     {
       p_cliente_id: input.cliente_id,
-      p_items: input.items.map((i) => ({
+      p_movimientos: input.items.map((i) => ({
         contenedor_id: i.contenedor_id,
         cantidad_entregada: Number(i.cantidad_entregada) || 0,
         cantidad_retirada: Number(i.cantidad_retirada) || 0,
       })),
       p_observaciones: input.observaciones?.trim() || null,
-      p_usuario_id: input.usuario_id || null,
+      p_creado_por: input.usuario_id || null,
     },
   );
 
