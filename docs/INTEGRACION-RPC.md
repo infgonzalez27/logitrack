@@ -1965,10 +1965,13 @@ if (data.ok) {
 }
 ```
 
-### Consideraciones
-- El bucket `productos` debe existir y estar configurado como **público** (ver Guía Técnica en `docs/ESTANDAR-IMAGENES-STORAGE.md`).
-- La ruta devuelta se concatena con la variable de entorno `NEXT_PUBLIC_STORAGE_BASE_URL` en el Front‑end para obtener la URL completa.
-- La función está implementada como **Supabase Edge Function** bajo `supabase/functions/upload_product_image/index.ts`.
+### Consideraciones y Requisito Crítico Multi-Tenant para el Frontend
+- El bucket `productos` debe existir y estar configurado como **público** en cada empresa (ver Guía Técnica en `docs/ESTANDAR-IMAGENES-STORAGE.md`).
+- > [!IMPORTANT]
+  > **Construcción de URL de imagen en Multi-Tenant (FRONTEND):**
+  > En la arquitectura multi-tenant de LogiTrack, los archivos subidos residen en el Storage del **proyecto Supabase de la empresa activa del usuario** (ej: `https://<tenant_supabase_url>/storage/v1/object/public`).
+  > **El Frontend NO debe usar una variable estática fija (`NEXT_PUBLIC_STORAGE_BASE_URL` apuntando a Central)** para resolver `imagen_path`. Debe resolver dinámicamente la URL base anteponiendo el host de la empresa activa del usuario (ejemplo: `${tenant.url}/storage/v1/object/public${imagen_path}` o leyendo la cookie/contexto del tenant actual). De lo contrario, Central retornará HTTP 404 y `LogiImage` volverá al placeholder SVG.
+- La función de backend está implementada como **Supabase Edge Function** bajo `supabase/functions/upload_product_image/index.ts` y la Server Action asociada en `src/lib/actions/productos.ts` (`subirImagenProductoAction`).
 
 > **Regla de Oro**: cualquier cambio que afecte la integración RPC debe ser documentado inmediatamente en este archivo y luego subir a GitHub (esperaremos autorización para el `git push`).
 
