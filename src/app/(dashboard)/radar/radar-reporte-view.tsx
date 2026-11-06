@@ -150,28 +150,28 @@ export function RadarReporteView({ reporte }: { reporte: RadarDetalleReporte }) 
         </div>
       </div>
 
-      {/* Contenedor del Reporte Activo (impresión con tamaño 10pt y line-height compacto) */}
-      <article className="radar-report-container rounded-xl border border-lt-border bg-lt-surface p-5 text-lt-text text-[13px] leading-snug print:rounded-none print:border-0 print:bg-transparent print:p-0 print:text-[10pt] print:leading-[1.15]">
+      {/* Contenedor del Reporte Activo (impresión y visualización estricta 8pt) */}
+      <article className="radar-report-container rounded-xl border border-lt-border bg-lt-surface p-5 text-lt-text text-[8pt] leading-snug print:rounded-none print:border-0 print:bg-transparent print:p-0 print:text-[8pt] print:leading-[1.15]">
         {/* Cabecera del Reporte */}
         <header className="lt-print-keep-together space-y-1 border-b border-lt-border pb-3 print:border-black">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-display text-xl font-bold tracking-tight print:text-lg">
+            <h2 className="font-display text-lg font-bold tracking-tight print:text-[11pt]">
               Radar # {radar.correlativo}
             </h2>
-            <span className="text-xs font-semibold uppercase tracking-wide text-lt-primary print:text-black">
+            <span className="text-[8pt] font-semibold uppercase tracking-wide text-lt-primary print:text-black">
               {tabActivo === "despachos"
                 ? "Reporte de Despachos"
                 : "Reporte de Resumen"}
             </span>
           </div>
-          <p className="text-xs text-lt-text-muted print:text-black">
+          <p className="text-[8pt] text-lt-text-muted print:text-black">
             Fecha de despacho:{" "}
             <strong className="text-lt-text print:text-black">
               {formatFechaDespacho(radar.fecha_despacho)}
             </strong>
           </p>
           {despachador?.nombre_completo ? (
-            <p className="text-xs text-lt-text-muted print:text-black">
+            <p className="text-[8pt] text-lt-text-muted print:text-black">
               Despachador:{" "}
               <strong className="text-lt-text print:text-black">
                 {despachador.nombre_completo}
@@ -197,21 +197,26 @@ export function RadarReporteView({ reporte }: { reporte: RadarDetalleReporte }) 
                   key={id}
                   className="lt-print-keep-together space-y-1.5 break-inside-avoid"
                 >
-                  <div className="rounded-md bg-lt-background/60 px-2.5 py-1 text-xs font-semibold text-lt-primary print:bg-transparent print:p-0 print:text-black">
+                  <div className="rounded-md bg-lt-background/60 px-2.5 py-1 text-[8pt] font-semibold text-lt-primary print:bg-transparent print:p-0 print:text-black">
                     Cliente: {clienteNombre(o)}
                     {rif}
                     {correlativoOrden}
                   </div>
-                  <table className="w-full border-collapse text-xs print:text-[10pt]">
+                  <table className="w-full border-collapse text-[8pt]">
+                    <colgroup>
+                      <col style={{ width: "46%" }} />
+                      <col style={{ width: "16%" }} />
+                      <col style={{ width: "16%" }} />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-lt-border print:border-black">
                         <th className="py-1.5 pr-3 text-left font-semibold">
                           Producto
                         </th>
-                        <th className="w-28 py-1.5 pr-2 text-left font-semibold text-lt-text-muted print:text-black">
+                        <th className="py-1.5 pr-2 text-left font-semibold text-lt-text-muted print:text-black">
                           Código
                         </th>
-                        <th className="w-32 py-1.5 text-right font-semibold">
+                        <th className="py-1.5 text-right font-semibold">
                           Cant. solicitada
                         </th>
                       </tr>
@@ -264,56 +269,69 @@ export function RadarReporteView({ reporte }: { reporte: RadarDetalleReporte }) 
           <div className="mt-4 space-y-6 print:mt-3 print:space-y-4">
             {/* Resumen de Productos */}
             <section className="lt-print-keep-together space-y-2 break-inside-avoid">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-lt-text print:text-black">
+              <h3 className="text-[8pt] font-bold uppercase tracking-wide text-lt-text print:text-black">
                 Resumen de Carga y Despacho
               </h3>
-              <table className="w-full border-collapse text-xs print:text-[10pt]">
+              <table className="w-full border-collapse text-[8pt]">
+                <colgroup>
+                  <col style={{ width: "35%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "8%" }} />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-lt-border bg-lt-background/50 print:border-black print:bg-transparent">
                     <th className="py-1.5 pr-3 text-left font-semibold">
                       Producto
                     </th>
-                    <th className="w-24 py-1.5 text-right font-semibold">
+                    <th className="py-1.5 pr-2 text-left font-semibold">
+                      Código
+                    </th>
+                    <th className="py-1.5 text-right font-semibold">
                       Cargado
                     </th>
-                    <th className="w-24 py-1.5 text-right font-semibold">
+                    <th className="py-1.5 text-right font-semibold">
                       Despachado
                     </th>
-                    <th className="w-24 py-1.5 text-right font-semibold">
+                    <th className="py-1.5 text-right font-semibold">
                       Sobrante
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {resumen.map((p) => (
-                    <tr
-                      key={p.producto_id}
-                      className="border-b border-lt-border/50 print:border-black/30"
-                    >
-                      <td className="py-1 pr-3 align-middle font-medium">
-                        {p.nombre_producto}
-                      </td>
-                      <td className="py-1 text-right align-middle tabular-nums">
-                        {formatNumber(Number(p.cargado ?? 0))}
-                      </td>
-                      <td className="py-1 text-right align-middle tabular-nums">
-                        {formatNumber(Number(p.despachado ?? 0))}
-                      </td>
-                      <td className="py-1 text-right align-middle font-bold tabular-nums">
-                        {formatNumber(Number(p.sobrante ?? 0))}
-                      </td>
-                    </tr>
-                  ))}
-                  {!resumen.length ? (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="py-2 text-lt-text-muted print:text-black"
+                    {resumen.map((p) => (
+                      <tr
+                        key={p.producto_id}
+                        className="border-b border-lt-border/50 print:border-black/30"
                       >
-                        Sin productos consolidados.
-                      </td>
-                    </tr>
-                  ) : null}
+                        <td className="py-1 pr-3 align-middle font-medium">
+                          {p.nombre_producto}
+                        </td>
+                        <td className="py-1 pr-2 align-middle text-lt-text-muted print:text-black">
+                          {p.codigo_producto ?? "—"}
+                        </td>
+                        <td className="py-1 text-right align-middle tabular-nums">
+                          {formatNumber(Number(p.cargado ?? 0))}
+                        </td>
+                        <td className="py-1 text-right align-middle tabular-nums">
+                          {formatNumber(Number(p.despachado ?? 0))}
+                        </td>
+                        <td className="py-1 text-right align-middle font-bold tabular-nums">
+                          {formatNumber(Number(p.sobrante ?? 0))}
+                        </td>
+                      </tr>
+                    ))}
+                    {!resumen.length ? (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="py-2 text-lt-text-muted print:text-black"
+                        >
+                          Sin productos consolidados.
+                        </td>
+                      </tr>
+                    ) : null}
                 </tbody>
               </table>
             </section>
@@ -321,10 +339,10 @@ export function RadarReporteView({ reporte }: { reporte: RadarDetalleReporte }) 
             {/* Resumen de Vacíos */}
             {vacios.length > 0 && (
               <section className="lt-print-keep-together space-y-2 border-t border-lt-border pt-4 print:border-black print:pt-3 break-inside-avoid">
-                <h3 className="text-sm font-bold uppercase tracking-wide text-lt-text print:text-black">
+                <h3 className="text-[8pt] font-bold uppercase tracking-wide text-lt-text print:text-black">
                   Resumen de Contenedores (Vacíos)
                 </h3>
-                <table className="w-full border-collapse text-xs print:text-[10pt]">
+                <table className="w-full border-collapse text-[8pt]">
                   <thead>
                     <tr className="border-b border-lt-border bg-lt-background/50 print:border-black print:bg-transparent">
                       <th className="py-1.5 pr-3 text-left font-semibold">
