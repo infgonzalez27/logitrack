@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { actualizarProductoAction } from "@/lib/actions/productos";
+import {
+  actualizarProductoAction,
+  subirImagenProductoAction,
+} from "@/lib/actions/productos";
 import { LogiImage } from "@/components/media/logi-image";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,6 +24,7 @@ export function ProductoEditarForm({
   contenedores: ContenedorOption[];
 }) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [codigoProducto, setCodigoProducto] = useState(producto.codigo_producto);
   const [nombre, setNombre] = useState(producto.nombre);
   const [codigoBarras, setCodigoBarras] = useState(
@@ -38,6 +42,29 @@ export function ProductoEditarForm({
   const [imagenPath, setImagenPath] = useState(producto.imagen_path ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await subirImagenProductoAction(producto.id, formData);
+    setUploadingImage(false);
+
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+
+    setImagenPath(res.imagen_path);
+    router.refresh();
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -88,12 +115,38 @@ export function ProductoEditarForm({
               value={imagenPath}
               onChange={(e) => setImagenPath(e.target.value)}
             />
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/webp,image/jpeg,image/png"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={uploadingImage || pending}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploadingImage ? "Subiendo imagen..." : "📷 Subir / Cambiar foto"}
+              </Button>
+              {imagenPath && (
+                <button
+                  type="button"
+                  onClick={() => setImagenPath("")}
+                  className="text-xs text-lt-red hover:underline"
+                >
+                  Quitar imagen
+                </button>
+              )}
+            </div>
             <p className="text-xs text-lt-text-muted">
-              Guarda la ruta relativa en Storage (ej.{" "}
+              Sube una foto (WebP, JPG, PNG &le; 5 MB) o especifica la ruta en Storage (ej.{" "}
               <code className="rounded bg-lt-surface-muted px-1">
                 /productos/nombre.webp
               </code>
-              ) o la URL pública completa. Preferir fotos de caja/empaque.
+              ).
             </p>
           </div>
         </div>

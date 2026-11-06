@@ -395,3 +395,97 @@ export async function actualizarProductoAction(
   revalidatePath(`/productos/${input.id.trim()}`);
   return { ok: true };
 }
+
+/**
+ * Sube una imagen de producto al bucket "productos" y actualiza la columna imagen_path en la tabla productos.
+ * Soporta archivos WebP, JPG y PNG de hasta 5 MB.
+ */
+export async function subirImagenProductoAction(
+  productId: string,
+  formData: FormData,
+): Promise<{ ok: true; imagen_path: string } | { ok: false; error: string }> {
+  if (!productId || !isUuid(productId)) {
+    return { ok: false, error: "ID de producto inválido." };
+  }
+
+  const file = formData.get("file");
+  if (!file || !(file instanceof File)) {
+    return { ok: false, error: "Debes seleccionar un archivo de imagen." };
+  }
+
+  const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return {
+      ok: false,
+      error: "El archivo supera el tamaño máximo permitido de 5 MB.",
+    };
+  }
+
+  const mime = file.type || "application/octet-stream";
+  const allowedMimes = new Set([
+    "image/webp",
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+  ]);
+  if (!allowedMimes.has(mime)) {
+    return {
+      ok: false,
+      error: "Tipo de archivo no permitido. Solo se aceptan WebP, JPG y PNG.",
+    };
+  }
+
+  let ext = "webp";
+  if (mime === "image/jpeg" || mime === "image/jpg") ext = "jpg";
+  else if (mime === "image/png") ext = "png";
+  else if (file.name.includes(".")) {
+    ext = file.name.split(".").pop()?.toLowerCase() || "webp";
+  }
+
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const relativeImagePath = `/productos/${fileName}`;
+
+  try {
+    const admin = await createAdminClient();
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 1. Subir al bucket 'productos'
+    const { error: uploadError } = await admin.storage
+      .from("productos")
+      .upload(fileName, buffer, {
+        contentType: mime,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return {
+        ok: false,
+        error: `Error al subir al bucket 'productos': ${uploadError.message}`,
+      };
+    }
+
+    // 2. Actualizar campo imagen_path en la tabla productos
+    const { error: updateError } = await admin
+      .from("productos")
+      .update({ imagen_path: relativeImagePath })
+      .eq("id", productId);
+
+    if (updateError) {
+      return {
+        ok: false,
+        error: `Imagen subida pero falló la actualización del producto: ${updateError.message}`,
+      };
+    }
+
+    revalidatePath("/productos");
+    revalidatePath(`/productos/${productId}`);
+
+    return { ok: true, imagen_path: relativeImagePath };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Error inesperado al subir imagen.";
+    return { ok: false, error: message };
+  }
+}
+
