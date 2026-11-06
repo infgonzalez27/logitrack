@@ -36,31 +36,32 @@ function downloadExcel(html: string, filename: string) {
 
 /**
  * Estilos para Excel:
- * - Fuente en 10pt (exacto a la instrucción del usuario).
- * - Menor espaciado entre registros / line-height compacto (line-height: 1.15, padding: 2px 5px).
+ * - Fuente a 8pt (requerimiento estricto).
+ * - Títulos principales en 10pt/11pt.
+ * - Anchos de columna especificados para Resumen y Despachos.
  */
 const EXCEL_STYLES = `
   <style>
-    body, table {
+    body, table, td, th, .header-meta, .section-title, .client-header {
       font-family: Calibri, Arial, sans-serif;
-      font-size: 10pt;
+      font-size: 8pt;
       line-height: 1.15;
       color: #1a202c;
     }
     .header-title {
-      font-size: 12pt;
+      font-size: 11pt;
       font-weight: bold;
       color: #0B3A5C;
       padding: 3px 0;
     }
     .header-meta {
-      font-size: 10pt;
+      font-size: 8pt;
       color: #4a5568;
       padding: 1px 0;
       line-height: 1.15;
     }
     .section-title {
-      font-size: 10pt;
+      font-size: 8pt;
       font-weight: bold;
       color: #0B3A5C;
       background-color: #f0f4f8;
@@ -69,7 +70,7 @@ const EXCEL_STYLES = `
       line-height: 1.15;
     }
     .client-header {
-      font-size: 10pt;
+      font-size: 8pt;
       font-weight: bold;
       color: #0B3A5C;
       background-color: #EAF2F8;
@@ -80,7 +81,7 @@ const EXCEL_STYLES = `
     th {
       background-color: #0B3A5C;
       color: #ffffff;
-      font-size: 10pt;
+      font-size: 8pt;
       font-weight: bold;
       padding: 2.5px 6px;
       text-align: left;
@@ -91,7 +92,7 @@ const EXCEL_STYLES = `
       text-align: right;
     }
     td {
-      font-size: 10pt;
+      font-size: 8pt;
       line-height: 1.15;
       padding: 2px 6px;
       border: 0.5pt solid #e2e8f0;
@@ -162,9 +163,9 @@ export function exportRadarDespachosToExcel(reporte: RadarDetalleReporte) {
         </td>
       </tr>
       <tr>
-        <th style="width: 55%;">Producto</th>
-        <th style="width: 25%;">Código</th>
-        <th class="num" style="width: 20%;">Cantidad Solicitada</th>
+        <th width="46" style="width: 46ch;">Producto</th>
+        <th width="16" style="width: 16ch;">Código</th>
+        <th class="num" width="16" style="width: 16ch;">Cantidad Solicitada</th>
       </tr>
     `;
 
@@ -226,9 +227,14 @@ export function exportRadarDespachosToExcel(reporte: RadarDetalleReporte) {
         <div class="header-meta"><strong>Total Paradas:</strong> ${ordenesOrdenadas.length} · <strong>Total Uds:</strong> ${totalUnidadesGlobal}</div>
         <br />
         <table border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+          <colgroup>
+            <col width="46" style="width: 46ch;" />
+            <col width="16" style="width: 16ch;" />
+            <col width="16" style="width: 16ch;" />
+          </colgroup>
           ${rowsHtml}
           <tr class="total">
-            <td colspan="2" style="text-align: right; font-size: 10pt;">TOTAL GENERAL CARGA (${totalLineasGlobal} ítems):</td>
+            <td colspan="2" style="text-align: right; font-size: 8pt;">TOTAL GENERAL CARGA (${totalLineasGlobal} ítems):</td>
             <td class="num">${totalUnidadesGlobal}</td>
           </tr>
         </table>
@@ -358,13 +364,20 @@ export function exportRadarResumenToExcel(reporte: RadarDetalleReporte) {
         <br />
         <div class="section-title">RESUMEN DE CARGA Y DESPACHO</div>
         <table border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+          <colgroup>
+            <col width="35" style="width: 35ch;" />
+            <col width="12" style="width: 12ch;" />
+            <col width="8"  style="width: 8ch;" />
+            <col width="10" style="width: 10ch;" />
+            <col width="8"  style="width: 8ch;" />
+          </colgroup>
           <thead>
             <tr>
-              <th style="width: 45%;">Producto</th>
-              <th style="width: 19%;">Código</th>
-              <th class="num" style="width: 12%;">Cargado</th>
-              <th class="num" style="width: 12%;">Despachado</th>
-              <th class="num" style="width: 12%;">Sobrante</th>
+              <th width="35" style="width: 35ch;">Producto</th>
+              <th width="12" style="width: 12ch;">Código</th>
+              <th class="num" width="8" style="width: 8ch;">Cargado</th>
+              <th class="num" width="10" style="width: 10ch;">Despachado</th>
+              <th class="num" width="8" style="width: 8ch;">Sobrante</th>
             </tr>
           </thead>
           <tbody>

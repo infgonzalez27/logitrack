@@ -192,14 +192,17 @@ export function NuevaRendicionForm({
 
   const tasaValor =
     (() => {
+      if (avisoTasaFecha) {
+        const t = parseLocaleNumber(borradorTasa);
+        return Number.isFinite(t) && t > 0 ? t : 0;
+      }
       const t = parseLocaleNumber(borradorTasa);
       if (Number.isFinite(t) && t > 0) return t;
       if (tasaOficial != null && tasaOficial > 0) return tasaOficial;
-      if (avisoTasaFecha) return null;
       if (tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0) {
         return Number(tasaDelDia.tasa_cambio);
       }
-      return null;
+      return 0;
     })();
 
   const formaSeleccionada = formasPago.find(
@@ -462,10 +465,11 @@ export function NuevaRendicionForm({
         setBorradorMontoBs(formatMoneyInput(convertirUsdABs(usd, nuevaTasa)));
       }
     } else {
-      setTasaOficial(null);
+      setTasaOficial(0);
       setFechaTasaConsultada(null);
       setAvisoTasaFecha(res.ok ? null : res.error || "Tasa no registrada");
-      setBorradorTasa("");
+      setBorradorTasa(formatMoneyInput(0, 4));
+      setBorradorMontoBs(formatMoneyInput(0));
     }
   }
 
@@ -817,32 +821,28 @@ export function NuevaRendicionForm({
             <input
               readOnly
               value={
-                tasaValor != null
-                  ? `${formatNumber(tasaValor)}${
-                      tasaDelDia?.fecha_tasa
-                        ? ` · ${formatDateOnly(tasaDelDia.fecha_tasa)}`
-                        : ""
-                    }`
-                  : (avisoTasaFecha ?? "Sin tasa")
+                avisoTasaFecha && (!tasaValor || tasaValor <= 0)
+                  ? "0,0000 (Tasa no registrada)"
+                  : tasaValor != null && tasaValor > 0
+                    ? `${formatNumber(tasaValor)}${
+                        fechaTasaConsultada
+                          ? ` · ${formatDateOnly(fechaTasaConsultada)}`
+                          : tasaDelDia?.fecha_tasa
+                            ? ` · ${formatDateOnly(tasaDelDia.fecha_tasa)}`
+                            : ""
+                      }`
+                    : "0,0000"
               }
               className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
             />
             {consultandoTasaFecha ? (
               <p className="text-xs text-white/80">Consultando tasa para {formatDateOnly(fechaPago)}…</p>
-            ) : avisoTasaFecha ? (
-              <p className="text-xs font-medium text-amber-200">
-                {avisoTasaFecha} ({formatDateOnly(fechaPago)}). Escribe la tasa manualmente en TASA BCV.
-              </p>
             ) : fechaTasaConsultada ? (
               <p className="text-xs text-emerald-200">
                 Tasa registrada para {formatDateOnly(fechaTasaConsultada)}
               </p>
             ) : tasaError ? (
               <p className="text-xs text-amber-200">{tasaError}</p>
-            ) : !tasaValor ? (
-              <p className="text-xs text-amber-200">
-                Registra la tasa en Tasas de cambio para pagos en Bs.
-              </p>
             ) : null}
           </div>
           <div className="space-y-1.5">
@@ -1143,11 +1143,8 @@ export function NuevaRendicionForm({
               }
               placeholder={
                 avisoTasaFecha
-                  ? "Tasa no registrada (escribe manual)"
+                  ? "0,0000"
                   : "Tasa del día"
-              }
-              error={
-                !tasaValor && avisoTasaFecha ? `${avisoTasaFecha} (${formatDateOnly(fechaPago)}) — puedes escribir la tasa manualmente` : undefined
               }
             />
             <Input
@@ -1160,6 +1157,17 @@ export function NuevaRendicionForm({
               }
             />
           </div>
+
+          {avisoTasaFecha && (!parseLocaleNumber(borradorTasa) || parseLocaleNumber(borradorTasa) <= 0) ? (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-950 font-bold">
+                !
+              </span>
+              <span>
+                {avisoTasaFecha} ({formatDateOnly(fechaPago)}). Se colocó en 0. Por favor escribe la tasa manualmente en <strong>TASA BCV</strong>.
+              </span>
+            </div>
+          ) : null}
 
           {pideInfoBancaria ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

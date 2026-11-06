@@ -583,9 +583,9 @@ export default function NuevaRendicionScreen() {
       setTasaInput(res.tasa.toFixed(4).replace(".", ","));
       setAvisoTasaFecha(null);
     } else {
-      setTasa(null);
+      setTasa(0);
       setFechaTasa(null);
-      setTasaInput("");
+      setTasaInput("0,0000");
       setAvisoTasaFecha(res.ok ? null : res.error || "Tasa no registrada");
     }
   };

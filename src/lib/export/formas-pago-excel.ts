@@ -77,7 +77,7 @@ const EXCEL_STYLES = `
     }
     td.tasa {
       text-align: right;
-      mso-number-format: "#,##0.0000";
+      mso-number-format: "\\@";
     }
     td.text {
       mso-number-format: "\\@";
@@ -128,7 +128,11 @@ export function exportFormasPagoToExcel(data: ReporteFormasPagoData) {
         <td class="text">${escapeHtml(m.fpago_concepto ?? "—")}</td>
         <td class="text">${escapeHtml(tipo)}</td>
         <td class="text">${escapeHtml(ref)}</td>
-        <td class="tasa">${Number(m.tasa_cambio || 0).toFixed(4)}</td>
+        <td class="tasa">${escapeHtml(
+          Number(m.tasa_cambio || 0)
+            .toFixed(4)
+            .replace(".", ","),
+        )}</td>
         <td class="num">${usd.toFixed(2)}</td>
         <td class="num">${bs.toFixed(2)}</td>
       </tr>
