@@ -1839,3 +1839,57 @@ Todas las 6 tareas de la Sección 14 han sido implementadas y verificadas con `t
   - Integrados botones **"Tomar foto"** y **"Subir capture"** con vista previa y formato de miles en vivo en `apps/mobile/app/(app)/rendiciones/nueva.tsx`, y visualización de comprobantes en `apps/mobile/app/(app)/rendiciones/[id].tsx`.
 - **Tarea 6 (Saldo a Favor en Cobranzas - Sección 11.3):**
   - Separados `totalCobrarUsd` y `totalDigitadoUsd` (`computeTotalDigitado`) en `apps/mobile/app/(app)/rendiciones/nueva.tsx`, preservando sobrepagos en `syncPaymentWithTotal`, `addPago` y `fillRemainingPayment` para que viajen completos a `registrar_rendicion_cuentas`.
+
+## 7. Subida de imágenes de productos vía Edge Function
+
+**Objetivo**: proporcionar al equipo Front‑end una API sencilla para subir fotografías de productos a Supabase Storage y registrar la ruta relativa (`imagen_path`) en la tabla `public.productos`.
+
+### Endpoint
+```
+POST https://<PROJECT_REF>.functions.supabase.co/upload_product_image
+```
+*Requiere autenticación mediante el **Service Role** (la función está protegida y sólo será invocada desde el Front‑end usando la clave `SUPABASE_ANON_KEY` y el token de sesión del usuario).* 
+
+### Parámetros (multipart/form‑data)
+| Campo | Tipo | Descripción |
+|------|------|-------------|
+| `file` | File | Imagen del producto (WebP, JPG o PNG). Tamaño máximo 5 MB. |
+| `product_id` | UUID | Identificador del producto al que se asociará la foto. |
+
+### Respuesta JSON
+```json
+{ "ok": true, "imagen_path": "/productos/<timestamp>.<ext>" }
+```
+En caso de error:
+```json
+{ "ok": false, "error": "<mensaje>" }
+```
+
+### Flujo interno de la función
+1. **Validación** de presencia y tamaño del archivo.  
+2. Genera un nombre único (`<timestamp>.<ext>`).  
+3. Usa `supabase.storage.from('productos').upload` para guardar el archivo en el bucket público `productos`.  
+4. Ejecuta la RPC `actualizar_registro_productos_segun_id` (o actualización directa) para almacenar la ruta relativa en la columna `imagen_path` del producto.  
+5. Devuelve la ruta relativa.
+
+### Uso en el Front‑end (ejemplo TypeScript)
+```ts
+const form = new FormData();
+form.append('file', selectedFile);
+form.append('product_id', productId);
+const res = await fetch('https://<PROJECT_REF>.functions.supabase.co/upload_product_image', {
+  method: 'POST',
+  body: form,
+});
+const data = await res.json();
+if (data.ok) {
+  // usar data.imagen_path con LogiImage o actualizar UI
+}
+```
+
+### Consideraciones
+- El bucket `productos` debe existir y estar configurado como **público** (ver Guía Técnica en `docs/ESTANDAR-IMAGENES-STORAGE.md`).
+- La ruta devuelta se concatena con la variable de entorno `NEXT_PUBLIC_STORAGE_BASE_URL` en el Front‑end para obtener la URL completa.
+- La función está implementada como **Supabase Edge Function** bajo `supabase/functions/upload_product_image/index.ts`.
+
+> **Regla de Oro**: cualquier cambio que afecte la integración RPC debe ser documentado inmediatamente en este archivo y luego subir a GitHub (esperaremos autorización para el `git push`).
