@@ -1,52 +1,30 @@
 # INTEGRACION-RPC
 
-## Requerimientos de Ajuste: Exportación a Excel (Reportes de Formas de Pago y Radar)
+## Especificaciones Técnicas: Ajustes en Reportes de Radar
 
 > **Fecha:** 2026-11-06  
 > **Destinatario:** Encargado de Front-end  
-> **Objetivo:** Corrección del formato numérico/decimal de la tasa de cambio en el reporte de Formas de Pago y ajuste de tipografía y anchos de columnas en los reportes de Radar (Resumen y Despachos).
+> **Documento Fuente:** `docs/especificaciones_de_reportes_de_radar.md`  
+> **Objetivo:** Cumplir las directrices y medidas técnicas exactas para corregir el diseño, tamaño de tipografía y ancho de las celdas en los reportes de Radar, evitando errores de renderizado o desbordamiento en el Front-end.
 
 ---
 
-### 1. Reporte de Formas de Pago (`formas-pago-excel.ts` o módulo de exportación correspondiente)
-
-#### Problema Detectado:
-- En la exportación a Excel, la **tasa de cambio** se está formateando o interpretando erróneamente sin considerar la coma/punto decimal según la configuración regional de Excel.
-- Por ejemplo, un valor de `896,1225` se está exportando/visualizando como `8.961.225,0000` (multiplicado por 10.000 o con punto de miles en vez de separador decimal).
-
-#### Causa Raíz y Solución Técnica:
-1. **Separador Decimal y Formato HTML/XML de Excel:**
-   - Si se genera el Excel vía tabla HTML (`application/vnd.ms-excel`), Excel interpreta los números literales según la configuración regional del sistema operativo del cliente (en Venezuela/Latinoamérica la coma `,` suele ser decimal y el punto `.` es separador de miles).
-   - Al inyectar `Number(m.tasa_cambio).toFixed(4)` con punto decimal (`896.1225`), si la celda tiene `mso-number-format: "#,##0.0000"`, Excel en español puede omitir el punto decimal y convertirlo en `8961225,0000`.
-   - **Solución recomendada:**
-     - Especificar la celda con formato explícito o forzar el separador correspondiente, o bien utilizar `mso-number-format: "\@"` (como texto) si solo es para visualización exacta de la tasa con 4 decimales: `896,1225`.
-     - Si se exporta numérico: asegurar que no se envíen separadores de miles que se confundan con decimales, o usar formato general/estándar numérico compatible con la configuración regional.
-     - Verificar que el valor provisto de base de datos no venga como entero (en caso de venir multiplicado por 10000, dividirlo entre 10000; si viene en decimal flotante, formatear con coma o punto según la directiva `mso-number-format`).
+### 1. Tipografía Global
+* **Tamaño de fuente:** `8pt` (ocho puntos) de manera estricta.
+* **Aplicación:** Aplica para todas las tablas, encabezados (headers) y celdas de datos en los reportes de Radar.
 
 ---
 
-### 2. Reportes de Radar (`radar-excel.ts`)
+### 2. Reporte Resumen
+Configuración de anchos de columna (basada en unidades estándar de caracteres de celda o su equivalente exacto en el motor de renderizado del Front-end):
 
-Para ambos reportes de Radar, se deben aplicar las siguientes especificaciones obligatorias:
+* **Columna A (Producto):** Ancho `= 35`
+* **Columna B (Código):** Ancho `= 12`
+* **Columna C (Cargado):** Ancho `= 8`
+* **Columna D (Despachado):** Ancho `= 10`
+* **Columna E (Sobrante):** Ancho `= 8`
 
-#### A. Tipografía Global:
-- **Tamaño de fuente:** `8pt` (actualmente en `10pt`).
-- Aplicar a `body, table, td, th, .header-meta, .section-title, .client-header`: `font-size: 8pt;`.
-- Mantener títulos principales de encabezado (`.header-title`) en tamaño proporcional y jerarquizado (por ejemplo `10pt` o `11pt` en negrita).
-
-#### B. Reporte Resumen (`exportRadarResumenToExcel`):
-Definir los anchos de columnas exactos en la tabla principal de **Carga y Despacho**:
-
-| Columna | Campo / Contenido | Ancho Especificado |
-| :--- | :--- | :--- |
-| **Columna A** | Producto | **35** (width: `35ch` o `35%` / ancho de columna Excel equivalente a 35) |
-| **Columna B** | Código | **12** (width: `12ch` o `12%` / ancho de columna Excel equivalente a 12) |
-| **Columna C** | Cargado | **8** (width: `8ch` o `8%` / ancho de columna Excel equivalente a 8) |
-| **Columna D** | Despachado | **10** (width: `10ch` o `10%` / ancho de columna Excel equivalente a 10) |
-| **Columna E** | Sobrante | **8** (width: `8ch` o `8%` / ancho de columna Excel equivalente a 8) |
-
-*Nota para implementación HTML/Excel:*  
-Incluir la definición `<colgroup>` o los atributos `width` en cada `<th>`:
+*Definición HTML/Excel recomendada (<colgroup>):*
 ```html
 <colgroup>
   <col width="35" style="width: 35ch;" />
@@ -57,16 +35,16 @@ Incluir la definición `<colgroup>` o los atributos `width` en cada `<th>`:
 </colgroup>
 ```
 
-#### C. Reporte de Despachos (`exportRadarDespachosToExcel`):
-Definir los anchos de columnas exactos en la tabla de detalle de despachos por orden/cliente:
+---
 
-| Columna | Campo / Contenido | Ancho Especificado |
-| :--- | :--- | :--- |
-| **Columna A** | Producto | **46** (width: `46ch` o `46%` / ancho de columna Excel equivalente a 46) |
-| **Columna B** | Código | **16** (width: `16ch` o `16%` / ancho de columna Excel equivalente a 16) |
-| **Columna C** | Cantidad Solicitada | **16** (width: `16ch` o `16%` / ancho de columna Excel equivalente a 16) |
+### 3. Reporte de Despachos
+Configuración de anchos de columna:
 
-*Nota para implementación HTML/Excel:*  
+* **Columna A (Producto):** Ancho `= 46`
+* **Columna B (Código):** Ancho `= 16`
+* **Columna C (Cantidad Solicitada):** Ancho `= 16`
+
+*Definición HTML/Excel recomendada (<colgroup>):*
 ```html
 <colgroup>
   <col width="46" style="width: 46ch;" />
@@ -76,7 +54,6 @@ Definir los anchos de columnas exactos en la tabla de detalle de despachos por o
 ```
 
 ---
-
 
 ## ActualizaciÃ³n de Reporte de RendiciÃ³n y Carga de CamiÃ³n
 
