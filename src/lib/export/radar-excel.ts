@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import type { RadarDetalleReporte } from "@/types/database";
 
 function formatFecha(value: string | null | undefined): string {
@@ -10,114 +11,12 @@ function formatFecha(value: string | null | undefined): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function escapeHtml(text: unknown): string {
-  if (text == null) return "";
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function downloadExcel(html: string, filename: string) {
-  const blob = new Blob([`\ufeff${html}`], {
-    type: "application/vnd.ms-excel;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 /**
- * Estilos para Excel:
- * - Fuente a 8pt (requerimiento estricto).
- * - Títulos principales en 10pt/11pt.
- * - Anchos de columna especificados para Resumen y Despachos.
- */
-const EXCEL_STYLES = `
-  <style>
-    body, table, td, th, .header-meta, .section-title, .client-header {
-      font-family: Calibri, Arial, sans-serif;
-      font-size: 8pt;
-      line-height: 1.15;
-      color: #1a202c;
-    }
-    .header-title {
-      font-size: 11pt;
-      font-weight: bold;
-      color: #0B3A5C;
-      padding: 3px 0;
-    }
-    .header-meta {
-      font-size: 8pt;
-      color: #4a5568;
-      padding: 1px 0;
-      line-height: 1.15;
-    }
-    .section-title {
-      font-size: 8pt;
-      font-weight: bold;
-      color: #0B3A5C;
-      background-color: #f0f4f8;
-      padding: 3px 6px;
-      border: 0.5pt solid #cbd5e0;
-      line-height: 1.15;
-    }
-    .client-header {
-      font-size: 8pt;
-      font-weight: bold;
-      color: #0B3A5C;
-      background-color: #EAF2F8;
-      padding: 3px 6px;
-      border: 0.5pt solid #B8D5E8;
-      line-height: 1.15;
-    }
-    th {
-      background-color: #0B3A5C;
-      color: #ffffff;
-      font-size: 8pt;
-      font-weight: bold;
-      padding: 2.5px 6px;
-      text-align: left;
-      border: 0.5pt solid #0B3A5C;
-      line-height: 1.15;
-    }
-    th.num {
-      text-align: right;
-    }
-    td {
-      font-size: 8pt;
-      line-height: 1.15;
-      padding: 2px 6px;
-      border: 0.5pt solid #e2e8f0;
-      vertical-align: middle;
-    }
-    td.num {
-      text-align: right;
-      mso-number-format: "#,##0";
-    }
-    td.text {
-      mso-number-format: "\\@";
-    }
-    tr.total td {
-      font-weight: bold;
-      background-color: #f7fafc;
-      border-top: 1pt solid #4a5568;
-      line-height: 1.15;
-      padding: 2.5px 6px;
-    }
-  </style>
-`;
-
-/**
- * Exporta el reporte de Despachos a Excel.
- * Contiene el listado de clientes con sus órdenes y productos solicitados.
+ * Exporta el reporte de Despachos a un archivo .XLSX nativo real.
+ * Anchos especificados:
+ * - Columna A (Producto): 46
+ * - Columna B (Código): 16
+ * - Columna C (Cantidad Solicitada): 16
  */
 export function exportRadarDespachosToExcel(reporte: RadarDetalleReporte) {
   const { radar, despachador, ordenes } = reporte;
@@ -137,7 +36,13 @@ export function exportRadarDespachosToExcel(reporte: RadarDetalleReporte) {
     return na.localeCompare(nb, "es");
   });
 
-  let rowsHtml = "";
+  const rows: (string | number)[][] = [
+    [`RADAR #${correlativo} — REPORTE DE DESPACHOS`],
+    [`Fecha de despacho: ${fecha}`],
+    [`Despachador: ${despachadorNombre}`],
+    [],
+  ];
+
   let totalLineasGlobal = 0;
   let totalUnidadesGlobal = 0;
 
@@ -148,6 +53,10 @@ export function exportRadarDespachosToExcel(reporte: RadarDetalleReporte) {
       "Cliente";
     const cRif = o.cliente?.rif_nit ? ` (${o.cliente.rif_nit})` : "";
     const oCorrelativo = o.correlativo ? ` · Orden #${o.correlativo}` : "";
+
+    rows.push([`Cliente: ${cNombre}${cRif}${oCorrelativo}`]);
+    rows.push(["Producto", "Código", "Cantidad Solicitada"]);
+
     const raw = Array.isArray(o.detalles) ? o.detalles : [];
     const lineas = [...raw].sort((a, b) =>
       String(a.nombre_producto ?? "").localeCompare(
@@ -156,25 +65,8 @@ export function exportRadarDespachosToExcel(reporte: RadarDetalleReporte) {
       ),
     );
 
-    rowsHtml += `
-      <tr>
-        <td colspan="3" class="client-header">
-          <strong>Cliente:</strong> ${escapeHtml(cNombre)}${escapeHtml(cRif)}${escapeHtml(oCorrelativo)}
-        </td>
-      </tr>
-      <tr>
-        <th width="46" style="width: 46ch;">Producto</th>
-        <th width="16" style="width: 16ch;">Código</th>
-        <th class="num" width="16" style="width: 16ch;">Cantidad Solicitada</th>
-      </tr>
-    `;
-
     if (lineas.length === 0) {
-      rowsHtml += `
-        <tr>
-          <td colspan="3" class="text" style="color: #718096; font-style: italic;">Sin líneas de producto.</td>
-        </tr>
-      `;
+      rows.push(["Sin líneas de producto.", "", ""]);
     } else {
       let subtotalCliente = 0;
       for (const d of lineas) {
@@ -182,78 +74,53 @@ export function exportRadarDespachosToExcel(reporte: RadarDetalleReporte) {
         subtotalCliente += cant;
         totalLineasGlobal++;
         totalUnidadesGlobal += cant;
-        rowsHtml += `
-          <tr>
-            <td class="text">${escapeHtml(d.nombre_producto ?? "Producto")}</td>
-            <td class="text">${escapeHtml(d.codigo_producto ?? "—")}</td>
-            <td class="num">${cant}</td>
-          </tr>
-        `;
+        rows.push([d.nombre_producto ?? "Producto", d.codigo_producto ?? "—", cant]);
       }
-      rowsHtml += `
-        <tr class="total">
-          <td colspan="2" style="text-align: right;">Subtotal Cliente:</td>
-          <td class="num">${subtotalCliente}</td>
-        </tr>
-      `;
+      rows.push(["Subtotal Cliente:", "", subtotalCliente]);
     }
-    rowsHtml += `<tr><td colspan="3" style="border: none; height: 6px;"></td></tr>`;
+    rows.push([]);
   }
 
-  const html = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-        <!--[if gte mso 9]>
-        <xml>
-          <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-              <x:ExcelWorksheet>
-                <x:Name>Despachos</x:Name>
-                <x:WorksheetOptions>
-                  <x:DisplayGridlines/>
-                </x:WorksheetOptions>
-              </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-          </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-        ${EXCEL_STYLES}
-      </head>
-      <body>
-        <div class="header-title">RADAR #${escapeHtml(correlativo)} — REPORTE DE DESPACHOS</div>
-        <div class="header-meta"><strong>Fecha de despacho:</strong> ${escapeHtml(fecha)}</div>
-        <div class="header-meta"><strong>Despachador:</strong> ${escapeHtml(despachadorNombre)}</div>
-        <div class="header-meta"><strong>Total Paradas:</strong> ${ordenesOrdenadas.length} · <strong>Total Uds:</strong> ${totalUnidadesGlobal}</div>
-        <br />
-        <table border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
-          <colgroup>
-            <col width="46" style="width: 46ch;" />
-            <col width="16" style="width: 16ch;" />
-            <col width="16" style="width: 16ch;" />
-          </colgroup>
-          ${rowsHtml}
-          <tr class="total">
-            <td colspan="2" style="text-align: right; font-size: 8pt;">TOTAL GENERAL CARGA (${totalLineasGlobal} ítems):</td>
-            <td class="num">${totalUnidadesGlobal}</td>
-          </tr>
-        </table>
-      </body>
-    </html>
-  `;
+  rows.push([`TOTAL GENERAL CARGA (${totalLineasGlobal} ítems):`, "", totalUnidadesGlobal]);
 
-  downloadExcel(html, `Radar_${correlativo}_Despachos.xls`);
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+
+  // Anchos exactos según el informe técnico de integración
+  worksheet["!cols"] = [
+    { wch: 46 }, // Columna A: Producto
+    { wch: 16 }, // Columna B: Código
+    { wch: 16 }, // Columna C: Cantidad Solicitada
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Despachos");
+
+  XLSX.writeFile(workbook, `Radar_${correlativo}_Despachos.xlsx`);
 }
 
 /**
- * Exporta el reporte de Resumen a Excel.
- * Contiene el resumen de carga/despacho consolidado y el resumen de vacíos.
+ * Exporta el reporte de Resumen a un archivo .XLSX nativo real.
+ * Anchos especificados:
+ * - Columna A (Producto): 35
+ * - Columna B (Código): 12
+ * - Columna C (Cargado): 8
+ * - Columna D (Despachado): 10
+ * - Columna E (Sobrante): 8
  */
 export function exportRadarResumenToExcel(reporte: RadarDetalleReporte) {
   const { radar, despachador, resumen_productos, resumen_vacios } = reporte;
   const correlativo = radar.correlativo ?? "—";
   const fecha = formatFecha(radar.fecha_despacho);
   const despachadorNombre = despachador?.nombre_completo ?? "—";
+
+  const rows: (string | number)[][] = [
+    [`RADAR #${correlativo} — REPORTE DE RESUMEN`],
+    [`Fecha de despacho: ${fecha}`],
+    [`Despachador: ${despachadorNombre}`],
+    [],
+    ["RESUMEN DE CARGA Y DESPACHO"],
+    ["Producto", "Código", "Cargado", "Despachado", "Sobrante"],
+  ];
 
   const resumen = [...(resumen_productos ?? [])].sort(
     (a, b) =>
@@ -265,7 +132,6 @@ export function exportRadarResumenToExcel(reporte: RadarDetalleReporte) {
   let totalDespachado = 0;
   let totalSobrante = 0;
 
-  let prodRows = "";
   for (const p of resumen) {
     const cargado = Number(p.cargado ?? 0);
     const despachado = Number(p.despachado ?? 0);
@@ -274,126 +140,58 @@ export function exportRadarResumenToExcel(reporte: RadarDetalleReporte) {
     totalDespachado += despachado;
     totalSobrante += sobrante;
 
-    prodRows += `
-      <tr>
-        <td class="text">${escapeHtml(p.nombre_producto)}</td>
-        <td class="text">${escapeHtml(p.codigo_producto ?? "—")}</td>
-        <td class="num">${cargado}</td>
-        <td class="num">${despachado}</td>
-        <td class="num" style="font-weight: bold;">${sobrante}</td>
-      </tr>
-    `;
+    rows.push([
+      p.nombre_producto ?? "—",
+      p.codigo_producto ?? "—",
+      cargado,
+      despachado,
+      sobrante,
+    ]);
   }
 
-  let vaciosHtml = "";
+  rows.push(["Totales:", "", totalCargado, totalDespachado, totalSobrante]);
+
   const vacios = resumen_vacios ?? [];
   if (vacios.length > 0) {
-    let vaciosRows = "";
+    rows.push([]);
+    rows.push(["RESUMEN DE CONTENEDORES (VACÍOS)"]);
+    rows.push(["Cliente", "RIF / NIT", "Envase", "Entregado", "Retirado"]);
+
     let totalEntregados = 0;
     let totalRetirados = 0;
 
     for (const v of vacios) {
-      for (let i = 0; i < v.detalles.length; i++) {
-        const d = v.detalles[i];
+      for (const d of v.detalles) {
         const entregado = Number(d.entregado ?? 0);
         const retirado = Number(d.retirado ?? 0);
         totalEntregados += entregado;
         totalRetirados += retirado;
 
-        vaciosRows += `
-          <tr>
-            <td class="text">${escapeHtml(v.razon_social)}</td>
-            <td class="text">${escapeHtml(v.rif_nit ?? "—")}</td>
-            <td class="text">${escapeHtml(d.nombre_producto)}</td>
-            <td class="num">${entregado}</td>
-            <td class="num">${retirado}</td>
-          </tr>
-        `;
+        rows.push([
+          v.razon_social ?? "—",
+          v.rif_nit ?? "—",
+          d.nombre_producto ?? "—",
+          entregado,
+          retirado,
+        ]);
       }
     }
-
-    vaciosHtml = `
-      <br />
-      <div class="section-title">RESUMEN DE CONTENEDORES (VACÍOS)</div>
-      <table border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr>
-            <th style="width: 30%;">Cliente</th>
-            <th style="width: 18%;">RIF / NIT</th>
-            <th style="width: 26%;">Envase</th>
-            <th class="num" style="width: 13%;">Entregado</th>
-            <th class="num" style="width: 13%;">Retirado</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${vaciosRows}
-          <tr class="total">
-            <td colspan="3" style="text-align: right;">Total Envases:</td>
-            <td class="num">${totalEntregados}</td>
-            <td class="num">${totalRetirados}</td>
-          </tr>
-        </tbody>
-      </table>
-    `;
+    rows.push(["Total Envases:", "", "", totalEntregados, totalRetirados]);
   }
 
-  const html = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-        <!--[if gte mso 9]>
-        <xml>
-          <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-              <x:ExcelWorksheet>
-                <x:Name>Resumen</x:Name>
-                <x:WorksheetOptions>
-                  <x:DisplayGridlines/>
-                </x:WorksheetOptions>
-              </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-          </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-        ${EXCEL_STYLES}
-      </head>
-      <body>
-        <div class="header-title">RADAR #${escapeHtml(correlativo)} — REPORTE DE RESUMEN</div>
-        <div class="header-meta"><strong>Fecha de despacho:</strong> ${escapeHtml(fecha)}</div>
-        <div class="header-meta"><strong>Despachador:</strong> ${escapeHtml(despachadorNombre)}</div>
-        <br />
-        <div class="section-title">RESUMEN DE CARGA Y DESPACHO</div>
-        <table border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
-          <colgroup>
-            <col width="35" style="width: 35ch;" />
-            <col width="12" style="width: 12ch;" />
-            <col width="8"  style="width: 8ch;" />
-            <col width="10" style="width: 10ch;" />
-            <col width="8"  style="width: 8ch;" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th width="35" style="width: 35ch;">Producto</th>
-              <th width="12" style="width: 12ch;">Código</th>
-              <th class="num" width="8" style="width: 8ch;">Cargado</th>
-              <th class="num" width="10" style="width: 10ch;">Despachado</th>
-              <th class="num" width="8" style="width: 8ch;">Sobrante</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${prodRows}
-            <tr class="total">
-              <td colspan="2" style="text-align: right;">Totales:</td>
-              <td class="num">${totalCargado}</td>
-              <td class="num">${totalDespachado}</td>
-              <td class="num">${totalSobrante}</td>
-            </tr>
-          </tbody>
-        </table>
-        ${vaciosHtml}
-      </body>
-    </html>
-  `;
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
 
-  downloadExcel(html, `Radar_${correlativo}_Resumen.xls`);
+  // Anchos exactos según el informe técnico de integración
+  worksheet["!cols"] = [
+    { wch: 35 }, // Columna A: Producto (o Cliente)
+    { wch: 12 }, // Columna B: Código (o RIF)
+    { wch: 8 },  // Columna C: Cargado (o Envase)
+    { wch: 10 }, // Columna D: Despachado (o Entregado)
+    { wch: 8 },  // Columna E: Sobrante (o Retirado)
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Resumen");
+
+  XLSX.writeFile(workbook, `Radar_${correlativo}_Resumen.xlsx`);
 }
