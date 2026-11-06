@@ -367,6 +367,8 @@ export interface RendicionCuentas {
   id: string;
   cliente_id: string;
   fecha_rendicion: string;
+  /** Fecha y hora exacta en que se registró la cobranza en el sistema. */
+  fecha_registro?: string | null;
   /** Tasa BCV aplicada al registrar (DB-028). */
   tasa_cambio?: number | null;
   total_efectivo_recaudado: number;
@@ -412,6 +414,8 @@ export interface EntidadBancaria {
 export type ReporteFormaPagoMovimiento = {
   rendicion_id: string;
   fecha_rendicion: string;
+  /** Fecha y hora exacta en que se registró la cobranza en el sistema. */
+  fecha_registro?: string | null;
   tasa_cambio: number | null;
   cliente_id: string;
   cliente_nombre: string;
@@ -831,6 +835,17 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      retorna_tasa_cambio_segun_fecha: {
+        Args: {
+          dfecha: string;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data?: TasaCambio | null;
+          error?: { code: string; message: string; details?: string | null } | null;
+        };
+      };
       registrar_movimiento_contenedores_a_clientes: {
         Args: {
           p_cliente_id: string;

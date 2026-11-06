@@ -88,3 +88,68 @@ export async function retornaUltimaTasa(): Promise<
   }
   return { ok: true, tasa, fecha: r?.fecha_tasa ?? null };
 }
+
+export async function retornaTasaSegunFecha(
+  dFecha: string,
+): Promise<
+  { ok: true; tasa: number; fecha: string } | { ok: false; error: string }
+> {
+  const fecha = dFecha?.trim().slice(0, 10);
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return { ok: false, error: "Fecha inválida." };
+  }
+
+  const { data, error } = await supabase.rpc(
+    "retorna_tasa_cambio_segun_fecha",
+    { dfecha: fecha },
+  );
+
+  if (!error && data && typeof data === "object") {
+    const env = data as {
+      success?: boolean;
+      message?: string;
+      data?: { tasa_cambio?: number; fecha_tasa?: string } | null;
+      error?: { code?: string; message?: string } | null;
+    };
+    if (env.success === true && env.data) {
+      const tasa = Number(env.data.tasa_cambio);
+      if (Number.isFinite(tasa) && tasa > 0) {
+        return {
+          ok: true,
+          tasa,
+          fecha: env.data.fecha_tasa ?? fecha,
+        };
+      }
+    }
+    if (env.success === false) {
+      return {
+        ok: false,
+        error:
+          env.error?.message ||
+          env.message ||
+          "Tasa no registrada",
+      };
+    }
+  }
+
+  const fallback = await supabase
+    .from("tasa_cambio")
+    .select("fecha_tasa, tasa_cambio")
+    .eq("fecha_tasa", fecha)
+    .maybeSingle();
+
+  if (fallback.error || !fallback.data) {
+    return { ok: false, error: "Tasa no registrada" };
+  }
+
+  const tasaFb = Number(fallback.data.tasa_cambio);
+  if (!Number.isFinite(tasaFb) || tasaFb <= 0) {
+    return { ok: false, error: "Tasa no registrada" };
+  }
+
+  return {
+    ok: true,
+    tasa: tasaFb,
+    fecha: fallback.data.fecha_tasa ?? fecha,
+  };
+}

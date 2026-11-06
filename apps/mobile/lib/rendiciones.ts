@@ -5,7 +5,7 @@ import {
   esFormaPagoEnBs,
 } from "./moneda";
 import { isRpcSuccess, rpcFailMessage, unwrapRpcData } from "./rpc";
-import { retornaUltimaTasa } from "./catalogos";
+import { retornaTasaSegunFecha, retornaUltimaTasa } from "./catalogos";
 
 export type Fpago = {
   fpago_id: string;
@@ -311,6 +311,7 @@ export async function registrarRendicion(input: {
   userId: string;
   observaciones?: string;
   tasaCambio?: number | null;
+  fechaPago?: string | null;
   ordenes: Array<{
     orden_id: string;
     monto_recaudado: number;
@@ -369,6 +370,14 @@ export async function registrarRendicion(input: {
     input.tasaCambio != null && input.tasaCambio > 0
       ? input.tasaCambio
       : null;
+  const fechaPago =
+    input.fechaPago && /^\d{4}-\d{2}-\d{2}$/.test(input.fechaPago.trim().slice(0, 10))
+      ? input.fechaPago.trim().slice(0, 10)
+      : null;
+  if (tasaDia == null && fechaPago) {
+    const porFecha = await retornaTasaSegunFecha(fechaPago);
+    if (porFecha.ok) tasaDia = porFecha.tasa;
+  }
   if (tasaDia == null) {
     const ultima = await retornaUltimaTasa();
     if (ultima.ok) tasaDia = ultima.tasa;
@@ -394,6 +403,7 @@ export async function registrarRendicion(input: {
     p_observaciones: input.observaciones?.trim() || null,
     p_creado_por: input.userId,
     p_tasa_cambio: tasaDia,
+    p_fecha_pago: fechaPago,
     p_ordenes: input.ordenes.map((o) => {
       const usd = o.monto_recaudado;
       const bs =
@@ -497,6 +507,7 @@ export type RendicionListaItem = {
   cliente_id: string;
   cliente_razon: string;
   fecha_rendicion: string;
+  fecha_registro?: string | null;
   total_efectivo_recaudado: number;
   total_transferencias_recaudado: number;
   total_recaudado_usd: number | null;
@@ -531,6 +542,7 @@ export type RendicionDetalle = RendicionListaItem & {
 export type ReporteFormaPagoMovimiento = {
   rendicion_id: string;
   fecha_rendicion: string;
+  fecha_registro?: string | null;
   tasa_cambio: number | null;
   cliente_id: string;
   cliente_nombre: string;

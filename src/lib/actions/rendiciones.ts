@@ -6,7 +6,11 @@ import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { getRoleNameFromProfile, type RolNombre } from "@/lib/auth/roles";
 import { listarCuentasBancariasEmpresaAction } from "@/lib/actions/cuentas-bancarias";
 import { callDbProcedure, rpcErrorMessage } from "@/lib/actions/db-rpc";
-import { retornaUltimaTasaCambioAction } from "@/lib/actions/tasa-cambio";
+import {
+  retornaTasaCambioSegunFechaAction,
+  retornaUltimaTasaCambioAction,
+} from "@/lib/actions/tasa-cambio";
+import { fechaIsoDia } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import {
   convertirBsAUsd,
@@ -544,6 +548,7 @@ export async function registrarRendicionCuentasAction(input: {
   cliente_id: string;
   observaciones?: string;
   tasa_cambio?: number | null;
+  fecha_pago?: string | null;
   ordenes: OrdenRendicionInput[];
   pagos: PagoRendicionInput[];
 }) {
@@ -633,6 +638,15 @@ export async function registrarRendicionCuentasAction(input: {
       ? Number(input.tasa_cambio)
       : null;
 
+  const fechaPago = fechaIsoDia(input.fecha_pago);
+
+  if (tasaDia == null && fechaPago) {
+    const porFecha = await retornaTasaCambioSegunFechaAction(fechaPago);
+    if (porFecha.ok && Number(porFecha.tasa.tasa_cambio) > 0) {
+      tasaDia = Number(porFecha.tasa.tasa_cambio);
+    }
+  }
+
   if (tasaDia == null) {
     const ultima = await retornaUltimaTasaCambioAction();
     if (ultima.ok && ultima.tasa && Number(ultima.tasa.tasa_cambio) > 0) {
@@ -667,6 +681,7 @@ export async function registrarRendicionCuentasAction(input: {
     p_observaciones: input.observaciones?.trim() || null,
     p_creado_por: user.id,
     p_tasa_cambio: tasaDia,
+    p_fecha_pago: fechaPago,
     p_ordenes: input.ordenes.map((o) => {
       const usd = o.monto_recaudado;
       const bs =

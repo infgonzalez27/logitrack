@@ -1893,3 +1893,82 @@ if (data.ok) {
 - La función está implementada como **Supabase Edge Function** bajo `supabase/functions/upload_product_image/index.ts`.
 
 > **Regla de Oro**: cualquier cambio que afecte la integración RPC debe ser documentado inmediatamente en este archivo y luego subir a GitHub (esperaremos autorización para el `git push`).
+
+
+---
+
+## 15. Tasa de Cambio según Fecha (`retorna_tasa_cambio_segun_fecha`) y Fecha de Pago / Registro en Cobranzas (`2026-11-06`)
+
+### 15.1. Contexto Funcional
+Muchas cobranzas (rendiciones de cuentas) se registran en el sistema días después de haberse efectuado el pago o abono real por parte del cliente. Para soportar este flujo:
+1. Se consulta la tasa de cambio oficial registrada en la fecha efectiva del pago mediante `public.retorna_tasa_cambio_segun_fecha(dFecha)`.
+2. Si para esa fecha no existe tasa cargada en `public.tasa_cambio`, la función informa exactamente **`"Tasa no registrada"`** y el formulario (Web y Mobile APK) permite al usuario **escribir la tasa manualmente**.
+3. En la tabla cabecera `public.rendiciones_cuentas`:
+   - `fecha_rendicion` almacena la **fecha efectiva del pago o abono**.
+   - Se añade la columna `fecha_registro TIMESTAMPTZ NOT NULL DEFAULT NOW()` que almacena la **fecha y hora exacta en que se grabó la cobranza en el sistema**.
+4. En `public.logs_auditoria` se graba el evento `INSERT` sobre `rendiciones_cuentas` con la fecha y hora exacta del momento (`NOW()`) y el `usuario_id` ejecutor.
+
+### 15.2. Parche SQL Idempotente
+- **Archivo en Tenants:** `supabase/tenant_patches/20261106134000_retorna_tasa_cambio_segun_fecha_y_fecha_cobranza.sql`
+- **Migración Base:** `supabase/migrations/20261106134000_retorna_tasa_cambio_segun_fecha_y_fecha_cobranza.sql`
+
+### 15.3. Contrato de la Función RPC: `public.retorna_tasa_cambio_segun_fecha`
+
+- **Firma SQL:**
+  ```sql
+  public.retorna_tasa_cambio_segun_fecha(dfecha date) RETURNS json
+  ```
+- **Parámetros de entrada:**
+  | Parámetro | Tipo | Requerido | Descripción |
+  | :--- | :--- | :---: | :--- |
+  | `dfecha` | `date` (`YYYY-MM-DD`) | Sí | Fecha del pago o abono a consultar en `public.tasa_cambio`. |
+
+- **Respuesta JSON cuando la tasa está registrada:**
+  ```json
+  {
+    "success": true,
+    "message": "Tasa de cambio obtenida exitosamente.",
+    "data": {
+      "fecha_tasa": "2026-11-04",
+      "tasa_cambio": 45.2500,
+      "created_at": "2026-11-04T08:00:00.000Z"
+    },
+    "error": null
+  }
+  ```
+
+- **Respuesta JSON cuando la tasa NO está registrada (`TASA_NO_REGISTRADA`):**
+  ```json
+  {
+    "success": false,
+    "message": "Tasa no registrada",
+    "data": null,
+    "error": {
+      "code": "TASA_NO_REGISTRADA",
+      "message": "Tasa no registrada",
+      "details": "No existe tasa de cambio registrada para la fecha 2026-11-04"
+    }
+  }
+  ```
+
+### 15.4. Actualización de `public.registrar_rendicion_cuentas`
+
+- **Nueva firma retrocompatible:**
+  ```sql
+  public.registrar_rendicion_cuentas(
+      p_cliente_id uuid,
+      p_observaciones text,
+      p_creado_por uuid,
+      p_ordenes jsonb,
+      p_pagos jsonb,
+      p_tasa_cambio numeric DEFAULT NULL::numeric,
+      p_fecha_pago date DEFAULT NULL::date
+  ) RETURNS json
+  ```
+- **Comportamiento de tasa y fechas:**
+  - Si `p_tasa_cambio` es enviado (`> 0`), se utiliza dicha tasa (ya sea la obtenida de `retorna_tasa_cambio_segun_fecha` o la **escrita manualmente por el usuario** cuando la fecha indicó `"Tasa no registrada"`).
+  - Si `p_tasa_cambio` es `NULL` y se envía `p_fecha_pago`, busca la tasa de `p_fecha_pago` en `public.tasa_cambio` (y como último recurso usa la última tasa registrada).
+  - Guarda la fecha del pago en `rendiciones_cuentas.fecha_rendicion` y el timestamp exacto del momento (`NOW()`) en `rendiciones_cuentas.fecha_registro` y en `logs_auditoria.fecha_registro`.
+- **Nuevos campos en `data` de respuesta:**
+  - `fecha_rendicion`: fecha del pago registrada.
+  - `fecha_registro`: timestamp exacto del momento del registro.

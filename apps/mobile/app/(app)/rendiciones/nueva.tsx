@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
 import { getClienteVisita } from "@/lib/clientes";
-import { retornaUltimaTasa } from "@/lib/catalogos";
+import { retornaTasaSegunFecha, retornaUltimaTasa } from "@/lib/catalogos";
 import {
   listarCuentasBancarias,
   listarEntidadesBancarias,
@@ -45,6 +45,23 @@ import {
 function montoAplicable(monto: number, saldoPendiente: number): number {
   const saldo = Number(saldoPendiente) || 0;
   return saldo > 0 ? Math.min(monto, saldo) : monto;
+}
+
+function hoyIsoCaracas(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function desplazarFechaIso(fechaIso: string, deltaDias: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fechaIso.trim());
+  const base = match
+    ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+    : new Date();
+  base.setUTCDate(base.getUTCDate() + deltaDias);
+  return base.toISOString().slice(0, 10);
 }
 
 function getFormaIcon(concepto: string | undefined): keyof typeof Ionicons.glyphMap {
@@ -99,6 +116,10 @@ export default function NuevaRendicionScreen() {
   const [pagos, setPagos] = useState<PagoDraft[]>([]);
   const [tasa, setTasa] = useState<number | null>(null);
   const [fechaTasa, setFechaTasa] = useState<string | null>(null);
+  const [fechaPago, setFechaPago] = useState<string>(() => hoyIsoCaracas());
+  const [tasaInput, setTasaInput] = useState<string>("");
+  const [avisoTasaFecha, setAvisoTasaFecha] = useState<string | null>(null);
+  const [consultandoTasa, setConsultandoTasa] = useState<boolean>(false);
   const [obs, setObs] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -146,6 +167,8 @@ export default function NuevaRendicionScreen() {
       }
       setTasa(tasaFinal);
       setFechaTasa(fechaFinal);
+      setTasaInput(tasaFinal != null && tasaFinal > 0 ? tasaFinal.toFixed(4).replace(".", ",") : "");
+      setAvisoTasaFecha(null);
 
       const ords = aRes.ok && Array.isArray(aRes.abonos.ordenes)
         ? aRes.abonos.ordenes
@@ -547,6 +570,38 @@ export default function NuevaRendicionScreen() {
     }
   };
 
+  const handleFechaPagoChange = async (nuevaFecha: string) => {
+    setFechaPago(nuevaFecha);
+    const trimmed = nuevaFecha.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return;
+    setConsultandoTasa(true);
+    const res = await retornaTasaSegunFecha(trimmed);
+    setConsultandoTasa(false);
+    if (res.ok && res.tasa > 0) {
+      setTasa(res.tasa);
+      setFechaTasa(res.fecha);
+      setTasaInput(res.tasa.toFixed(4).replace(".", ","));
+      setAvisoTasaFecha(null);
+    } else {
+      setTasa(null);
+      setFechaTasa(null);
+      setTasaInput("");
+      setAvisoTasaFecha(res.ok ? null : res.error || "Tasa no registrada");
+    }
+  };
+
+  const handleTasaManualChange = (raw: string) => {
+    setTasaInput(raw);
+    const normalized = raw.replace(/\./g, "").replace(",", ".");
+    const direct = Number(raw.replace(",", "."));
+    const val = Number.isFinite(direct) && direct > 0 ? direct : Number(normalized);
+    if (Number.isFinite(val) && val > 0) {
+      setTasa(val);
+    } else {
+      setTasa(null);
+    }
+  };
+
   const submit = async () => {
     if (!profile || !clienteId) return;
     try {
@@ -581,6 +636,7 @@ export default function NuevaRendicionScreen() {
         userId: profile.id,
         observaciones: obs || undefined,
         tasaCambio: tasa,
+        fechaPago,
         formas,
         ordenes: ordenesPayload,
         pagos: pagos.map((p) => {
@@ -666,6 +722,94 @@ export default function NuevaRendicionScreen() {
                 <Text style={styles.bcvBadgeDate}>{formatDate(fechaTasa)}</Text>
               ) : null}
             </View>
+          ) : null}
+        </View>
+
+        {/* Fecha del pago/abono y Tasa de cambio según fecha o manual */}
+        <View style={{ backgroundColor: "#FFFFFF", borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#E2E8F0", gap: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Ionicons name="calendar-outline" size={16} color="#0B3A5C" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>
+                Fecha del pago / abono
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <Pressable
+                onPress={() => void handleFechaPagoChange(desplazarFechaIso(fechaPago, -1))}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#CBD5E1" }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}>-1 día</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleFechaPagoChange(hoyIsoCaracas())}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#E0F2FE", borderWidth: 1, borderColor: "#BAE6FD" }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#0369A1" }}>Hoy</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleFechaPagoChange(desplazarFechaIso(fechaPago, 1))}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#CBD5E1" }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}>+1 día</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B", marginBottom: 4 }}>
+                Fecha (AAAA-MM-DD)
+              </Text>
+              <TextInput
+                value={fechaPago}
+                onChangeText={(txt) => void handleFechaPagoChange(txt)}
+                placeholder="AAAA-MM-DD"
+                placeholderTextColor="#94A3B8"
+                maxLength={10}
+                style={{ borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: "#0F172A", backgroundColor: "#F8FAFC", fontWeight: "600" }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B", marginBottom: 4 }}>
+                Tasa BCV / Manual (Bs/$)
+              </Text>
+              <TextInput
+                value={tasaInput}
+                onChangeText={handleTasaManualChange}
+                keyboardType="decimal-pad"
+                placeholder={avisoTasaFecha ? "Escribe tasa manual" : "Ej: 45,1234"}
+                placeholderTextColor={avisoTasaFecha ? "#D97706" : "#94A3B8"}
+                style={{
+                  borderWidth: 1,
+                  borderColor: avisoTasaFecha && !(tasa && tasa > 0) ? "#F59E0B" : "#CBD5E1",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  fontSize: 14,
+                  color: "#0F172A",
+                  backgroundColor: avisoTasaFecha && !(tasa && tasa > 0) ? "#FFFBEB" : "#F8FAFC",
+                  fontWeight: "700",
+                }}
+              />
+            </View>
+          </View>
+
+          {consultandoTasa ? (
+            <Text style={{ fontSize: 12, color: "#64748B" }}>
+              Consultando tasa para {fechaPago}...
+            </Text>
+          ) : avisoTasaFecha ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#FEF3C7", paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8 }}>
+              <Ionicons name="warning-outline" size={16} color="#B45309" />
+              <Text style={{ flex: 1, fontSize: 12, color: "#92400E", fontWeight: "600" }}>
+                {avisoTasaFecha} ({fechaPago}). Puedes escribir la tasa manualmente.
+              </Text>
+            </View>
+          ) : fechaTasa ? (
+            <Text style={{ fontSize: 11, color: "#047857", fontWeight: "600" }}>
+              Tasa registrada para {formatDate(fechaTasa)}: Bs {tasa ? formatMoney(tasa) : "—"}
+            </Text>
           ) : null}
         </View>
 

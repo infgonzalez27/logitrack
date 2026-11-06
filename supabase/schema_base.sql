@@ -6317,6 +6317,75 @@ $$;
 ALTER FUNCTION "public"."retorna_saldo_contenedores_segun_clientes"("p_cliente_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."retorna_tasa_cambio_segun_fecha"("dfecha" "date") RETURNS json
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+    v_record RECORD;
+BEGIN
+    IF dfecha IS NULL THEN
+        RETURN json_build_object(
+            'success', false,
+            'message', 'La fecha de consulta (dFecha) es requerida.',
+            'data', NULL,
+            'error', json_build_object(
+                'code', 'PARAMETRO_INVALIDO',
+                'message', 'La fecha de consulta (dFecha) es requerida.',
+                'details', NULL
+            )
+        );
+    END IF;
+
+    SELECT fecha_tasa, tasa_cambio, created_at
+    INTO v_record
+    FROM public.tasa_cambio
+    WHERE fecha_tasa = dfecha
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object(
+            'success', false,
+            'message', 'Tasa no registrada',
+            'data', NULL,
+            'error', json_build_object(
+                'code', 'TASA_NO_REGISTRADA',
+                'message', 'Tasa no registrada',
+                'details', 'No existe tasa de cambio registrada para la fecha ' || TO_CHAR(dfecha, 'YYYY-MM-DD')
+            )
+        );
+    END IF;
+
+    RETURN json_build_object(
+        'success', true,
+        'message', 'Tasa de cambio obtenida exitosamente.',
+        'data', json_build_object(
+            'fecha_tasa', v_record.fecha_tasa,
+            'tasa_cambio', v_record.tasa_cambio,
+            'created_at', v_record.created_at
+        ),
+        'error', NULL
+    );
+
+EXCEPTION WHEN OTHERS THEN
+    RETURN json_build_object(
+        'success', false,
+        'message', SQLERRM,
+        'data', NULL,
+        'error', json_build_object(
+            'code', 'SQL_ERROR',
+            'message', SQLERRM,
+            'details', 'SQLSTATE: ' || SQLSTATE
+        )
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."retorna_tasa_cambio_segun_fecha"("dfecha" "date") OWNER TO "postgres";
+GRANT ALL ON FUNCTION "public"."retorna_tasa_cambio_segun_fecha"("dfecha" "date") TO "anon", "authenticated", "service_role";
+
+
 CREATE OR REPLACE FUNCTION "public"."retorna_tasas_cambio_por_rango"("p_fecha_desde" "date", "p_fecha_hasta" "date") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
@@ -7921,6 +7990,7 @@ CREATE TABLE IF NOT EXISTS "public"."rendiciones_cuentas" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "cliente_id" "uuid",
     "fecha_rendicion" timestamp with time zone DEFAULT "now"(),
+    "fecha_registro" timestamp with time zone DEFAULT "now"() NOT NULL,
     "total_efectivo_recaudado" numeric(12,2) DEFAULT 0.00,
     "total_transferencias_recaudado" numeric(12,2) DEFAULT 0.00,
     "total_devoluciones_valoradas" numeric(12,2) DEFAULT 0.00,

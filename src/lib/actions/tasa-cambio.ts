@@ -173,6 +173,71 @@ export async function ensureTasaCambioDelDia(): Promise<{
   return { ok: true, hoy, tasa: inserted.tasa, registrada: true };
 }
 
+export async function retornaTasaCambioSegunFechaAction(
+  dFecha: string,
+): Promise<
+  | { ok: true; tasa: TasaCambio }
+  | { ok: false; error: string; code?: string }
+> {
+  const fecha = fechaIsoDia(dFecha);
+  if (!fecha) {
+    return {
+      ok: false,
+      error: "La fecha de consulta (dFecha) es requerida.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const response = await callDbProcedure<TasaCambio | null>(
+    "retorna_tasa_cambio_segun_fecha",
+    {
+      dfecha: fecha,
+    },
+  );
+
+  if (response.success && response.data) {
+    const parsed = asTasaCambio(response.data);
+    if (parsed && Number.isFinite(parsed.tasa_cambio) && parsed.tasa_cambio > 0) {
+      return { ok: true, tasa: parsed };
+    }
+  }
+
+  if (
+    response.error?.code === "TASA_NO_REGISTRADA" ||
+    response.error?.message === "Tasa no registrada" ||
+    response.message === "Tasa no registrada"
+  ) {
+    return {
+      ok: false,
+      error: "Tasa no registrada",
+      code: "TASA_NO_REGISTRADA",
+    };
+  }
+
+  // Fallback si el RPC aún no existe en algún tenant: consultar rango exacto [fecha, fecha]
+  const fallback = await retornaTasasCambioPorRangoAction(fecha, fecha);
+  if (fallback.ok) {
+    const match = fallback.tasas.find(
+      (t) => (fechaIsoDia(t.fecha_tasa) ?? t.fecha_tasa) === fecha,
+    );
+    const parsed = match ? asTasaCambio(match) : null;
+    if (parsed && Number.isFinite(parsed.tasa_cambio) && parsed.tasa_cambio > 0) {
+      return { ok: true, tasa: parsed };
+    }
+    return {
+      ok: false,
+      error: "Tasa no registrada",
+      code: "TASA_NO_REGISTRADA",
+    };
+  }
+
+  return {
+    ok: false,
+    error: rpcErrorMessage(response, "Tasa no registrada"),
+    code: response.error?.code,
+  };
+}
+
 export async function retornaTasasCambioPorRangoAction(
   fechaDesde: string,
   fechaHasta: string,

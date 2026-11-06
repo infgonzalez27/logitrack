@@ -8,6 +8,7 @@ import {
   uploadCaptureRendicionAction,
   type OrdenParaRendicion,
 } from "@/lib/actions/rendiciones";
+import { retornaTasaCambioSegunFechaAction } from "@/lib/actions/tasa-cambio";
 import { formatCurrency, formatDateOnly, formatMoneyInput, formatNumber, parseLocaleNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -161,6 +162,11 @@ export function NuevaRendicionForm({
       : "",
   );
   const [borradorFechaPago, setBorradorFechaPago] = useState(hoyLocal);
+  const [fechaTasaConsultada, setFechaTasaConsultada] = useState<string | null>(
+    tasaDelDia?.fecha_tasa ?? null,
+  );
+  const [avisoTasaFecha, setAvisoTasaFecha] = useState<string | null>(null);
+  const [consultandoTasaFecha, setConsultandoTasaFecha] = useState(false);
   const [borradorCodigoBanco, setBorradorCodigoBanco] = useState(
     () => entidadesBancarias[0]?.codigo_eb ?? "",
   );
@@ -189,6 +195,7 @@ export function NuevaRendicionForm({
       const t = parseLocaleNumber(borradorTasa);
       if (Number.isFinite(t) && t > 0) return t;
       if (tasaOficial != null && tasaOficial > 0) return tasaOficial;
+      if (avisoTasaFecha) return null;
       if (tasaDelDia != null && Number(tasaDelDia.tasa_cambio) > 0) {
         return Number(tasaDelDia.tasa_cambio);
       }
@@ -261,7 +268,9 @@ export function NuevaRendicionForm({
       setSaldoFavorBs(result.data.saldo_favor_bs);
       if (
         result.data.tasa_oficial_actual != null &&
-        result.data.tasa_oficial_actual > 0
+        result.data.tasa_oficial_actual > 0 &&
+        !avisoTasaFecha &&
+        fechaPago === hoyLocal()
       ) {
         setTasaOficial(result.data.tasa_oficial_actual);
         setBorradorTasa(formatMoneyInput(result.data.tasa_oficial_actual, 4));
@@ -433,6 +442,33 @@ export function NuevaRendicionForm({
     setBorradorMontoUsd(formatMoneyInput(convertirBsAUsd(bs, tasaValor)));
   }
 
+  async function cambiarFechaPagoYConsultarTasa(nuevaFecha: string) {
+    setFechaPago(nuevaFecha);
+    setBorradorFechaPago(nuevaFecha);
+    if (!nuevaFecha) return;
+
+    setConsultandoTasaFecha(true);
+    const res = await retornaTasaCambioSegunFechaAction(nuevaFecha);
+    setConsultandoTasaFecha(false);
+
+    if (res.ok && res.tasa && Number(res.tasa.tasa_cambio) > 0) {
+      const nuevaTasa = Number(res.tasa.tasa_cambio);
+      setTasaOficial(nuevaTasa);
+      setFechaTasaConsultada(res.tasa.fecha_tasa);
+      setAvisoTasaFecha(null);
+      setBorradorTasa(formatMoneyInput(nuevaTasa, 4));
+      const usd = parseLocaleNumber(borradorMontoUsd);
+      if (Number.isFinite(usd) && usd >= 0) {
+        setBorradorMontoBs(formatMoneyInput(convertirUsdABs(usd, nuevaTasa)));
+      }
+    } else {
+      setTasaOficial(null);
+      setFechaTasaConsultada(null);
+      setAvisoTasaFecha(res.ok ? null : res.error || "Tasa no registrada");
+      setBorradorTasa("");
+    }
+  }
+
   function onTasaChange(value: string) {
     setBorradorTasa(value);
     const tasa = parseLocaleNumber(value);
@@ -449,6 +485,10 @@ export function NuevaRendicionForm({
     fractionDigits = 2,
   ) {
     const n = parseLocaleNumber(value);
+    if (fractionDigits === 4 && (!value.trim() || !Number.isFinite(n) || n <= 0)) {
+      setter("");
+      return;
+    }
     if (!Number.isFinite(n) || n < 0) {
       setter(formatMoneyInput(0, fractionDigits));
       return;
@@ -711,6 +751,7 @@ export function NuevaRendicionForm({
         cliente_id: clienteId,
         observaciones: obs || undefined,
         tasa_cambio: tasaValor,
+        fecha_pago: fechaPago,
         ordenes: ordenes.map((o) => ({
           orden_id: o.orden_id,
           monto_recaudado: o.monto_rendicion,
@@ -763,8 +804,8 @@ export function NuevaRendicionForm({
               type="date"
               value={fechaPago}
               onChange={(e) => {
-                setFechaPago(e.target.value);
-                setBorradorFechaPago(e.target.value);
+                void cambiarFechaPagoYConsultarTasa(e.target.value);
+                /* sincronizado por cambiarFechaPagoYConsultarTasa */
               }}
               className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
             />
@@ -782,11 +823,21 @@ export function NuevaRendicionForm({
                         ? ` · ${formatDateOnly(tasaDelDia.fecha_tasa)}`
                         : ""
                     }`
-                  : "Sin tasa"
+                  : (avisoTasaFecha ?? "Sin tasa")
               }
               className="w-full rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 text-sm text-lt-text"
             />
-            {tasaError ? (
+            {consultandoTasaFecha ? (
+              <p className="text-xs text-white/80">Consultando tasa para {formatDateOnly(fechaPago)}…</p>
+            ) : avisoTasaFecha ? (
+              <p className="text-xs font-medium text-amber-200">
+                {avisoTasaFecha} ({formatDateOnly(fechaPago)}). Escribe la tasa manualmente en TASA BCV.
+              </p>
+            ) : fechaTasaConsultada ? (
+              <p className="text-xs text-emerald-200">
+                Tasa registrada para {formatDateOnly(fechaTasaConsultada)}
+              </p>
+            ) : tasaError ? (
               <p className="text-xs text-amber-200">{tasaError}</p>
             ) : !tasaValor ? (
               <p className="text-xs text-amber-200">
@@ -1071,7 +1122,7 @@ export function NuevaRendicionForm({
               label="Fecha"
               type="date"
               value={borradorFechaPago}
-              onChange={(e) => setBorradorFechaPago(e.target.value)}
+              onChange={(e) => void cambiarFechaPagoYConsultarTasa(e.target.value)}
             />
             <Input
               label="Monto $"
@@ -1090,7 +1141,14 @@ export function NuevaRendicionForm({
               onBlur={() =>
                 formatMontoOnBlur(borradorTasa, setBorradorTasa, 4)
               }
-              placeholder="Tasa del día"
+              placeholder={
+                avisoTasaFecha
+                  ? "Tasa no registrada (escribe manual)"
+                  : "Tasa del día"
+              }
+              error={
+                !tasaValor && avisoTasaFecha ? `${avisoTasaFecha} (${formatDateOnly(fechaPago)}) — puedes escribir la tasa manualmente` : undefined
+              }
             />
             <Input
               label="Monto Bs"
