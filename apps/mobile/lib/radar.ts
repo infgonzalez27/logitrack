@@ -172,7 +172,10 @@ export async function retornaRadarDespachador(): Promise<
   const rows = unwrapRpcData<Record<string, unknown>[]>(data) ?? [];
   const ordenes = (Array.isArray(rows) ? rows : [])
     .map((r) => normalizeOrden(r))
-    .filter((o): o is RadarOrden => o != null);
+    .filter(
+      (o): o is RadarOrden =>
+        o != null && o.estado.toLowerCase() !== "anulada",
+    );
   return { ok: true, ordenes };
 }
 
@@ -228,7 +231,10 @@ export async function listarParadasRadar(
     };
   }
   const rows = unwrapRpcData<Record<string, unknown>[]>(data) ?? [];
-  const paradas: RadarParadaResumen[] = (Array.isArray(rows) ? rows : []).map(
+  const filteredRows = (Array.isArray(rows) ? rows : []).filter(
+    (r) => String(r.estado ?? "").toLowerCase() !== "anulada",
+  );
+  const paradas: RadarParadaResumen[] = filteredRows.map(
     (r) => ({
       id_orden_distribucion: String(
         r.id_orden_distribucion ?? r.orden_id ?? r.id ?? "",

@@ -60,7 +60,8 @@ export async function listarRadares(opts?: {
     const { data: ordenes } = await supabase
       .from("ordenes_distribucion")
       .select("radar_id")
-      .in("radar_id", ids);
+      .in("radar_id", ids)
+      .neq("estado", "anulada");
     for (const o of ordenes ?? []) {
       if (!o.radar_id) continue;
       counts.set(o.radar_id, (counts.get(o.radar_id) ?? 0) + 1);
@@ -135,7 +136,8 @@ export async function listarRadaresPorRangoLocal(opts: {
       detalle_distribucion(producto_id, cantidad_despachada, cantidad_solicitada)
     `,
     )
-    .in("radar_id", ids);
+    .in("radar_id", ids)
+    .neq("estado", "anulada");
 
   type Det = {
     producto_id: string | null;

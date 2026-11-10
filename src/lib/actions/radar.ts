@@ -56,7 +56,9 @@ export async function retornaRadarDespachadorAction(): Promise<
 
   return {
     ok: true,
-    ordenes: Array.isArray(response.data) ? response.data : [],
+    ordenes: (Array.isArray(response.data) ? response.data : []).filter(
+      (o) => String(o.estado ?? "").toLowerCase() !== "anulada",
+    ),
   };
 }
 
@@ -971,7 +973,14 @@ export async function retornaRadarDetalleReporteAction(
     };
   }
 
-  return { ok: true, reporte: response.data };
+  const reporte = response.data;
+  if (Array.isArray(reporte.ordenes)) {
+    reporte.ordenes = reporte.ordenes.filter(
+      (o) => String(o.estado ?? "").toLowerCase() !== "anulada",
+    );
+  }
+
+  return { ok: true, reporte };
 }
 
 function mapRadarListaRango(raw: unknown): RadarListaRangoItem | null {
@@ -1002,6 +1011,7 @@ function mapRadarListaRango(raw: unknown): RadarListaRangoItem | null {
 function mapRadarOrdenResumen(raw: unknown): RadarOrdenResumen | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
+  if (String(r.estado ?? "").toLowerCase() === "anulada") return null;
   const id =
     typeof r.id_orden_distribucion === "string"
       ? r.id_orden_distribucion
@@ -1168,6 +1178,7 @@ export async function retornaOrdenesDistribucionSegunIdRadarAction(
       `,
       )
       .eq("radar_id", id)
+      .neq("estado", "anulada")
       .order("correlativo", { ascending: true });
 
     if (error) {

@@ -2030,3 +2030,33 @@ Muchas cobranzas (rendiciones de cuentas) se registran en el sistema días despu
 - **Nuevos campos en `data` de respuesta:**
   - `fecha_rendicion`: fecha del pago registrada.
   - `fecha_registro`: timestamp exacto del momento del registro.
+
+---
+
+## 16. Exclusión de Órdenes Anuladas en Creación, Regeneración y Consulta de Radar (Parche `20261110113500`)
+
+Para garantizar que ninguna orden con `estado = 'anulada'` aparezca ni sume unidades al crear un radar, al regenerarlo/sincronizarlo o al consultarlo en Web y App Móvil:
+
+### 16.1. Cambios en Base de Datos (RPCs PostgreSQL)
+Archivo: `supabase/tenant_patches/20261110113500_excluir_ordenes_anuladas_radar.sql` (y `supabase/migrations/20261110113500_excluir_ordenes_anuladas_radar.sql`):
+1. **`crear_o_obtener_radar(p_despachador_id, p_fecha_despacho)`**:
+   - Si el radar está pendiente (`status_radar = FALSE`), desvincula cualquier orden que haya pasado a `estado = 'anulada'` (`SET radar_id = NULL`).
+   - Vincula únicamente órdenes activas (`estado IN ('aprobada', 'en_transito', 'por_liquidar', 'liquidada', 'devuelta')` y `es_autoventa = FALSE`).
+   - Recalcula `total_cantidad_solicitada`, `total_cantidad_despachada`, `total_contenedores_retirados` y `total_ordenes` filtrando `AND o.estado <> 'anulada'`.
+2. **`solicita_editar_o_sincronizar_radar(p_radar_id)`** (Regenerar / Sincronizar Radar):
+   - Desvincula (`SET radar_id = NULL`) tanto las órdenes en estado `'aprobada'` como las que estén en `'anulada'`.
+   - Vuelve a vincular solo órdenes activas y recalcula totales con `AND o.estado <> 'anulada'`.
+3. **`anular_orden_distribucion(p_orden_id, p_motivo)`**:
+   - Si la orden que se está anulando pertenecía a un radar pendiente (`status_radar = FALSE`), limpia automáticamente su `radar_id = NULL` y recalcula de inmediato los totales del radar.
+4. **Consultas de lectura y reportes del Radar**:
+   - `retorna_ordenes_distribucion_segun_idradar(p_radar_id)`: Filtra `AND o.estado <> 'anulada'`.
+   - `retorna_radar_detalle_reporte(p_radar_id)`: Excluye `o.estado = 'anulada'` en `resumen_productos`, `resumen_vacios` y `ordenes`.
+   - `retorna_lista_radars_pendiente_segun_rango_fechas`, `retorna_lista_radars_aprobado_segun_rango_fechas` y `retorna_lista_radars_segun_rango_fechas`: Excluyen órdenes anuladas en el cálculo lateral de `total_paradas`, `items` y `sku`.
+
+### 16.2. Cambios en Frontend (App Móvil y Web)
+- **App Móvil (`apps/mobile/lib/radar.ts`)**:
+  - `retornaRadarDespachador()`: Filtra `.filter((o) => o != null && o.estado.toLowerCase() !== "anulada")`.
+  - `listarParadasRadar(radarId)`: Filtra las filas devueltas por `retorna_ordenes_distribucion_segun_idradar` excluyendo `String(r.estado ?? "").toLowerCase() === "anulada"`.
+- **App Web (`src/lib/actions/radar.ts` y `src/lib/data/radares.ts`)**:
+  - `retornaRadarDespachadorAction()`, `retornaRadarDetalleReporteAction()` y `retornaOrdenesDistribucionSegunIdRadarAction()` excluyen cualquier orden con `estado = 'anulada'` tanto en el mapeo del RPC como en el fallback local de Supabase (`.neq("estado", "anulada")`).
+  - `listarRadares()` y `listarRadaresPorRangoLocal()` incluyen `.neq("estado", "anulada")` al consultar `ordenes_distribucion`.
