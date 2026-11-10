@@ -523,26 +523,25 @@ export function AutoVentasClient({
     });
   };
 
-  const handleReversar = () => {
+  const handleReversar = (devolverAlmacen: boolean = true) => {
     if (!camionId) return;
-    if (
-      !confirm(
-        "Descargar camión: todo el sobrante (cargado − entregado) vuelve al almacén y el inventario móvil queda en cero. ¿Continuar?",
-      )
-    ) {
+    const confirmMsg = devolverAlmacen
+      ? "Descargar camión: todo el sobrante (cargado − entregado) vuelve al almacén principal y el inventario móvil queda en cero. ¿Continuar?"
+      : "Pasar camión a DISPONIBLE: se conservará el stock disponible a bordo en el inventario móvil para la siguiente jornada de AutoVentas. ¿Continuar?";
+    if (!confirm(confirmMsg)) {
       return;
     }
     setMensaje(null);
     startTransition(async () => {
-      const res = await reversarInventarioMovilAutoVentasAction(camionId);
+      const res = await reversarInventarioMovilAutoVentasAction(camionId, undefined, devolverAlmacen);
       if (res.success) {
         setMensaje({
           tipo: "success",
-          texto: res.message || "Sobrante devuelto al almacén.",
+          texto: res.message || (devolverAlmacen ? "Sobrante devuelto al almacén." : "Camión disponible con stock a bordo."),
         });
         const detalle = res.data?.detalle ?? [];
         setUltimaDescarga(
-          detalle.length
+          detalle.length && devolverAlmacen
             ? {
                 tipo: "descarga",
                 camion:
@@ -561,7 +560,7 @@ export function AutoVentasClient({
       } else {
         setMensaje({
           tipo: "error",
-          texto: res.message || "No se pudo descargar el camión.",
+          texto: res.message || "No se pudo procesar la descarga del camión.",
         });
       }
     });
@@ -821,9 +820,19 @@ export function AutoVentasClient({
                   type="button"
                   variant="secondary"
                   disabled={isPending || inventarioResumen.length === 0}
-                  onClick={handleReversar}
+                  onClick={() => handleReversar(false)}
+                  title="Pasa el camión a disponible manteniendo el stock disponible a bordo"
                 >
-                  Descargar camión (devolver sobrante)
+                  Dejar disponible (conservar stock)
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={isPending || inventarioResumen.length === 0}
+                  onClick={() => handleReversar(true)}
+                  title="Descarga todo el sobrante al almacén principal"
+                >
+                  Descargar al almacén
                 </Button>
               </div>
             </div>

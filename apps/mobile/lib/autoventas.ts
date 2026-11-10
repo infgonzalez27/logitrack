@@ -283,12 +283,14 @@ export type DescargaCamionLinea = {
 };
 
 /**
- * `descargar_camion_autoventa`: devuelve al almacén solo el sobrante
- * (cargado − entregado). Sin `productos` descarga todo y vacía el camión.
+ * `descargar_camion_autoventa`:
+ * - Si `devolverAlmacen = true`: devuelve al almacén solo el sobrante (cargado − entregado). Sin `productos` descarga todo y vacía el camión.
+ * - Si `devolverAlmacen = false`: pasa el camión a 'disponible' conservando el stock en inventario móvil para la siguiente jornada.
  */
 export async function reversarInventarioMovil(input: {
   camionId: string;
   productos?: Array<{ producto_id: string; cantidad: number }>;
+  devolverAlmacen?: boolean;
 }): Promise<
   | { ok: true; message?: string; detalle: DescargaCamionLinea[] }
   | { ok: false; error: string }
@@ -299,6 +301,7 @@ export async function reversarInventarioMovil(input: {
   const { data, error } = await supabase.rpc("descargar_camion_autoventa", {
     p_camion_id: input.camionId,
     p_productos: input.productos?.length ? input.productos : null,
+    p_devolver_almacen: input.devolverAlmacen ?? true,
   });
   if (error) return { ok: false, error: error.message };
   if (!isRpcSuccess(data)) {
@@ -313,7 +316,7 @@ export async function reversarInventarioMovil(input: {
   };
   return {
     ok: true,
-    message: env.message || "Sobrante devuelto al almacén.",
+    message: env.message || (input.devolverAlmacen === false ? "Camión disponible con stock a bordo." : "Sobrante devuelto al almacén."),
     detalle: env.data?.detalle ?? [],
   };
 }

@@ -76,9 +76,63 @@ export function EntregasReporte({ data, empresaNombre, empresaCodigo }: Props) {
                   })}
                 </tbody>
               </table>
+
+              {/* Contenedores por entrega del cliente */}
+              {entrega.contenedores && entrega.contenedores.length > 0 && (
+                <div className="mt-2 pl-4 border-l-2 border-gray-300">
+                  <div className="text-xs font-semibold text-gray-700 uppercase mb-1">
+                    Contenedores / Envases:
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-300 text-left text-gray-600">
+                        <th className="py-0.5">Envase</th>
+                        <th className="py-0.5 text-right">Entregado</th>
+                        <th className="py-0.5 text-right">Retirado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entrega.contenedores.map((c) => (
+                        <tr key={c.contenedor_id} className="border-b border-gray-100">
+                          <td className="py-0.5">{c.nombre}</td>
+                          <td className="py-0.5 text-right">{formatNumber(c.cantidad_entregada ?? 0)}</td>
+                          <td className="py-0.5 text-right font-medium">{formatNumber(c.cantidad_retirada ?? 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           );
         })}
+
+        {/* Resumen consolidado de contenedores si aplica */}
+        {data.resumen_contenedores && data.resumen_contenedores.length > 0 && (
+          <div className="mt-6 border-t-2 border-black pt-4">
+            <h3 className="text-sm font-bold uppercase mb-2">
+              Resumen Consolidado de Contenedores (Vacíos)
+            </h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-black text-left font-bold uppercase">
+                  <th className="py-1">Envase</th>
+                  <th className="py-1 text-right">Total Entregado</th>
+                  <th className="py-1 text-right">Total Retirado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.resumen_contenedores.map((rc) => (
+                  <tr key={rc.contenedor_id} className="border-b border-gray-200">
+                    <td className="py-1">{rc.nombre}</td>
+                    <td className="py-1 text-right">{formatNumber(rc.total_entregado)}</td>
+                    <td className="py-1 text-right font-bold">{formatNumber(rc.total_retirado)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="mt-8">
           <table className="w-full text-sm">

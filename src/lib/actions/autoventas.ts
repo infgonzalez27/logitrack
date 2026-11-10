@@ -246,12 +246,14 @@ export type DescargaCamionLinea = {
 };
 
 /**
- * Descarga el camión (`descargar_camion_autoventa`): devuelve al almacén solo
- * el sobrante (cargado − entregado). Sin `productos` vacía el inventario móvil.
+ * Descarga el camión (`descargar_camion_autoventa`):
+ * - Si `devolverAlmacen = true`: devuelve al almacén el sobrante (cargado − entregado).
+ * - Si `devolverAlmacen = false`: pasa el camión a 'disponible' conservando el stock en inventario móvil para la siguiente jornada.
  */
 export async function reversarInventarioMovilAutoVentasAction(
   camionId: string,
   productos?: Array<{ producto_id: string; cantidad: number }>,
+  devolverAlmacen: boolean = true,
 ): Promise<ActionResult<{ detalle: DescargaCamionLinea[] }>> {
   const access = await requireAutoVentaAccess();
   if (!access.ok) return { success: false, message: access.message };
@@ -265,6 +267,7 @@ export async function reversarInventarioMovilAutoVentasAction(
     {
       p_camion_id: camionId,
       p_productos: productos?.length ? productos : null,
+      p_devolver_almacen: devolverAlmacen,
     },
   );
 
@@ -281,7 +284,7 @@ export async function reversarInventarioMovilAutoVentasAction(
 
   return {
     success: true,
-    message: response.message || "Sobrante devuelto al almacén.",
+    message: response.message || (devolverAlmacen ? "Sobrante devuelto al almacén." : "Camión disponible con stock a bordo."),
     data: { detalle: response.data?.detalle ?? [] },
   };
 }

@@ -212,7 +212,7 @@ export default function AutoventasScreen() {
     );
   }
 
-  async function onReversar(todo = false) {
+  async function onReversar(todo = false, devolverAlmacen = true) {
     if (!camionId) {
       setError("Selecciona un camión.");
       return;
@@ -241,16 +241,17 @@ export default function AutoventasScreen() {
     const res = await reversarInventarioMovil({
       camionId,
       productos: productosPayload,
+      devolverAlmacen,
     });
     setSaving(false);
     if (!res.ok) {
       setError(res.error);
       return;
     }
-    setMessage(res.message || "Sobrante devuelto al almacén.");
+    setMessage(res.message || (devolverAlmacen ? "Sobrante devuelto al almacén." : "Camión disponible con stock a bordo."));
     const empDescarga = getEmpresaActual();
     setUltimaDescarga(
-      res.detalle.length
+      res.detalle.length && devolverAlmacen
         ? {
             tipo: "descarga",
             camionLabel: camiones.find((c) => c.id === camionId)?.placa ?? "-",
@@ -594,35 +595,55 @@ export default function AutoventasScreen() {
                   ) : null}
                 </View>
               ) : null}
-              <SectionTitle>Descargar camión</SectionTitle>
+              <SectionTitle>Descargar / Cerrar jornada</SectionTitle>
               <Text style={styles.meta}>
-                Devuelve al almacén lo que quedó sin vender (cargado −
-                entregado).
+                Puedes devolver el sobrante al almacén o dejar el camión en disponible manteniendo el stock a bordo.
               </Text>
               <PrimaryButton
-                label="Descargar camión completo"
+                label="Dejar disponible (conservar stock)"
                 loading={saving}
                 onPress={() => {
                   Alert.alert(
-                    "Descargar camión",
-                    "Todo el sobrante del camión vuelve al almacén y el inventario móvil queda en cero. ¿Continuar?",
+                    "Conservar inventario en el camión",
+                    "El camión pasará a estado 'disponible' manteniendo las unidades no vendidas a bordo para la siguiente jornada de AutoVentas. ¿Continuar?",
                     [
                       { text: "Cancelar", style: "cancel" },
                       {
-                        text: "Descargar",
-                        onPress: () => void onReversar(true),
+                        text: "Sí, conservar stock",
+                        onPress: () => void onReversar(true, false),
                       },
                     ],
                   );
                 }}
               />
               <Pressable
-                style={styles.btnGhost}
+                style={[styles.btnGhost, { marginTop: 8 }]}
                 disabled={saving}
-                onPress={() => void onReversar(false)}
+                onPress={() => {
+                  Alert.alert(
+                    "Descargar camión al almacén",
+                    "Todo el sobrante del camión vuelve al almacén principal y el inventario móvil queda en cero. ¿Continuar?",
+                    [
+                      { text: "Cancelar", style: "cancel" },
+                      {
+                        text: "Descargar todo",
+                        onPress: () => void onReversar(true, true),
+                      },
+                    ],
+                  );
+                }}
               >
                 <Text style={styles.btnGhostText}>
-                  Devolver solo las cantidades indicadas
+                  Descargar todo al almacén (vaciar camión)
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.btnGhost}
+                disabled={saving}
+                onPress={() => void onReversar(false, true)}
+              >
+                <Text style={styles.btnGhostText}>
+                  Devolver al almacén solo las cantidades indicadas
                 </Text>
               </Pressable>
             </View>
