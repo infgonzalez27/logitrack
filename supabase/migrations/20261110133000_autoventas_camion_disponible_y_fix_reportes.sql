@@ -858,11 +858,15 @@ BEGIN
         WHERE id = p_camion_id;
     END IF;
 
-    -- 2. Generar correlativo y número de factura/nota de autoventa
+    -- 2. Generar correlativo y número de factura/nota de autoventa antes del INSERT
+    v_correlativo := nextval('public.ordenes_distribucion_correlativo_seq');
+    v_factura_numero := 'AV-' || LPAD(v_correlativo::TEXT, 6, '0');
     v_orden_id := gen_random_uuid();
 
     INSERT INTO public.ordenes_distribucion (
         id,
+        correlativo,
+        factura_origen_numero,
         cliente_id,
         vendedor_id,
         despachador_id,
@@ -870,7 +874,6 @@ BEGIN
         id_ruta,
         radar_id,
         es_autoventa,
-        origen_venta,
         es_cortesia,
         estado,
         fecha_despacho,
@@ -879,9 +882,12 @@ BEGIN
         total_recaudar_bs,
         peso_total_calculado,
         observaciones,
-        creado_por
+        creado_por,
+        created_at
     ) VALUES (
         v_orden_id,
+        v_correlativo,
+        v_factura_numero,
         p_cliente_id,
         v_vendedor_id,
         v_despachador_id,
@@ -889,7 +895,6 @@ BEGIN
         v_id_ruta,
         NULL,
         TRUE,
-        'RUTA',
         COALESCE(p_es_cortesia, FALSE),
         'por_liquidar',
         NOW(),
@@ -898,11 +903,9 @@ BEGIN
         0.00,
         0.00,
         p_observaciones,
-        COALESCE(auth.uid(), v_vendedor_id)
-    )
-    RETURNING correlativo INTO v_correlativo;
-
-    v_factura_numero := 'AV-' || LPAD(v_correlativo::TEXT, 6, '0');
+        COALESCE(auth.uid(), v_vendedor_id),
+        NOW()
+    );
 
     -- 3. Insertar detalle de productos, calcular descuentos y descontar inventario móvil
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_productos_json) LOOP
