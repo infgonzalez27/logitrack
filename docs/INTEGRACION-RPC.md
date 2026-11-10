@@ -2060,3 +2060,156 @@ Archivo: `supabase/tenant_patches/20261110113500_excluir_ordenes_anuladas_radar.
 - **App Web (`src/lib/actions/radar.ts` y `src/lib/data/radares.ts`)**:
   - `retornaRadarDespachadorAction()`, `retornaRadarDetalleReporteAction()` y `retornaOrdenesDistribucionSegunIdRadarAction()` excluyen cualquier orden con `estado = 'anulada'` tanto en el mapeo del RPC como en el fallback local de Supabase (`.neq("estado", "anulada")`).
   - `listarRadares()` y `listarRadaresPorRangoLocal()` incluyen `.neq("estado", "anulada")` al consultar `ordenes_distribucion`.
+
+---
+
+## 17. AutoVentas: Camión Disponible con Inventario Móvil, Bloqueo de Radar en Camión con Stock Móvil y Corrección de Reportes de Sobrante y Contenedores Retirados (Parche `20261110133000`)
+
+Archivo SQL idempotente:
+- `supabase/tenant_patches/20261110133000_autoventas_camion_disponible_y_fix_reportes.sql`
+- `supabase/migrations/20261110133000_autoventas_camion_disponible_y_fix_reportes.sql`
+
+> **Nota de Regla de Negocio**:
+> - **En Radar (`solicita_aprobar_radar`)**: El comportamiento **no cambia**. Cada vez que se aprueba un radar, el sobrante no despachado del camión siempre se devuelve a `inventario_almacen` y el camión queda limpio.
+> - **En AutoVentas (`descargar_camion_autoventa`)**: Se habilita la opción de pasar el camión a estado `'disponible'` **sin devolver el sobrante al almacén** (`p_devolver_almacen = false`), conservando el stock disponible en `inventario_movil` para la siguiente jornada de AutoVentas.
+> - **Restricción estricta Radar vs. AutoVentas**: A un camión que tenga stock disponible en `inventario_movil` **NO se le puede cargar un Radar** (`code: 'CAMION_CON_INVENTARIO_MOVIL'`).
+
+---
+
+### 17.1. Cambios Realizados en Backend (Supabase RPCs)
+
+#### A. `public.descargar_camion_autoventa(p_camion_id uuid, p_productos jsonb DEFAULT NULL, p_devolver_almacen boolean DEFAULT TRUE)`
+Se agregó el tercer parámetro opcional `p_devolver_almacen` (por defecto `TRUE`, retrocompatible):
+- **Modo 1 — Devolver sobrante al almacén (`p_devolver_almacen = true`, comportamiento tradicional)**:
+  - Si `p_productos` es `NULL` o `'[]'` (descarga total): suma todo el disponible (`cantidad_cargada - cantidad_entregada`) a `inventario_almacen.stock_disponible`, elimina las filas de `inventario_movil` del camión y cambia `camiones.estado = 'disponible'`.
+  - Si `p_productos` contiene ítems (descarga parcial): devuelve solo las cantidades indicadas a `inventario_almacen` y descuenta de `inventario_movil.cantidad_cargada`.
+- **Modo 2 — Cambiar camión a `'disponible'` SIN devolver sobrante al almacén (`p_devolver_almacen = false`, exclusivo AutoVentas)**:
+  - **No mueve unidades a `inventario_almacen`**.
+  - Elimina de `inventario_movil` los productos del camión cuyo disponible (`cantidad_cargada - cantidad_entregada`) ya esté en `0`.
+  - Para los productos con sobrante (`disponible > 0`), consolida el saldo para la nueva jornada:
+    ```sql
+    SET cantidad_cargada = disponible,
+        cantidad_entregada = 0,
+        cantidad_devolucion = 0
+    ```
+  - Cambia el estado del camión a `camiones.estado = 'disponible'`.
+  - **Respuesta JSON cuando `p_devolver_almacen = false`**:
+    ```json
+    {
+      "success": true,
+      "message": "Camión disponible con inventario móvil: se conservaron 35 unidad(es) de 2 producto(s) a bordo sin devolver al almacén.",
+      "data": {
+        "camion_id": "uuid-camion",
+        "estado_camion": "disponible",
+        "devuelto_almacen": false,
+        "descarga_total": false,
+        "productos_en_camion": 2,
+        "unidades_en_camion": 35,
+        "productos_devueltos": 0,
+        "unidades_devueltas": 0,
+        "detalle": [
+          {
+            "producto_id": "uuid-prod",
+            "codigo": "PROD-01",
+            "nombre": "Botellón 20L",
+            "cantidad": 35
+          }
+        ]
+      },
+      "error": null
+    }
+    ```
+
+#### B. `public.solicita_cargar_inventario_movil_desde_almacen(p_camion_id uuid, p_resumen_productos jsonb, p_radar_id uuid DEFAULT NULL)`
+1. **Bloqueo de carga de Radar si el camión tiene inventario móvil activo**:
+   - Cuando `p_radar_id IS NOT NULL` (carga desde módulo de Radar), verifica si el camión tiene unidades disponibles en `public.inventario_movil` (`SUM(GREATEST(0, cantidad_cargada - cantidad_entregada)) > 0`).
+   - Si tiene unidades a bordo, rechaza la operación devolviendo:
+     ```json
+     {
+       "success": false,
+       "data": null,
+       "error": {
+         "code": "CAMION_CON_INVENTARIO_MOVIL",
+         "message": "No se puede cargar un Radar en este camión porque actualmente posee inventario móvil disponible (35 unidades de AutoVentas). Primero debe descargar el camión al almacén o asignar otro camión."
+       }
+     }
+     ```
+2. **Separación estricta AutoVentas (`p_radar_id IS NULL`) vs. Radar (`p_radar_id IS NOT NULL`)**:
+   - Se eliminó la búsqueda automática de radares históricos por `camion_id` cuando `p_radar_id` viene `NULL`, evitando que una carga de AutoVentas altere órdenes o radares anteriores.
+3. **Limpieza previa de filas agotadas**:
+   - Antes de insertar/actualizar `inventario_movil`, purga cualquier fila del camión donde `disponible = 0` para que nunca se arrastren valores antiguos de `cantidad_entregada`.
+
+#### C. `public.registrar_venta_en_ruta_autoventa(...)`
+- Ahora permite registrar ventas en ruta cuando el camión está en `'en_ruta'`, `'asignado'` o **`'disponible'`** (siempre que tenga stock suficiente en `inventario_movil`).
+- Si el camión estaba en `'disponible'` (porque cerró jornada conservando su inventario móvil), al registrar la primera venta de AutoVenta pasa automáticamente a `'en_ruta'`.
+
+#### D. Corrección del Bug `"Cargado: 20, Entregado/Despachado: 20, Sobrante: 0"` recién cargado el camión
+- **Causa raíz en Radar**: Al cargar el camión con `solicita_cargar_inventario_movil_desde_almacen`, la base de datos pre-llenaba `detalle_distribucion.cantidad_despachada = cantidad_solicitada` dejando `estado_entrega = 'pendiente'`. El RPC `retorna_radar_detalle_reporte` y `retorna_inventario_no_despachado_para_almacen` sumaban `cantidad_despachada` sin verificar si la entrega ya había sido ejecutada.
+- **Solución aplicada**:
+  - Tanto en `retorna_radar_detalle_reporte` como en `retorna_inventario_no_despachado_para_almacen`, ahora solo se contabiliza `cantidad_despachada` cuando `COALESCE(d.estado_entrega, 'pendiente') <> 'pendiente'`.
+  - Así, recién cargado el camión (sin entregas realizadas), el reporte muestra correctamente: **`Cargado: 20 | Despachado: 0 | Sobrante: 20`**.
+- **Causa raíz en AutoVentas**: En `solicita_reversar_carga_inventario_movil_a_almacen` y descargas previas quedaban filas en `inventario_movil` con `disponible = 0` pero `cantidad_entregada > 0`. Ahora se eliminan las filas agotadas y se reinicia `cantidad_entregada = 0` al consolidar o reversar.
+
+#### E. Corrección de Contenedores Retirados en Reporte de Resumen de Radar (`retorna_radar_detalle_reporte`)
+- **Causa raíz**: El bloque `resumen_vacios` hacía `JOIN public.productos p ON p.id = ec.contenedor_id` (tabla incorrecta, ya que `contenedor_id` apunta a `public.tipos_contenedores`) y no consultaba `public.movimientos_contenedores`.
+- **Solución aplicada**:
+  - `resumen_vacios` ahora lee de `public.movimientos_contenedores` (con fallback a `detalle_distribucion` para órdenes sin fila en `movimientos_contenedores`) haciendo `LEFT JOIN public.tipos_contenedores tc ON tc.id = ec.contenedor_id`.
+  - Además, `data.radar.total_contenedores_retirados` y `data.radar.total_cantidad_despachada` se calculan en vivo con los valores reales de las órdenes activas del radar.
+
+#### F. Contenedores Retirados en Reportes de AutoVentas (`retorna_reporte_autoventas_entregas_cliente` y `retorna_resumen_autoventas_jornada`)
+1. **`public.retorna_reporte_autoventas_entregas_cliente(p_camion_id uuid, p_fecha date)`** ahora incluye:
+   - En la raíz de `data`:
+     - `total_contenedores_entregados` (`int`)
+     - `total_contenedores_retirados` (`int`)
+     - `resumen_vacios`: arreglo agrupado por cliente (misma estructura que `retorna_radar_detalle_reporte`: `{ cliente_id, razon_social, rif_nit, detalles: [{ contenedor_id, codigo_producto, nombre_producto, entregado, retirado }] }`).
+     - `resumen_contenedores`: consolidado por tipo de envase en la jornada (`[{ contenedor_id, codigo, nombre, total_entregado, total_retirado }]`).
+   - Dentro de cada elemento de `data.entregas[]`:
+     - `total_contenedores_entregados` (`int`)
+     - `total_contenedores_retirados` (`int`)
+     - `contenedores`: `[{ contenedor_id, codigo, nombre, cantidad_entregada, cantidad_retirada }]`
+2. **`public.retorna_resumen_autoventas_jornada(p_camion_id uuid, p_fecha date)`** ahora incluye:
+   - En la raíz de `data`:
+     - `total_contenedores_entregados` (`int`)
+     - `total_contenedores_retirados` (`int`)
+     - `resumen_contenedores`: `[{ contenedor_id, codigo, nombre, total_entregado, total_retirado }]`
+   - En cada elemento de `data.ventas[]`:
+     - `contenedores_retirados` (`int`)
+
+---
+
+### 17.2. Instrucciones para el Equipo Frontend (App Web y App Móvil)
+
+#### 1. Opción en AutoVentas: "Pasar camión a disponible (sin devolver sobrante al almacén)"
+- **App Web (`src/lib/actions/autoventas.ts` y `src/app/(dashboard)/autoventas/autoventas-client.tsx`)**:
+  - En `descargarCamionAutoventaAction`, agregar el parámetro `devolverAlmacen: boolean = true` y pasarlo al RPC:
+    ```ts
+    const { data, error } = await supabase.rpc('descargar_camion_autoventa', {
+      p_camion_id: camionId,
+      p_productos: payload,
+      p_devolver_almacen: devolverAlmacen,
+    });
+    ```
+  - En el modal de **Descargar / Cerrar Jornada del Camión** en AutoVentas (`autoventas-client.tsx`), ofrecer dos opciones claras al usuario:
+    1. **Descargar al almacén (devolver sobrante)**: llama a `descargarCamionAutoventaAction(camionId, items, true)`.
+    2. **Pasar camión a disponible (mantener inventario móvil en el camión)**: llama a `descargarCamionAutoventaAction(camionId, null, false)`.
+  - Permitir que en el selector de camiones de AutoVentas se pueda seleccionar un camión en estado `'disponible'` que ya posea inventario móvil cargado para continuar vendiendo o cargarle más productos de AutoVentas.
+- **App Móvil (`apps/mobile/lib/autoventas.ts` y `apps/mobile/app/(app)/autoventas/index.tsx`)**:
+  - Actualizar `descargarCamionAutoventa(camionId, productos, devolverAlmacen = true)` enviando `p_devolver_almacen: devolverAlmacen` al RPC `descargar_camion_autoventa`.
+  - En la pantalla de AutoVentas móvil, agregar el botón/opción **"Dejar camión disponible (conservar stock a bordo)"** que invoque `descargarCamionAutoventa(camionId, null, false)`.
+
+#### 2. Validación en Radar cuando un camión tiene Inventario Móvil de AutoVentas
+- **App Web (`src/app/(dashboard)/radar/radar-client.tsx`) y App Móvil (`apps/mobile/app/(app)/radar/[id].tsx`)**:
+  - El backend ya rechaza automáticamente `solicita_cargar_inventario_movil_desde_almacen` con `error.code === 'CAMION_CON_INVENTARIO_MOVIL'` si el camión tiene stock en `inventario_movil`.
+  - Opcionalmente en la UI de asignación/carga de camión en Radar: si el camión seleccionado tiene unidades en `inventario_movil`, mostrar advertencia o deshabilitar el botón de cargar Radar indicando el mensaje devuelto por el RPC.
+
+#### 3. Mostrar Contenedores Retirados en el Reporte de Resumen de Entregas (AutoVentas) y Resumen de Radar
+- **Reporte de Resumen de Radar (`src/app/(dashboard)/radar/radar-reporte-view.tsx` y `src/lib/export/radar-excel.ts`)**:
+  - El componente ya lee `data.resumen_vacios` de `retorna_radar_detalle_reporte`. Con la corrección del RPC en Supabase, la tabla **"Contenedores Entregados y Retirados (Resumen por Cliente)"** se poblará automáticamente sin cambios adicionales, y `data.radar.total_contenedores_retirados` traerá el total real.
+- **Reporte de Entregas de AutoVentas (`src/lib/actions/reporte-entregas.ts` y `src/components/print/entregas-reporte.tsx`)**:
+  - Actualizar las interfaces `EntregaClienteItem` y `ReporteEntregasData` en `src/lib/actions/reporte-entregas.ts` para mapear los nuevos campos que ya devuelve `retorna_reporte_autoventas_entregas_cliente`:
+    - Por cada entrega en `data.entregas[]`: `contenedores` (`[{ contenedor_id, codigo, nombre, cantidad_entregada, cantidad_retirada }]`), `total_contenedores_entregados` y `total_contenedores_retirados`.
+    - En la raíz de `data`: `total_contenedores_entregados`, `total_contenedores_retirados`, `resumen_vacios` y `resumen_contenedores`.
+  - En `src/components/print/entregas-reporte.tsx`, renderizar la sección/tabla de **Contenedores Entregados y Retirados** (tanto en el bloque de cada cliente como el resumen consolidado de vacíos al final del reporte, igual que en el reporte de Radar).
+- **Resumen de Jornada de AutoVentas (`src/app/(dashboard)/autoventas/autoventas-client.tsx` y `apps/mobile/app/(app)/autoventas/index.tsx`)**:
+  - `retorna_resumen_autoventas_jornada` ahora devuelve `total_contenedores_entregados`, `total_contenedores_retirados`, `resumen_contenedores` y `contenedores_retirados` por cada venta en `ventas[]`. Mostrar la tarjeta/indicador de **Contenedores Retirados** en el resumen de la jornada.
+
