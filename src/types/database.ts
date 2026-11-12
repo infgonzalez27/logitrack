@@ -878,6 +878,33 @@ export interface Database {
             origen_orden: string;
             estado_anterior: string;
             estado_nuevo: string;
+            mercancia_reintegrada_almacen?: unknown;
+          } | null;
+          error?: {
+            code: string;
+            message: string;
+            details?: string;
+          } | null;
+        };
+      };
+      generar_despacho_orden_almacen: {
+        Args: {
+          p_orden_id: string;
+          p_observaciones?: string | null;
+        };
+        Returns: {
+          success: boolean;
+          message?: string;
+          data?: {
+            orden_id: string;
+            correlativo: number;
+            estado_anterior: string;
+            estado_nuevo: string;
+            total_recaudar_usd: number;
+            total_recaudar_bs: number;
+            abonos_conservados_usd: number;
+            mercancia_despachada_almacen?: unknown;
+            contenedores?: unknown;
           } | null;
           error?: {
             code: string;

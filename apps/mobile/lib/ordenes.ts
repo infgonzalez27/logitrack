@@ -750,7 +750,8 @@ export async function obtenerInventarioDisponibleMovil(camionId: string): Promis
 
 
 /**
- * Reversa la entrega de una orden de distribución sin anularla.
+ * Anula el despacho de una orden de distribución sin anular la orden (exclusivo Gerencia/Admin).
+ * La mercancía reingresa a inventario_almacen y la orden pasa a estado aprobada.
  * Invoca el RPC `reversar_entrega_orden_distribucion`.
  */
 export async function reversarEntregaOrdenDistribucion(
@@ -779,13 +780,52 @@ export async function reversarEntregaOrdenDistribucion(
       error:
         env?.message ??
         env?.error?.message ??
-        "No se pudo reversar la entrega de la orden.",
+        "No se pudo anular el despacho de la orden.",
     };
   }
   return {
     ok: true,
     estadoNuevo: env.data?.estado_nuevo ?? "",
     origenOrden: env.data?.origen_orden ?? "",
-    message: env.message ?? "Entrega reversada exitosamente.",
+    message: env.message ?? "Despacho anulado exitosamente.",
+  };
+}
+
+/**
+ * Genera el despacho de una orden en estado 'aprobada' descontando de inventario_almacen (exclusivo Gerencia/Admin).
+ * Invoca el RPC `generar_despacho_orden_almacen`.
+ */
+export async function generarDespachoOrdenAlmacen(
+  ordenId: string,
+  observaciones?: string,
+): Promise<
+  | { ok: true; estadoNuevo: string; message: string }
+  | { ok: false; error: string }
+> {
+  const { data, error } = await supabase.rpc(
+    "generar_despacho_orden_almacen",
+    {
+      p_orden_id: ordenId,
+      p_observaciones: observaciones?.trim() ? observaciones.trim() : null,
+    },
+  );
+  if (error) return { ok: false, error: error.message };
+  const env = data as RpcEnvelope<{
+    orden_id?: string;
+    estado_nuevo?: string;
+  }> | null;
+  if (!env || env.success === false) {
+    return {
+      ok: false,
+      error:
+        env?.message ??
+        env?.error?.message ??
+        "No se pudo generar el despacho desde almacén.",
+    };
+  }
+  return {
+    ok: true,
+    estadoNuevo: env.data?.estado_nuevo ?? "por_liquidar",
+    message: env.message ?? "Despacho generado exitosamente desde almacén.",
   };
 }

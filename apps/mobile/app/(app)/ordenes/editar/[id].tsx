@@ -16,6 +16,7 @@ import {
   useRouter,
   type Href,
 } from "expo-router";
+import { useAuth } from "@/lib/auth-context";
 import {
   actualizarOrdenDistribucion,
   aprobarOrdenDistribucion,
@@ -52,12 +53,14 @@ type LineaDraft = {
   codigo: string | null;
   cantidad: number;
   precio: number;
+  precioText: string;
   pctDescuento: number;
 };
 
 export default function EditarOrdenScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +74,8 @@ export default function EditarOrdenScreen() {
   const [productos, setProductos] = useState<ProductoLista[]>([]);
   const [searching, setSearching] = useState(false);
 
+  const esGerencia =
+    profile?.rol === "admin" || profile?.rol === "gerente";
   const editable =
     orden?.estado === "borrador" || orden?.estado === "aprobada";
   const canAprobar = orden?.estado === "borrador";
@@ -92,14 +97,18 @@ export default function EditarOrdenScreen() {
       setFecha(toLocalInput(res.orden.fecha_despacho));
       setFactura(res.orden.factura_origen_numero ?? "");
       setLineas(
-        (res.orden.detalle_distribucion ?? []).map((d) => ({
-          producto_id: d.producto_id ?? "",
-          nombre: d.productos?.nombre ?? "Producto",
-          codigo: d.productos?.codigo_producto ?? null,
-          cantidad: d.cantidad_solicitada,
-          precio: Number(d.valor_unitario_usd ?? 0),
-          pctDescuento: Number(d.porcentaje_descuento ?? 0),
-        })),
+        (res.orden.detalle_distribucion ?? []).map((d) => {
+          const unit = Number(d.valor_unitario_usd ?? 0);
+          return {
+            producto_id: d.producto_id ?? "",
+            nombre: d.productos?.nombre ?? "Producto",
+            codigo: d.productos?.codigo_producto ?? null,
+            cantidad: d.cantidad_solicitada,
+            precio: unit,
+            precioText: unit.toFixed(2),
+            pctDescuento: Number(d.porcentaje_descuento ?? 0),
+          };
+        }),
       );
     }
     setLoading(false);
@@ -151,6 +160,7 @@ export default function EditarOrdenScreen() {
           codigo: p.codigo_producto,
           cantidad: 1,
           precio: neto,
+          precioText: neto.toFixed(2),
           pctDescuento: Number(p.porcentaje_descuento ?? 0),
         },
       ];
@@ -166,6 +176,19 @@ export default function EditarOrdenScreen() {
     }
     setLineas((prev) =>
       prev.map((l) => (l.producto_id === productoId ? { ...l, cantidad } : l)),
+    );
+  }
+
+  function updatePrecioText(productoId: string, txt: string) {
+    const cleaned = txt.replace(",", ".").replace(/[^0-9.]/g, "");
+    const parsed = Number.parseFloat(cleaned);
+    const num = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+    setLineas((prev) =>
+      prev.map((l) =>
+        l.producto_id === productoId
+          ? { ...l, precioText: cleaned, precio: num }
+          : l,
+      ),
     );
   }
 
@@ -205,7 +228,7 @@ export default function EditarOrdenScreen() {
       setError(res.error);
       return;
     }
-    setMessage("Orden actualizada exitosamente.");
+    setMessage("Orden actualizada y recalculada exitosamente.");
     void load();
   }
 
@@ -330,7 +353,7 @@ export default function EditarOrdenScreen() {
       </Text>
 
       {!editable ? (
-        <ErrorText message="Solo se editan órdenes en borrador o aprobada. Usa Radar para despacho en ruta." />
+        <ErrorText message="Solo se editan órdenes en borrador o aprobada. Si está por liquidar, primero anula el despacho desde el detalle de la orden." />
       ) : (
         <>
           <SectionTitle>Cabecera</SectionTitle>
@@ -435,10 +458,37 @@ export default function EditarOrdenScreen() {
                     >
                       <Text style={styles.qtyBtnText}>+</Text>
                     </Pressable>
+
+                    {esGerencia ? (
+                      <View style={styles.priceInputWrap}>
+                        <Text style={styles.unitPrice}>Precio USD</Text>
+                        <TextInput
+                          style={styles.priceInput}
+                          keyboardType="decimal-pad"
+                          value={item.precioText}
+                          onChangeText={(txt) =>
+                            updatePrecioText(item.producto_id, txt)
+                          }
+                          onBlur={() => {
+                            setLineas((prev) =>
+                              prev.map((l) =>
+                                l.producto_id === item.producto_id
+                                  ? { ...l, precioText: l.precio.toFixed(2) }
+                                  : l,
+                              ),
+                            );
+                          }}
+                          selectTextOnFocus
+                        />
+                      </View>
+                    ) : null}
+
                     <View style={{ flex: 1, alignItems: "flex-end" }}>
-                      <Text style={styles.unitPrice}>
-                        c/u ${formatMoney(item.precio)}
-                      </Text>
+                      {!esGerencia ? (
+                        <Text style={styles.unitPrice}>
+                          c/u ${formatMoney(item.precio)}
+                        </Text>
+                      ) : null}
                       <Text style={styles.lineTotal}>
                         ${formatMoney(item.cantidad * item.precio)}
                       </Text>
@@ -589,7 +639,7 @@ const styles = StyleSheet.create({
   qtyRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
     marginTop: 10,
   },
   qtyBtn: {
@@ -608,7 +658,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#0B3A5C",
-    minWidth: 56,
+    minWidth: 52,
     height: 36,
     borderWidth: 1,
     borderColor: "#D0D7DE",
@@ -618,7 +668,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 0,
   },
-  unitPrice: { fontSize: 12, color: "#5B6B7C" },
+  priceInputWrap: {
+    alignItems: "center",
+  },
+  priceInput: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0B3A5C",
+    minWidth: 72,
+    height: 34,
+    borderWidth: 1,
+    borderColor: "#D0D7DE",
+    borderRadius: 8,
+    textAlign: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: 6,
+    paddingVertical: 0,
+    marginTop: 2,
+  },
+  unitPrice: { fontSize: 11, color: "#5B6B7C" },
   lineTotal: { fontSize: 15, fontWeight: "700", color: "#0B3A5C" },
   totalRow: {
     flexDirection: "row",

@@ -2273,3 +2273,56 @@ Se agregó el tercer parámetro opcional `p_devolver_almacen` (por defecto `TRUE
   - En `RadarParadasView`, se muestra la fecha de despacho de cada orden (con badge de aviso si es de una fecha anterior a la del radar) y el botón **"Quitar del radar"** para órdenes en estado `'aprobada'` cuando el radar está pendiente (deshabilitado si `carga_inventario_movil = TRUE`).
 - **App Móvil (`apps/mobile/lib/radar.ts`, `apps/mobile/app/(app)/radar/index.tsx`)**:
   - Se agregó `quitarOrdenDeRadar(radarId, ordenId)` y el botón **"Quitar del radar"** en el detalle de paradas del radar para los roles `admin`, `gerente` y `vendedor`.
+
+
+---
+
+## 19. Actualización 2026-11-12: Anular Despacho, Edición con Recálculo y Generar Despacho desde Almacén (Solo Gerencia/Admin) con Auditoría
+
+> **Parche de Base de Datos**: `supabase/tenant_patches/20261112133500_anular_generar_despacho_gerencia_y_auditoria.sql` (sincronizado en `supabase/migrations/20261112133500_anular_generar_despacho_gerencia_y_auditoria.sql`).
+
+### 19.1. Flujo Operativo de 3 Pasos (Exclusivo `gerente` y `admin`)
+
+1. **Paso 1 — Anular el Despacho (`public.reversar_entrega_orden_distribucion`)**:
+   - Exclusivo para roles **`gerente` y `admin`**.
+   - Permite anular el despacho de una orden en estado `'por_liquidar'` (o `'despachada'` / `'devuelta'`) **incluso si el radar asociado ya se encuentra aprobado (`status_radar = TRUE`)**.
+   - **Validación de liquidación y abonos**:
+     - Si la orden está en estado `'liquidada'`, rechaza con código `ORDEN_LIQUIDADA` indicando que primero se debe reversar la cobranza asociada.
+     - Si la orden está en estado `'por_liquidar'` y posee **abonos parciales**, **NO hace falta reversar el abono**: los abonos parciales se conservan intactos asociados a la orden.
+   - **Inventario y Estado**:
+     - La mercancía despachada (`cantidad_despachada`) **ingresa directamente a `public.inventario_almacen` (`stock_disponible`)**.
+     - Se revierten los envases de la entrega en `saldo_contenedores_clientes` y `movimientos_contenedores` (conservando `contenedores_retirados` en `detalle_distribucion` para el posterior redespacho).
+     - La orden regresa a estado **`'aprobada'`** para habilitar su edición.
+   - **Auditoría**: Inserta registro en `public.logs_auditoria` con `accion = 'ANULAR_DESPACHO'`, `tabla_afectada = 'ordenes_distribucion'`, detallando valores anteriores, estado del radar y mercancía reintegrada al almacén.
+
+2. **Paso 2 — Editar la Orden y Recalcular (`public.actualiza_orden_distribucion_segun_correlativo`)**:
+   - Cuando la orden tuvo un despacho anulado, pertenece a un radar o tiene abonos, solo **`gerente` o `admin`** puede editarla.
+   - Permite modificar el **precio unitario USD (`valor_unitario_usd`)** y la **cantidad a despachar (`cantidad_solicitada`)**, eliminando la sobreescritura que afectaba a precios menores a `$1.00`.
+   - Recalcula automáticamente `precio_lista_usd`, `porcentaje_descuento`, `monto_descuento_usd`, `subtotal_recaudar_usd`, `valor_unitario_recaudar`, `subtotal_recaudar`, `total_recaudar_usd`, `total_recaudar_bs` y `peso_total_calculado`.
+   - Preserva `contenedores_retirados` y `contenedor_id` de las líneas previas.
+   - **Auditoría**: Inserta registro en `public.logs_auditoria` con `accion = 'EDITAR_ORDEN'`, `tabla_afectada = 'ordenes_distribucion'`.
+
+3. **Paso 3 — Generar el Despacho desde Inventario Almacén (`public.generar_despacho_orden_almacen`)**:
+   - **Firma RPC**:
+     ```sql
+     public.generar_despacho_orden_almacen(
+         p_orden_id UUID,
+         p_observaciones TEXT DEFAULT NULL
+     ) RETURNS JSONB
+     ```
+   - Exclusivo para roles **`gerente` y `admin`**.
+   - Toma la orden en estado **`'aprobada'`**, valida stock disponible y **descuenta de `public.inventario_almacen` (`stock_disponible`)** las cantidades a despachar.
+   - Marca todas las líneas en `detalle_distribucion` con `cantidad_despachada = cantidad_solicitada` y `estado_entrega = 'entregado'`.
+   - Asienta los envases entregados y retirados en `movimientos_contenedores` y `saldo_contenedores_clientes` (`lt_asentar_contenedores_orden`).
+   - Pasa la orden a **`'por_liquidar'`** y ejecuta `public.liquidar_orden_distribucion(p_orden_id)` respetando cualquier abono aprobado previo.
+   - Si la orden pertenece a un radar (incluso ya aprobado), sincroniza `total_cantidad_solicitada`, `total_cantidad_despachada` y `total_contenedores_retirados` en `public.radars`.
+   - **Auditoría**: Inserta registro en `public.logs_auditoria` con `accion = 'GENERAR_DESPACHO_ALMACEN'`, `tabla_afectada = 'ordenes_distribucion'`.
+
+### 19.2. Integración en Frontend (Web y Móvil)
+- **Web (`src/lib/actions/ordenes.ts`, `src/app/(dashboard)/ordenes/[id]/orden-estado-actions.tsx`, `src/types/database.ts`)**:
+  - Se restringió `reversarEntregaOrdenAction` (botón **"Anular Despacho"**) exclusivamente a `admin` y `gerente`.
+  - Se agregó `generarDespachoOrdenAlmacenAction` y el botón **"Generar Despacho (Almacén)"** en el detalle de la orden cuando está en estado `'aprobada'` para `admin` y `gerente`.
+  - Al guardar la edición de una orden en Web, redirige directamente al detalle `/ordenes/[id]` para facilitar el paso **"Generar Despacho (Almacén)"**.
+- **App Móvil (`apps/mobile/lib/ordenes.ts`, `apps/mobile/src/features/ordenes/screens/OrdenDetalleScreen.tsx`, `apps/mobile/app/(app)/ordenes/editar/[id].tsx`)**:
+  - Se agregó `generarDespachoOrdenAlmacen` y los botones **"Anular Despacho"** y **"Generar Despacho"** en `OrdenDetalleScreen` exclusivamente para `admin` y `gerente`.
+  - En `EditarOrdenScreen`, se habilitó la edición del **Precio USD** por línea para `admin` y `gerente` con recálculo en tiempo real.

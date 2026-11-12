@@ -14,8 +14,10 @@ import {
   useRouter,
   type Href,
 } from "expo-router";
+import { useAuth } from "@/lib/auth-context";
 import {
   anularOrdenDistribucion,
+  generarDespachoOrdenAlmacen,
   getOrdenDetalle,
   reversarEntregaOrdenDistribucion,
   type OrdenDetalle,
@@ -43,6 +45,7 @@ const ESTADOS_REVERSABLES = new Set(["por_liquidar", "despachada", "devuelta"]);
 export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { profile } = useAuth();
   const { theme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,7 +57,10 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [anulando, setAnulando] = useState(false);
   const [reversando, setReversando] = useState(false);
+  const [despachando, setDespachando] = useState(false);
   const logoSource = useMemo(() => getEmpresaLogoSource(getEmpresaActual()?.codigo), []);
+  const esGerencia =
+    profile?.rol === "admin" || profile?.rol === "gerente";
 
   const load = useCallback(
     async (mode: "initial" | "refresh") => {
@@ -108,15 +114,15 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
     );
   }, [orden, load]);
 
-  const onReversar = useCallback(() => {
+  const onAnularDespacho = useCallback(() => {
     if (!orden) return;
     Alert.alert(
-      "Reversar Entrega",
-      `¿Deseas reversar la entrega de la orden #${orden.correlativo}? La orden no será anulada: volverá a estado editable y se restaurarán los saldos de inventario y envases.`,
+      "Anular Despacho",
+      `¿Deseas anular el despacho de la orden #${orden.correlativo}? La mercancía regresará al Inventario de Almacén y la orden pasará a estado Aprobada para que puedas editar precios o cantidades y volver a generar el despacho. Los abonos parciales previos se conservan.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
-          text: "Confirmar Reverso",
+          text: "Confirmar Anulación",
           style: "destructive",
           onPress: async () => {
             setReversando(true);
@@ -124,16 +130,48 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
             setMessage(null);
             const res = await reversarEntregaOrdenDistribucion(
               orden.id,
-              "Reverso desde detalle móvil",
+              "Anulación de despacho desde detalle móvil",
             );
             setReversando(false);
             if (!res.ok) {
               setError(res.error);
-              Alert.alert("Error al reversar", res.error);
+              Alert.alert("Error al anular despacho", res.error);
               return;
             }
             setMessage(res.message);
-            Alert.alert("Entrega reversada", res.message);
+            Alert.alert("Despacho anulado", res.message);
+            void load("refresh");
+          },
+        },
+      ],
+    );
+  }, [orden, load]);
+
+  const onGenerarDespacho = useCallback(() => {
+    if (!orden) return;
+    Alert.alert(
+      "Generar Despacho (Almacén)",
+      `¿Deseas generar el despacho de la orden #${orden.correlativo}? Se descontará del Inventario de Almacén lo despachado y la orden pasará a estado Por Liquidar (respetando cualquier abono previo).`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Generar Despacho",
+          onPress: async () => {
+            setDespachando(true);
+            setError(null);
+            setMessage(null);
+            const res = await generarDespachoOrdenAlmacen(
+              orden.id,
+              "Despacho generado desde detalle móvil",
+            );
+            setDespachando(false);
+            if (!res.ok) {
+              setError(res.error);
+              Alert.alert("Error al generar despacho", res.error);
+              return;
+            }
+            setMessage(res.message);
+            Alert.alert("Despacho generado", res.message);
             void load("refresh");
           },
         },
@@ -230,7 +268,10 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
 
   const canEdit =
     orden?.estado === "borrador" || orden?.estado === "aprobada";
-  const canReversar = orden ? ESTADOS_REVERSABLES.has(orden.estado) : false;
+  const canAnularDespacho =
+    esGerencia && orden ? ESTADOS_REVERSABLES.has(orden.estado) : false;
+  const canGenerarDespacho =
+    esGerencia && orden?.estado === "aprobada";
 
   if (loading && !orden) {
     return (
@@ -274,6 +315,23 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
           </Text>
           <StatusBadge label={status.label} tone={status.tone} />
         </View>
+
+        {esGerencia && orden.estado === "liquidada" ? (
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.meta, { color: theme.colors.textSecondary }]}>
+              Esta orden se encuentra liquidada. Para anular su despacho y
+              modificarla, primero debes reversar la cobranza asociada.
+            </Text>
+          </View>
+        ) : null}
 
         <View
           style={[
@@ -431,15 +489,27 @@ export const OrdenDetalleScreen: React.FC = function OrdenDetalleScreen() {
                 },
               ]
             : []),
-          ...(canReversar
+          ...(canGenerarDespacho
+            ? [
+                {
+                  key: "generar_despacho",
+                  label: "Generar Despacho",
+                  icon: "checkmark-done-outline" as const,
+                  variant: "secondary" as const,
+                  loading: despachando,
+                  onPress: onGenerarDespacho,
+                },
+              ]
+            : []),
+          ...(canAnularDespacho
             ? [
                 {
                   key: "reversar",
-                  label: "Reversar Entrega",
+                  label: "Anular Despacho",
                   icon: "refresh-outline" as const,
                   variant: "secondary" as const,
                   loading: reversando,
-                  onPress: onReversar,
+                  onPress: onAnularDespacho,
                 },
               ]
             : []),

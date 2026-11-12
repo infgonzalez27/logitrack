@@ -676,7 +676,7 @@ export type ActualizaOrdenDetalleInput = {
   valor_unitario_usd: number;
 };
 
-/** DB-017 — solo órdenes en borrador. */
+/** DB-017 — órdenes en borrador o aprobada. */
 export async function actualizaOrdenDistribucionAction(input: {
   correlativo: number;
   cliente_id: string;
@@ -763,9 +763,8 @@ export async function actualizaOrdenDistribucionAction(input: {
   if (ordenId) {
     revalidatePath(`/ordenes/${ordenId}`);
   }
-  redirect("/ordenes");
+  redirect(ordenId ? `/ordenes/${ordenId}` : "/ordenes");
 }
-
 
 export async function reversarEntregaOrdenAction(
   ordenId: string,
@@ -783,11 +782,11 @@ export async function reversarEntregaOrdenAction(
 
   const profile = await getCurrentProfile();
   const rol = getRoleNameFromProfile(profile);
-  const rolesPermitidos = ["admin", "gerente", "despachador", "vendedor"];
+  const rolesPermitidos = ["admin", "gerente"];
   if (!rol || !rolesPermitidos.includes(rol)) {
     return {
       ok: false,
-      error: "No tienes permisos para reversar la entrega de esta orden.",
+      error: "Solo la Gerencia o Administración puede anular el despacho de una orden.",
     };
   }
 
@@ -804,7 +803,7 @@ export async function reversarEntregaOrdenAction(
       ok: false,
       error: rpcErrorMessage(
         response,
-        "No se pudo reversar la entrega de la orden.",
+        "No se pudo anular el despacho de la orden.",
       ),
     };
   }
@@ -812,9 +811,63 @@ export async function reversarEntregaOrdenAction(
   revalidatePath("/ordenes");
   revalidatePath(`/ordenes/${ordenIdTrim}`);
   revalidatePath("/radar");
+  revalidatePath("/inventario");
   return {
     ok: true,
-    message: response.message || "Entrega reversada exitosamente.",
+    message: response.message || "Despacho anulado exitosamente.",
+    data: response.data,
+  };
+}
+
+export async function generarDespachoOrdenAlmacenAction(
+  ordenId: string,
+  observaciones?: string,
+): Promise<{ ok: true; message: string; data?: unknown } | { ok: false; error: string }> {
+  const ordenIdTrim = ordenId?.trim();
+  if (!ordenIdTrim || !isUuid(ordenIdTrim)) {
+    return { ok: false, error: "ID de orden inválido." };
+  }
+
+  const user = await getSessionUser();
+  if (!user) {
+    return { ok: false, error: "No autenticado." };
+  }
+
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  const rolesPermitidos = ["admin", "gerente"];
+  if (!rol || !rolesPermitidos.includes(rol)) {
+    return {
+      ok: false,
+      error: "Solo la Gerencia o Administración puede generar el despacho directo desde almacén.",
+    };
+  }
+
+  const response = await callDbProcedure<unknown>(
+    "generar_despacho_orden_almacen",
+    {
+      p_orden_id: ordenIdTrim,
+      p_observaciones: observaciones?.trim() || null,
+    },
+  );
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(
+        response,
+        "No se pudo generar el despacho desde almacén.",
+      ),
+    };
+  }
+
+  revalidatePath("/ordenes");
+  revalidatePath(`/ordenes/${ordenIdTrim}`);
+  revalidatePath("/radar");
+  revalidatePath("/inventario");
+  return {
+    ok: true,
+    message: response.message || "Despacho generado exitosamente desde almacén.",
     data: response.data,
   };
 }
