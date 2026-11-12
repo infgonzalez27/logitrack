@@ -89,6 +89,9 @@ export default async function RadarDetallePage({
               reporte={reporte.reporte}
               radarId={id}
               modoDespachador={modoDespachador}
+              puedeEditarRadar={puedeRegenerar}
+              yaAprobado={radarAprobado}
+              cargaInventarioMovil={cargaInventarioMovil}
             />
           </section>
           <section className="border-t border-lt-border pt-8 print:border-0 print:pt-0">

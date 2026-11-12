@@ -18,6 +18,7 @@ import {
   listarParadasRadar,
   listarRadarsHoy,
   paradaEstadoLabel,
+  quitarOrdenDeRadar,
   retornaRadarDespachador,
   type RadarListaItem,
   type RadarOrden,
@@ -33,6 +34,10 @@ export default function RadarScreen() {
   const isDespachador = profile?.rol === "despachador";
   const canApprove =
     profile?.rol === "gerente" || profile?.rol === "admin";
+  const canEditRadar =
+    profile?.rol === "gerente" ||
+    profile?.rol === "admin" ||
+    profile?.rol === "vendedor";
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,6 +51,7 @@ export default function RadarScreen() {
   const [approving, setApproving] = useState(false);
   const [imprimiendoId, setImprimiendoId] = useState<string | null>(null);
   const [reversandoId, setReversandoId] = useState<string | null>(null);
+  const [quitandoId, setQuitandoId] = useState<string | null>(null);
 
   const onImprimirBluetooth = async (ordenId: string) => {
     setImprimiendoId(ordenId);
@@ -188,6 +194,45 @@ export default function RadarScreen() {
     setParadas([]);
     setRefreshing(true);
     void load();
+  };
+
+  const onQuitarOrdenRadar = (ordenId: string, correlativo: number) => {
+    if (!selectedRadar) return;
+    Alert.alert(
+      "Quitar del Radar",
+      `¿Quitar la Orden #${correlativo} de este radar? Seguirá en estado Aprobada para próximos radares.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Quitar del radar",
+          style: "destructive",
+          onPress: async () => {
+            setQuitandoId(ordenId);
+            const res = await quitarOrdenDeRadar(
+              selectedRadar.id_radar,
+              ordenId,
+            );
+            setQuitandoId(null);
+            if (!res.ok) {
+              Alert.alert("No se pudo quitar", res.error);
+              return;
+            }
+            Alert.alert(
+              "Orden retirada",
+              res.message ??
+                `Orden #${correlativo} retirada del radar y mantenida como aprobada.`,
+            );
+            const updated = await listarParadasRadar(selectedRadar.id_radar);
+            if (updated.ok) {
+              setParadas(updated.paradas);
+              setSelectedRadar((prev) =>
+                prev ? { ...prev, total_paradas: updated.paradas.length } : null,
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (loading && !refreshing) {
@@ -362,40 +407,76 @@ export default function RadarScreen() {
           ListEmptyComponent={
             <Text style={styles.empty}>Sin paradas en este radar.</Text>
           }
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.name}>{item.razon_social}</Text>
-              <Text style={styles.meta}>
-                Orden #{item.correlativo}
-                {item.ruta ? ` · ${item.ruta}` : ""}
-              </Text>
-              {item.direccion_fiscal ? (
-                <Text style={styles.meta}>{item.direccion_fiscal}</Text>
-              ) : null}
-              <Text style={styles.meta}>
-                {item.items} uds · {item.sku} SKU
-              </Text>
-              <View style={[styles.actions, { marginTop: 8 }]}>
-                <Pressable
-                  style={[
-                    styles.btnGhost,
-                    imprimiendoId === item.id_orden_distribucion && { opacity: 0.6 },
-                  ]}
-                  disabled={imprimiendoId === item.id_orden_distribucion}
-                  onPress={() => onImprimirOrden(item.id_orden_distribucion)}
-                >
-                  {imprimiendoId === item.id_orden_distribucion ? (
-                    <ActivityIndicator size="small" color="#0B3A5C" />
-                  ) : (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Ionicons name="print-outline" size={16} color="#0B3A5C" />
-                      <Text style={styles.btnGhostText}>Imprimir</Text>
-                    </View>
-                  )}
-                </Pressable>
+          renderItem={({ item }) => {
+            const esOrdenAprobada =
+              String(item.estado ?? "aprobada").toLowerCase() === "aprobada";
+            const puedeQuitar =
+              canEditRadar &&
+              !selectedRadar.status_radar &&
+              !selectedRadar.carga_inventario_movil &&
+              esOrdenAprobada;
+            return (
+              <View style={styles.card}>
+                <Text style={styles.name}>{item.razon_social}</Text>
+                <Text style={styles.meta}>
+                  Orden #{item.correlativo}
+                  {item.ruta ? ` · ${item.ruta}` : ""}
+                  {item.fecha_despacho
+                    ? ` · ${formatDate(item.fecha_despacho)}`
+                    : ""}
+                </Text>
+                {item.direccion_fiscal ? (
+                  <Text style={styles.meta}>{item.direccion_fiscal}</Text>
+                ) : null}
+                <Text style={styles.meta}>
+                  {item.items} uds · {item.sku} SKU
+                </Text>
+                <View style={[styles.actions, { marginTop: 8 }]}>
+                  <Pressable
+                    style={[
+                      styles.btnGhost,
+                      imprimiendoId === item.id_orden_distribucion && { opacity: 0.6 },
+                    ]}
+                    disabled={imprimiendoId === item.id_orden_distribucion}
+                    onPress={() => onImprimirOrden(item.id_orden_distribucion)}
+                  >
+                    {imprimiendoId === item.id_orden_distribucion ? (
+                      <ActivityIndicator size="small" color="#0B3A5C" />
+                    ) : (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <Ionicons name="print-outline" size={16} color="#0B3A5C" />
+                        <Text style={styles.btnGhostText}>Imprimir</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                  {puedeQuitar ? (
+                    <Pressable
+                      style={[
+                        styles.btnReversar,
+                        quitandoId === item.id_orden_distribucion && { opacity: 0.6 },
+                      ]}
+                      disabled={quitandoId === item.id_orden_distribucion}
+                      onPress={() =>
+                        onQuitarOrdenRadar(
+                          item.id_orden_distribucion,
+                          item.correlativo,
+                        )
+                      }
+                    >
+                      {quitandoId === item.id_orden_distribucion ? (
+                        <ActivityIndicator size="small" color="#B45309" />
+                      ) : (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <Ionicons name="remove-circle-outline" size={16} color="#B45309" />
+                          <Text style={styles.btnReversarText}>Quitar del radar</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          )}
+            );
+          }}
         />
       </View>
     );

@@ -50,8 +50,9 @@ export function RadarGerenciaActions({
         d?.contenedores_entregados_procesados ?? d?.contenedores_procesados ?? 0;
       const retirados = d?.contenedores_retirados_procesados ?? 0;
       const anuladas = d?.ordenes_anuladas ?? 0;
+      const reprogramadas = d?.ordenes_reprogramadas ?? 0;
       const extra = d
-        ? ` Entregados: ${entregados}. Retirados: ${retirados}. Órdenes anuladas: ${anuladas}.`
+        ? ` Entregados: ${entregados}. Retirados: ${retirados}. Órdenes anuladas: ${anuladas}.${reprogramadas > 0 ? ` Órdenes no despachadas liberadas (aprobadas): ${reprogramadas}.` : ""}`
         : "";
       setSuccess(
         (result.message ?? "Radar aprobado exitosamente.") + extra,

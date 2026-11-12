@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { quitarOrdenDeRadarAction } from "@/lib/actions/radar";
 import { formatDateOnly, formatNumber } from "@/lib/format";
 import type { RadarDetalle, RadarDetalleReporte } from "@/types/database";
 
@@ -61,12 +66,55 @@ export function RadarParadasView({
   reporte,
   radarId,
   modoDespachador = false,
+  puedeEditarRadar = false,
+  yaAprobado = false,
+  cargaInventarioMovil = false,
 }: {
   reporte: RadarDetalleReporte;
   radarId: string;
   modoDespachador?: boolean;
+  puedeEditarRadar?: boolean;
+  yaAprobado?: boolean;
+  cargaInventarioMovil?: boolean;
 }) {
   const { radar, despachador, ordenes } = reporte;
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [quitandoId, setQuitandoId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const radarFechaIso = String(radar.fecha_despacho ?? "").slice(0, 10);
+
+  function onQuitarOrden(o: ParadaOrden) {
+    const id = ordenId(o);
+    if (!id || yaAprobado || cargaInventarioMovil) return;
+
+    const ok = window.confirm(
+      `¿Quitar la Orden #${o.correlativo ?? ""} de este radar?\nLa orden seguirá en estado Aprobada y se incluirá automáticamente cuando se cree un nuevo radar.`,
+    );
+    if (!ok) return;
+
+    setError(null);
+    setSuccess(null);
+    setQuitandoId(id);
+    startTransition(async () => {
+      const result = await quitarOrdenDeRadarAction({
+        radar_id: radarId,
+        orden_id: id,
+      });
+      setQuitandoId(null);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setSuccess(
+        result.message ??
+          `Orden #${o.correlativo ?? ""} retirada del radar y mantenida como aprobada.`,
+      );
+      router.refresh();
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -95,6 +143,9 @@ export function RadarParadasView({
         </p>
       </Card>
 
+      {error ? <p className="lt-alert-error text-sm">{error}</p> : null}
+      {success ? <p className="lt-alert-success text-sm">{success}</p> : null}
+
       <ul className="space-y-3">
         {(ordenes ?? []).map((o) => {
           const id = ordenId(o);
@@ -105,6 +156,14 @@ export function RadarParadasView({
           const pendientes = ((o.detalles ?? []) as RadarDetalle[]).some(
             (d) => (d.estado_entrega ?? "pendiente") === "pendiente",
           );
+          const ordenFechaIso = String(o.fecha_despacho ?? "").slice(0, 10);
+          const esFechaAnterior =
+            Boolean(ordenFechaIso && radarFechaIso) &&
+            ordenFechaIso < radarFechaIso;
+          const esOrdenAprobada =
+            String(o.estado ?? "aprobada").toLowerCase() === "aprobada";
+          const mostrarQuitar =
+            puedeEditarRadar && !modoDespachador && !yaAprobado && esOrdenAprobada && Boolean(id);
 
           return (
             <li key={id || String(o.correlativo)}>
@@ -119,6 +178,9 @@ export function RadarParadasView({
                       {o.cliente?.nombre_ruta
                         ? ` · ${o.cliente.nombre_ruta}`
                         : ""}
+                      {o.fecha_despacho
+                        ? ` · Fecha: ${formatDateOnly(o.fecha_despacho)}`
+                        : ""}
                     </p>
                     {o.cliente?.direccion_fiscal ? (
                       <p className="mt-1 text-sm text-lt-text-muted">
@@ -129,10 +191,17 @@ export function RadarParadasView({
                       {resumenCarga(o)}
                     </p>
                   </div>
-                  <Badge tone={estado.tone}>{estado.label}</Badge>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {esFechaAnterior ? (
+                      <Badge tone="warning">
+                        Fecha anterior ({formatDateOnly(o.fecha_despacho)})
+                      </Badge>
+                    ) : null}
+                    <Badge tone={estado.tone}>{estado.label}</Badge>
+                  </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                   {modoDespachador && id && pendientes ? (
                     <Button href={`/radar/${radarId}/entrega/${id}`}>
                       Iniciar entrega
@@ -155,6 +224,22 @@ export function RadarParadasView({
                     >
                       Ver orden
                     </Link>
+                  ) : null}
+                  {mostrarQuitar ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="border-amber-600/40 text-amber-700 hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-400 dark:hover:bg-amber-950/20"
+                      disabled={pending || cargaInventarioMovil}
+                      onClick={() => onQuitarOrden(o)}
+                      title={
+                        cargaInventarioMovil
+                          ? "Primero reversa el inventario móvil al almacén para quitar órdenes del radar"
+                          : "Quitar orden de este radar y mantenerla aprobada"
+                      }
+                    >
+                      {quitandoId === id ? "Quitando…" : "Quitar del radar"}
+                    </Button>
                   ) : null}
                 </div>
               </Card>

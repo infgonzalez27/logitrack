@@ -10,6 +10,7 @@ DECLARE
     v_fecha_despacho DATE;
     v_status_radar BOOLEAN;
     v_carga_inventario BOOLEAN;
+    v_ordenes_excluidas UUID[];
     v_correlativo INT;
     v_tot_solicitada NUMERIC(10,0);
     v_tot_despachada NUMERIC(10,0);
@@ -32,8 +33,9 @@ BEGIN
 
     -- Obtener datos del radar
     SELECT despachador_id, fecha_despacho, correlativo,
-           COALESCE(status_radar, FALSE), COALESCE(carga_inventario_movil, FALSE)
-    INTO v_despachador_id, v_fecha_despacho, v_correlativo, v_status_radar, v_carga_inventario
+           COALESCE(status_radar, FALSE), COALESCE(carga_inventario_movil, FALSE),
+           COALESCE(ordenes_excluidas, '{}'::UUID[])
+    INTO v_despachador_id, v_fecha_despacho, v_correlativo, v_status_radar, v_carga_inventario, v_ordenes_excluidas
     FROM public.radars
     WHERE id = p_radar_id;
 
@@ -71,22 +73,29 @@ BEGIN
         );
     END IF;
 
-    -- Fase 1: Desvincular las órdenes de distribución actualmente vinculadas al radar en estado editable ('aprobada')
+    -- Fase 1: Desvincular las órdenes de distribución actualmente vinculadas al radar en estado editable ('aprobada') o anuladas
     UPDATE public.ordenes_distribucion
     SET radar_id = NULL
-    WHERE radar_id = p_radar_id AND estado = 'aprobada';
+    WHERE radar_id = p_radar_id
+      AND estado IN ('aprobada', 'anulada');
 
     GET DIAGNOSTICS v_desvinculadas = ROW_COUNT;
 
-    -- Fase 2: Volver a vincular las órdenes que tengan la fecha de despacho y despachador del radar
+    -- Fase 2: Volver a vincular las órdenes aprobadas con fecha <= v_fecha_despacho (o en ruta de la fecha exacta)
+    -- respetando las órdenes excluidas manualmente de este radar (Comportamiento A)
     UPDATE public.ordenes_distribucion o
     SET radar_id = p_radar_id
     FROM public.clientes c
     WHERE o.cliente_id = c.id
-      AND c.despachador_id = v_despachador_id
-      AND o.fecha_despacho::date = v_fecha_despacho
-      AND o.estado IN ('aprobada', 'en_transito', 'por_liquidar', 'liquidada', 'devuelta')
-      AND (o.radar_id IS NULL OR o.radar_id = p_radar_id);
+      AND COALESCE(o.despachador_id, c.despachador_id) = v_despachador_id
+      AND (
+          (o.estado = 'aprobada' AND o.fecha_despacho::date <= v_fecha_despacho)
+          OR
+          (o.estado IN ('en_transito', 'por_liquidar', 'liquidada', 'devuelta') AND o.fecha_despacho::date = v_fecha_despacho)
+      )
+      AND (o.radar_id IS NULL OR o.radar_id = p_radar_id)
+      AND COALESCE(o.es_autoventa, FALSE) = FALSE
+      AND NOT (o.id = ANY(v_ordenes_excluidas));
 
     GET DIAGNOSTICS v_vinculadas = ROW_COUNT;
 
@@ -99,13 +108,13 @@ BEGIN
     INTO v_tot_solicitada, v_tot_despachada, v_tot_retirados, v_total_ordenes
     FROM public.ordenes_distribucion o
     JOIN public.detalle_distribucion d ON d.orden_id = o.id
-    WHERE o.radar_id = p_radar_id;
+    WHERE o.radar_id = p_radar_id
+      AND o.estado <> 'anulada';
 
     UPDATE public.radars
     SET total_cantidad_solicitada = v_tot_solicitada,
         total_cantidad_despachada = v_tot_despachada,
-        total_contenedores_retirados = v_tot_retirados,
-        updated_at = NOW()
+        total_contenedores_retirados = v_tot_retirados
     WHERE id = p_radar_id;
 
     RETURN jsonb_build_object(

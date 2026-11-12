@@ -58,11 +58,14 @@ export type RadarListaItem = {
   items: number;
   sku: number;
   status_radar: boolean;
+  carga_inventario_movil?: boolean;
 };
 
 export type RadarParadaResumen = {
   id_orden_distribucion: string;
   correlativo: number;
+  estado?: string;
+  fecha_despacho?: string | null;
   ruta: string;
   razon_social: string;
   direccion_fiscal: string | null;
@@ -209,6 +212,7 @@ export async function listarRadarsHoy(): Promise<
       items: Number(r.items) || 0,
       sku: Number(r.sku) || 0,
       status_radar: Boolean(r.status_radar),
+      carga_inventario_movil: Boolean(r.carga_inventario_movil),
     }),
   );
   return { ok: true, radars: radars.filter((r) => r.id_radar) };
@@ -240,6 +244,9 @@ export async function listarParadasRadar(
         r.id_orden_distribucion ?? r.orden_id ?? r.id ?? "",
       ),
       correlativo: Number(r.correlativo) || 0,
+      estado: typeof r.estado === "string" ? r.estado : undefined,
+      fecha_despacho:
+        typeof r.fecha_despacho === "string" ? r.fecha_despacho : null,
       ruta: String(r.ruta ?? ""),
       razon_social: String(r.razon_social ?? "Cliente"),
       direccion_fiscal: (r.direccion_fiscal as string) ?? null,
@@ -486,6 +493,25 @@ export async function aprobarRadar(
     return {
       ok: false,
       error: rpcFailMessage(data, "No se pudo aprobar el radar."),
+    };
+  }
+  const env = data as { message?: string };
+  return { ok: true, message: env.message };
+}
+
+export async function quitarOrdenDeRadar(
+  radarId: string,
+  ordenId: string,
+): Promise<{ ok: true; message?: string } | { ok: false; error: string }> {
+  const { data, error } = await supabase.rpc("quitar_orden_de_radar", {
+    p_radar_id: radarId,
+    p_orden_id: ordenId,
+  });
+  if (error) return { ok: false, error: error.message };
+  if (!isRpcSuccess(data)) {
+    return {
+      ok: false,
+      error: rpcFailMessage(data, "No se pudo quitar la orden del radar."),
     };
   }
   const env = data as { message?: string };

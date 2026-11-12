@@ -520,6 +520,7 @@ export async function solicitaAprobarRadarAction(
         /** @deprecated usar contenedores_retirados_procesados */
         contenedores_procesados?: number;
         ordenes_anuladas?: number;
+        ordenes_reprogramadas?: number;
         inventario_reintegrado?: unknown[];
       };
     }
@@ -552,6 +553,7 @@ export async function solicitaAprobarRadarAction(
     clientes_deshabilitados_credito?: number;
     contenedores_procesados?: number;
     ordenes_anuladas?: number;
+    ordenes_reprogramadas?: number;
     inventario_reintegrado?: unknown[];
   }>("solicita_aprobar_radar", { p_radar_id: id });
 
@@ -881,6 +883,85 @@ export async function solicitaEditarOSincronizarRadarAction(
   };
 }
 
+/**
+ * INTEGRACION-RPC §2.3.6 — `quitar_orden_de_radar`.
+ * Retira una orden aprobada del radar pendiente antes de cargar el camión,
+ * manteniéndola en estado `aprobada` para que un nuevo radar posterior la tome.
+ */
+export async function quitarOrdenDeRadarAction(input: {
+  radar_id: string;
+  orden_id: string;
+}): Promise<
+  | {
+      ok: true;
+      message?: string;
+      data?: {
+        radar_id?: string;
+        orden_id?: string;
+        correlativo_orden?: number;
+        estado_orden?: string;
+        ordenes_restantes?: number;
+        total_cantidad_solicitada?: number;
+        total_cantidad_despachada?: number;
+        total_contenedores_retirados?: number;
+      };
+    }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (!canCreateRadar(rol)) {
+    return {
+      ok: false,
+      error: "Solo gerente, vendedor o admin pueden quitar órdenes del radar.",
+      code: "ACCESO_DENEGADO",
+    };
+  }
+
+  const radarId = input.radar_id?.trim();
+  const ordenId = input.orden_id?.trim();
+  if (!radarId || !UUID_RE.test(radarId) || !ordenId || !UUID_RE.test(ordenId)) {
+    return {
+      ok: false,
+      error: "Identificadores de radar u orden inválidos.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const response = await callDbProcedure<{
+    radar_id?: string;
+    orden_id?: string;
+    correlativo_orden?: number;
+    estado_orden?: string;
+    ordenes_restantes?: number;
+    total_cantidad_solicitada?: number;
+    total_cantidad_despachada?: number;
+    total_contenedores_retirados?: number;
+  }>("quitar_orden_de_radar", {
+    p_radar_id: radarId,
+    p_orden_id: ordenId,
+  });
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo quitar la orden del radar."),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/radar");
+  revalidatePath(`/radar/${radarId}`);
+  revalidatePath("/ordenes");
+  revalidatePath(`/ordenes/${ordenId}`);
+
+  return {
+    ok: true,
+    message: response.message,
+    data: response.data ?? undefined,
+  };
+}
+
 /** INTEGRACION-RPC §2.19 — `crear_o_obtener_radar` */
 export async function crearOObtenerRadarAction(input: {
   despachador_id: string;
@@ -1022,6 +1103,9 @@ function mapRadarOrdenResumen(raw: unknown): RadarOrdenResumen | null {
   return {
     id_orden_distribucion: id,
     correlativo: Number(r.correlativo ?? 0),
+    estado: typeof r.estado === "string" ? r.estado : undefined,
+    fecha_despacho:
+      typeof r.fecha_despacho === "string" ? r.fecha_despacho : null,
     ruta: String(r.ruta ?? ""),
     razon_social: String(r.razon_social ?? ""),
     direccion_fiscal:

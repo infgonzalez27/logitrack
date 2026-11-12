@@ -2213,3 +2213,63 @@ Se agregó el tercer parámetro opcional `p_devolver_almacen` (por defecto `TRUE
 - **Resumen de Jornada de AutoVentas (`src/app/(dashboard)/autoventas/autoventas-client.tsx` y `apps/mobile/app/(app)/autoventas/index.tsx`)**:
   - `retorna_resumen_autoventas_jornada` ahora devuelve `total_contenedores_entregados`, `total_contenedores_retirados`, `resumen_contenedores` y `contenedores_retirados` por cada venta en `ventas[]`. Mostrar la tarjeta/indicador de **Contenedores Retirados** en el resumen de la jornada.
 
+
+---
+
+## 18. Actualización 2026-11-12: Órdenes Aprobadas con Fechas Anteriores en Radar y Opción "Quitar del Radar"
+
+> **Parche de Base de Datos**: `supabase/tenant_patches/20261112104000_radar_ordenes_fechas_anteriores_y_quitar_orden.sql` (sincronizado en `supabase/migrations/20261112104000_radar_ordenes_fechas_anteriores_y_quitar_orden.sql` y `supabase/schema_base.sql`).
+
+### 18.1. Cambios en Base de Datos (Supabase RPCs y Esquema)
+
+#### A. Columna `ordenes_excluidas UUID[]` en `public.radars`
+- Se añadió la columna `ordenes_excluidas UUID[] NOT NULL DEFAULT '{}'::UUID[]` en `public.radars`.
+- Almacena los IDs de las órdenes que fueron retiradas manualmente de ese radar específico mediante `quitar_orden_de_radar` (**Comportamiento A**: si se ejecuta *"Regenerar Radar"* en ese mismo radar no las vuelve a incluir, pero cuando se crea un **nuevo Radar** en otra fecha, sí las trae automáticamente).
+
+#### B. `public.crear_o_obtener_radar(p_despachador_id uuid, p_fecha_despacho date)` y `public.solicita_editar_o_sincronizar_radar(p_radar_id uuid)`
+- **Inclusión de órdenes `'aprobada'` de fechas anteriores**:
+  - Ahora vinculan automáticamente todas las órdenes del despachador que tengan `estado = 'aprobada'` y **`fecha_despacho::date <= p_fecha_despacho`** (fecha del radar o fechas anteriores), siempre que tengan `radar_id IS NULL` (o pertenezcan al mismo radar), `es_autoventa = FALSE` y no estén en `radars.ordenes_excluidas` de ese radar.
+  - Para órdenes ya en curso o procesadas (`'en_transito'`, `'por_liquidar'`, `'liquidada'`, `'devuelta'`), se mantiene la condición de fecha exacta `fecha_despacho::date = p_fecha_despacho`.
+
+#### C. Nueva RPC: `public.quitar_orden_de_radar(p_radar_id uuid, p_orden_id uuid)`
+- **Propósito**: Permite retirar una orden en estado `'aprobada'` de un radar pendiente **antes de cargar el camión** (`carga_inventario_movil = FALSE`), dejándola en `estado = 'aprobada'` y `radar_id = NULL` sin afectar el inventario del almacén, para que pueda ser tomada automáticamente cuando se cree un nuevo radar posterior.
+- **Validaciones**:
+  - Rechaza si el radar ya está aprobado (`status_radar = TRUE` → código `RADAR_APROBADO_BLOQUEADO`).
+  - Rechaza si el camión ya tiene inventario móvil cargado (`carga_inventario_movil = TRUE` → código `RADAR_INVENTARIO_CARGADO`, indicando que primero debe reversar el inventario móvil al almacén).
+  - Rechaza si la orden no pertenece al radar (`ORDEN_NO_PERTENECE_AL_RADAR`) o no está en estado `'aprobada'` (`ESTADO_ORDEN_INVALIDO`).
+- **Respuesta exitosa**:
+  ```json
+  {
+    "success": true,
+    "message": "Orden #105 retirada del radar. Se mantiene aprobada para próximos radares.",
+    "data": {
+      "radar_id": "uuid-radar",
+      "orden_id": "uuid-orden",
+      "correlativo_orden": 105,
+      "estado_orden": "aprobada",
+      "ordenes_restantes": 8,
+      "total_cantidad_solicitada": 120,
+      "total_cantidad_despachada": 0,
+      "total_contenedores_retirados": 0
+    },
+    "error": null
+  }
+  ```
+
+#### D. `public.solicita_aprobar_radar(p_radar_id uuid)`
+- Al aprobar/cerrar el radar y ejecutar `retorna_inventario_no_despachado_para_almacen(p_radar_id)` (que devuelve el inventario sobrante al almacén):
+  - Las órdenes en estado `'devuelta'` pasan a `'anulada'`.
+  - **Nuevo**: Las órdenes que **no pudieron ser despachadas** en la jornada (aquellas que quedaron en `'aprobada'` o `'en_transito'` donde todas sus líneas siguen en `estado_entrega = 'pendiente'`) regresan automáticamente a **`estado = 'aprobada'`**, se desvinculan del radar cerrado (**`radar_id = NULL`**) y reinician `cantidad_despachada = 0`.
+  - De esta forma, al crear el radar del día siguiente, esas órdenes no despachadas son traídas automáticamente.
+  - Devuelve en `data.ordenes_reprogramadas` (`int`) la cantidad de órdenes no despachadas que quedaron liberadas como `'aprobada'`.
+
+#### E. `public.retorna_ordenes_distribucion_segun_idradar(p_radar_id uuid)` y `public.retorna_lista_radars_segun_rango_fechas(...)`
+- `retorna_ordenes_distribucion_segun_idradar` ahora incluye `'fecha_despacho'` en cada orden resumida.
+- `retorna_lista_radars_segun_rango_fechas` ahora incluye `'carga_inventario_movil'` en cada radar listado.
+
+### 18.2. Integración en Frontend (Web y Móvil)
+- **Web (`src/lib/actions/radar.ts`, `src/app/(dashboard)/radar/radar-paradas-view.tsx`, `src/app/(dashboard)/radar/[id]/page.tsx`)**:
+  - Se agregó la Server Action `quitarOrdenDeRadarAction({ radar_id, orden_id })`.
+  - En `RadarParadasView`, se muestra la fecha de despacho de cada orden (con badge de aviso si es de una fecha anterior a la del radar) y el botón **"Quitar del radar"** para órdenes en estado `'aprobada'` cuando el radar está pendiente (deshabilitado si `carga_inventario_movil = TRUE`).
+- **App Móvil (`apps/mobile/lib/radar.ts`, `apps/mobile/app/(app)/radar/index.tsx`)**:
+  - Se agregó `quitarOrdenDeRadar(radarId, ordenId)` y el botón **"Quitar del radar"** en el detalle de paradas del radar para los roles `admin`, `gerente` y `vendedor`.

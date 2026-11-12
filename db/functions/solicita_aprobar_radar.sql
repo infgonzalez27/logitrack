@@ -9,16 +9,15 @@ DECLARE
     v_despachador_id UUID;
     v_fecha_despacho DATE;
     v_status_radar BOOLEAN;
-    v_rec RECORD;
-    v_rec_entregados RECORD;
-    v_rec_cliente RECORD;
     v_inv_res JSONB;
     v_ordenes_anuladas_count INT := 0;
+    v_ordenes_reprogramadas_count INT := 0;
     v_contenedores_retirados_procesados INT := 0;
     v_contenedores_entregados_procesados INT := 0;
     v_clientes_deshabilitados_count INT := 0;
-    v_ordenes_por_liquidar_count INT := 0;
-    v_contenedores_entregados INT := 0;
+    v_tot_solicitada NUMERIC(10,0);
+    v_tot_despachada NUMERIC(10,0);
+    v_tot_retirados NUMERIC(10,0);
 BEGIN
     IF p_radar_id IS NULL THEN
         RETURN jsonb_build_object(
@@ -63,83 +62,13 @@ BEGIN
     SET status_radar = TRUE
     WHERE id = p_radar_id;
 
-    -- 2. Cargar en el estado de cuenta del cliente los contenedores ENTREGADOS en el despacho
-    -- si el producto tiene un contenedor asignado: CEIL(cantidad_despachada * unidades_por_contenedor)
-    FOR v_rec_entregados IN
-        SELECT 
-            o.cliente_id,
-            d.orden_id,
-            COALESCE(d.contenedor_id, p.contenedor_id) AS contenedor_id,
-            SUM(CEIL(COALESCE(d.cantidad_despachada, 0)::numeric * COALESCE(p.unidades_por_contenedor, 1))) AS total_entregados
-        FROM public.ordenes_distribucion o
-        JOIN public.detalle_distribucion d ON d.orden_id = o.id
-        JOIN public.productos p ON p.id = d.producto_id
-        WHERE o.radar_id = p_radar_id
-          AND COALESCE(d.cantidad_despachada, 0) > 0
-          AND COALESCE(d.contenedor_id, p.contenedor_id) IS NOT NULL
-        GROUP BY o.cliente_id, d.orden_id, COALESCE(d.contenedor_id, p.contenedor_id)
-    LOOP
-        v_contenedores_entregados := v_rec_entregados.total_entregados::INT;
-        IF v_contenedores_entregados > 0 THEN
-            INSERT INTO public.movimientos_contenedores (
-                cliente_id, orden_id, contenedor_id, cantidad_entregada, cantidad_retirada, creado_por
-            ) VALUES (
-                v_rec_entregados.cliente_id, v_rec_entregados.orden_id, v_rec_entregados.contenedor_id, v_contenedores_entregados, 0, auth.uid()
-            );
+    v_contenedores_entregados_procesados := 0;
+    v_contenedores_retirados_procesados := 0;
 
-            INSERT INTO public.saldo_contenedores_clientes (
-                cliente_id, contenedor_id, saldo_pendiente, updated_at
-            ) VALUES (
-                v_rec_entregados.cliente_id, v_rec_entregados.contenedor_id, v_contenedores_entregados, NOW()
-            )
-            ON CONFLICT (cliente_id, contenedor_id)
-            DO UPDATE SET 
-                saldo_pendiente = public.saldo_contenedores_clientes.saldo_pendiente + EXCLUDED.saldo_pendiente,
-                updated_at = NOW();
-
-            v_contenedores_entregados_procesados := v_contenedores_entregados_procesados + v_contenedores_entregados;
-        END IF;
-    END LOOP;
-
-    -- 3. Procesar movimiento de envases RETIRADOS/DEVUELTOS por clientes (contenedores_retirados)
-    FOR v_rec IN
-        SELECT 
-            o.cliente_id,
-            d.orden_id,
-            COALESCE(d.contenedor_id, p.contenedor_id) AS contenedor_id,
-            SUM(COALESCE(d.contenedores_retirados, 0)) AS total_retirados
-        FROM public.ordenes_distribucion o
-        JOIN public.detalle_distribucion d ON d.orden_id = o.id
-        LEFT JOIN public.productos p ON p.id = d.producto_id
-        WHERE o.radar_id = p_radar_id
-          AND COALESCE(d.contenedores_retirados, 0) > 0
-        GROUP BY o.cliente_id, d.orden_id, COALESCE(d.contenedor_id, p.contenedor_id)
-    LOOP
-        IF v_rec.contenedor_id IS NOT NULL THEN
-            INSERT INTO public.movimientos_contenedores (
-                cliente_id, orden_id, contenedor_id, cantidad_entregada, cantidad_retirada, creado_por
-            ) VALUES (
-                v_rec.cliente_id, v_rec.orden_id, v_rec.contenedor_id, 0, v_rec.total_retirados, auth.uid()
-            );
-
-            INSERT INTO public.saldo_contenedores_clientes (
-                cliente_id, contenedor_id, saldo_pendiente, updated_at
-            ) VALUES (
-                v_rec.cliente_id, v_rec.contenedor_id, 0, NOW()
-            )
-            ON CONFLICT (cliente_id, contenedor_id)
-            DO UPDATE SET 
-                saldo_pendiente = GREATEST(0, public.saldo_contenedores_clientes.saldo_pendiente - v_rec.total_retirados),
-                updated_at = NOW();
-
-            v_contenedores_retirados_procesados := v_contenedores_retirados_procesados + v_rec.total_retirados;
-        END IF;
-    END LOOP;
-
-    -- 4. Devuelve el inventario no despachado del camión al almacén principal
+    -- 2. Devuelve el inventario no despachado del camión al almacén principal
     v_inv_res := public.retorna_inventario_no_despachado_para_almacen(p_radar_id);
 
-    -- 5. Las órdenes en estado 'devuelta' pasan al estado final 'anulada'
+    -- 3. Las órdenes en estado 'devuelta' pasan al estado final 'anulada'
     WITH ordenes_devueltas AS (
         UPDATE public.ordenes_distribucion
         SET estado = 'anulada'
@@ -148,13 +77,61 @@ BEGIN
     )
     SELECT COUNT(*) INTO v_ordenes_anuladas_count FROM ordenes_devueltas;
 
-    -- 6. Políticas de crédito desactivadas temporalmente para mantener todos los clientes activos
-    -- Ningún cliente es desactivado al aprobar el radar. Todos mantienen permiso_despacho_manual = TRUE.
+    -- 4. Las órdenes que NO pudieron ser despachadas (quedaron en 'aprobada' o 'en_transito'
+    --    con todas sus líneas pendientes) vuelven a estado 'aprobada' y se desvinculan (radar_id = NULL)
+    UPDATE public.detalle_distribucion dd
+    SET cantidad_despachada = 0,
+        estado_entrega = 'pendiente',
+        motivo_rechazo = NULL
+    FROM public.ordenes_distribucion o
+    WHERE dd.orden_id = o.id
+      AND o.radar_id = p_radar_id
+      AND o.estado IN ('aprobada', 'en_transito')
+      AND NOT EXISTS (
+          SELECT 1
+          FROM public.detalle_distribucion dd2
+          WHERE dd2.orden_id = o.id
+            AND COALESCE(dd2.estado_entrega, 'pendiente') <> 'pendiente'
+      );
+
+    WITH ordenes_no_despachadas AS (
+        UPDATE public.ordenes_distribucion o
+        SET estado = 'aprobada',
+            radar_id = NULL
+        WHERE o.radar_id = p_radar_id
+          AND o.estado IN ('aprobada', 'en_transito')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.detalle_distribucion dd2
+              WHERE dd2.orden_id = o.id
+                AND COALESCE(dd2.estado_entrega, 'pendiente') <> 'pendiente'
+          )
+        RETURNING o.id
+    )
+    SELECT COUNT(*) INTO v_ordenes_reprogramadas_count FROM ordenes_no_despachadas;
+
+    -- 5. Recalcular totales finales del radar cerrado
+    SELECT 
+        COALESCE(SUM(d.cantidad_solicitada), 0),
+        COALESCE(SUM(CASE WHEN COALESCE(d.estado_entrega, 'pendiente') <> 'pendiente' THEN COALESCE(d.cantidad_despachada, 0) ELSE 0 END), 0),
+        COALESCE(SUM(d.contenedores_retirados), 0)
+    INTO v_tot_solicitada, v_tot_despachada, v_tot_retirados
+    FROM public.ordenes_distribucion o
+    JOIN public.detalle_distribucion d ON d.orden_id = o.id
+    WHERE o.radar_id = p_radar_id
+      AND o.estado <> 'anulada';
+
+    UPDATE public.radars
+    SET total_cantidad_solicitada = v_tot_solicitada,
+        total_cantidad_despachada = v_tot_despachada,
+        total_contenedores_retirados = v_tot_retirados
+    WHERE id = p_radar_id;
+
     v_clientes_deshabilitados_count := 0;
 
     RETURN jsonb_build_object(
         'success', TRUE,
-        'message', 'Radar aprobado exitosamente. Saldos de contenedores actualizados, políticas de crédito evaluadas, inventario restituido a almacén y órdenes devueltas anuladas.',
+        'message', 'Radar aprobado exitosamente. Inventario sobrante restituido al almacén, órdenes devueltas anuladas y órdenes no despachadas liberadas como aprobadas.',
         'data', jsonb_build_object(
             'radar_id', p_radar_id,
             'status_radar', TRUE,
@@ -162,6 +139,7 @@ BEGIN
             'contenedores_retirados_procesados', v_contenedores_retirados_procesados,
             'clientes_deshabilitados_credito', v_clientes_deshabilitados_count,
             'ordenes_anuladas', v_ordenes_anuladas_count,
+            'ordenes_reprogramadas', v_ordenes_reprogramadas_count,
             'inventario_reintegrado', COALESCE(v_inv_res->'data', '[]'::jsonb)
         ),
         'error', NULL
@@ -181,4 +159,4 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.solicita_aprobar_radar TO authenticated, service_role;
 
-COMMENT ON FUNCTION public.solicita_aprobar_radar(UUID) IS 'Aprueba el radar (status_radar = TRUE), carga envases entregados/retirados a saldos de clientes, evalúa políticas de crédito (max_facturas_vencidas), reingresa inventario a almacén y anula órdenes devueltas.';
+COMMENT ON FUNCTION public.solicita_aprobar_radar(UUID) IS 'Aprueba el radar (status_radar = TRUE), reingresa inventario no despachado a almacén, anula órdenes devueltas y libera órdenes no despachadas como aprobadas.';

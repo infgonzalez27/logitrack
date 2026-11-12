@@ -683,6 +683,8 @@ export type RadarListaRangoItem = {
 export type RadarOrdenResumen = {
   id_orden_distribucion: string;
   correlativo: number;
+  estado?: string;
+  fecha_despacho?: string | null;
   ruta: string;
   razon_social: string;
   direccion_fiscal: string | null;
