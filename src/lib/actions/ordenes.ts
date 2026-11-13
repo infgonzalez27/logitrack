@@ -82,7 +82,7 @@ function mapProductosJson(lineas: LineaOrdenInput[]): ProductoOrdenRpc[] {
 function validateCreateOrdenInput(
   input: {
     cliente_id: string;
-    camion_id: string;
+    camion_id?: string | null;
     lineas: LineaOrdenInput[];
   },
   vendedorId: string | undefined,
@@ -99,10 +99,8 @@ function validateCreateOrdenInput(
   if (!isUuid(input.cliente_id)) {
     return "Cliente inválido.";
   }
-  if (!input.camion_id?.trim()) {
-    return "Selecciona un camión.";
-  }
-  if (!isUuid(input.camion_id)) {
+  // El camión ya no se elige al crear la orden: se asigna al armar el Radar.
+  if (input.camion_id?.trim() && !isUuid(input.camion_id)) {
     return "Camión inválido.";
   }
   if (!input.lineas.length) {
@@ -179,7 +177,7 @@ async function resolveClienteOrdenFields(
 
 export async function createOrdenAction(input: {
   cliente_id: string;
-  camion_id: string;
+  camion_id?: string | null;
   fecha_despacho: string;
   lineas: LineaOrdenInput[];
   tasa_cambio?: number | null;
@@ -235,7 +233,7 @@ export async function createOrdenAction(input: {
   const { data, error } = await supabase.rpc("crear_orden_distribucion", {
     p_vendedor_id: user!.id,
     p_cliente_id: input.cliente_id.trim(),
-    p_camion_id: input.camion_id.trim(),
+    p_camion_id: input.camion_id?.trim() || null,
     p_tasa_cambio: tasa,
     p_productos_json: productosJson,
     p_despachador_id: clienteFields.despachador_id,
@@ -680,7 +678,7 @@ export type ActualizaOrdenDetalleInput = {
 export async function actualizaOrdenDistribucionAction(input: {
   correlativo: number;
   cliente_id: string;
-  camion_id: string;
+  camion_id?: string | null;
   fecha_despacho?: string | null;
   factura_origen_numero?: string | null;
   lineas: ActualizaOrdenDetalleInput[];
@@ -715,10 +713,7 @@ export async function actualizaOrdenDistribucionAction(input: {
         "El cliente no tiene despachador asignado. Asígnalo en la ficha del cliente.",
     };
   }
-  if (!input.camion_id?.trim()) {
-    return { error: "El camión es obligatorio." };
-  }
-  if (!isUuid(input.camion_id.trim())) {
+  if (input.camion_id?.trim() && !isUuid(input.camion_id.trim())) {
     return { error: "Camión inválido." };
   }
 
@@ -732,7 +727,7 @@ export async function actualizaOrdenDistribucionAction(input: {
     p_correlativo: input.correlativo,
     p_header: {
       cliente_id: input.cliente_id.trim(),
-      camion_id: input.camion_id.trim(),
+      camion_id: input.camion_id?.trim() || null,
       chofer_id: clienteFields.despachador_id,
       despachador_id: clienteFields.despachador_id,
       id_ruta: clienteFields.id_ruta,

@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { canEditarOrdenBorrador } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
-import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
 import { listarProductosAction } from "@/lib/actions/productos";
 import { retornaUsuariosDespachadoresAction } from "@/lib/actions/rutas";
 import { retornaUltimaTasaCambioAction } from "@/lib/actions/tasa-cambio";
@@ -47,7 +46,6 @@ export default async function EditarOrdenPage({
   const supabase = await createClient();
   const [
     { data: clientes },
-    camionesResult,
     despachadoresResult,
     productosResult,
     tasaResult,
@@ -57,7 +55,6 @@ export default async function EditarOrdenPage({
       .select("id, razon_social, rif_nit, despachador_id")
       .eq("activo", true)
       .order("razon_social"),
-    listarCamionesParaOrdenAction(),
     retornaUsuariosDespachadoresAction(),
     listarProductosAction(".F.", orden.cliente_id ?? undefined),
     retornaUltimaTasaCambioAction(),
@@ -80,7 +77,6 @@ export default async function EditarOrdenPage({
         ordenId={orden.id}
         initial={{
           cliente_id: orden.cliente_id ?? "",
-          camion_id: orden.camion_id ?? "",
           factura_origen_numero: orden.factura_origen_numero ?? "",
           fecha_despacho: toDatetimeLocal(orden.fecha_despacho),
           lineas: detalle.map((l) => ({
@@ -102,14 +98,6 @@ export default async function EditarOrdenPage({
             ? (despachadorNombrePorId.get(c.despachador_id) ?? null)
             : null,
         }))}
-        camiones={
-          camionesResult.ok
-            ? camionesResult.camiones.map((c) => ({
-                value: c.id,
-                label: c.placa,
-              }))
-            : []
-        }
         productos={productosResult.ok ? productosResult.productos : []}
         productosError={productosResult.ok ? null : productosResult.error}
         tasaActual={tasaResult.ok ? tasaResult.tasa : null}

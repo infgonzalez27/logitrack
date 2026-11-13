@@ -8,6 +8,8 @@ import type { CamionListaRpc } from "@/types/database";
 type ActionResult = { error?: string; success?: boolean; id?: string };
 
 export type CamionOrdenOption = {
+  /** Estado actual (`disponible`, `en_ruta`, `mantenimiento`). */
+  estado: string;
   id: string;
   placa: string;
 };
@@ -17,7 +19,7 @@ function mapCamionesParaOrden(
 ): CamionOrdenOption[] {
   return rows
     .filter((c) => c.estado !== "inactivo")
-    .map((c) => ({ id: c.id, placa: c.placa }))
+    .map((c) => ({ id: c.id, placa: c.placa, estado: c.estado ?? "disponible" }))
     .sort((a, b) => a.placa.localeCompare(b.placa, "es"));
 }
 

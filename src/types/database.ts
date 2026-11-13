@@ -652,6 +652,8 @@ export type RadarCabecera = {
   despachador_id: string;
   fecha_despacho: string;
   status_radar: boolean;
+  /** Camión asignado al armar el radar (radars.camion_id). */
+  camion_id?: string | null;
   /** true = ya se cargó almacén → inventario móvil (§2.3.1). */
   carga_inventario_movil?: boolean;
   total_cantidad_solicitada: number;

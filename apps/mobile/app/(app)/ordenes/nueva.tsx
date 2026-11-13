@@ -16,7 +16,7 @@ import {
   getClienteVisita,
   type ClienteListaItem,
 } from "@/lib/clientes";
-import { listarCamiones, retornaUltimaTasa, type CamionOption } from "@/lib/catalogos";
+import { retornaUltimaTasa } from "@/lib/catalogos";
 import { listarProductos, precioNeto, type ProductoLista } from "@/lib/productos";
 import { crearOrdenDistribucion } from "@/lib/ordenes";
 import { defaultFechaDespachoLocal, formatMoney } from "@/lib/format";
@@ -41,8 +41,6 @@ export default function NuevaOrdenScreen() {
   const [clientes, setClientes] = useState<ClienteListaItem[]>([]);
   const [clienteId, setClienteId] = useState(clienteIdParam ?? "");
   const [clienteLabel, setClienteLabel] = useState("");
-  const [camionId, setCamionId] = useState("");
-  const [camiones, setCamiones] = useState<CamionOption[]>([]);
   const [fechaDespacho, setFechaDespacho] = useState(defaultFechaDespachoLocal());
   const [tasa, setTasa] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -52,7 +50,7 @@ export default function NuevaOrdenScreen() {
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [picker, setPicker] = useState<"cliente" | "camion" | "productos" | null>(
+  const [picker, setPicker] = useState<"cliente" | "productos" | null>(
     null,
   );
   const [busquedaCliente, setBusquedaCliente] = useState("");
@@ -74,14 +72,12 @@ export default function NuevaOrdenScreen() {
     (async () => {
       if (!profile) return;
       setLoadingInit(true);
-      const [cRes, camRes, tRes] = await Promise.all([
+      const [cRes, tRes] = await Promise.all([
         listClientesForProfile(profile),
-        listarCamiones(),
         retornaUltimaTasa(),
       ]);
       if (cancelled) return;
       if (cRes.ok) setClientes(cRes.clientes);
-      if (camRes.ok) setCamiones(camRes.camiones);
       if (tRes.ok) setTasa(tRes.tasa);
 
       if (clienteIdParam) {
@@ -167,10 +163,6 @@ export default function NuevaOrdenScreen() {
       setError("Selecciona un cliente.");
       return;
     }
-    if (!camionId) {
-      setError("Selecciona un camión.");
-      return;
-    }
     const lineasValidas = lineas.filter((l) => l.cantidad > 0);
     if (lineasValidas.length === 0) {
       setError("Agrega al menos un producto.");
@@ -182,7 +174,6 @@ export default function NuevaOrdenScreen() {
     const res = await crearOrdenDistribucion({
       vendedorId: profile.id,
       clienteId,
-      camionId,
       fechaDespachoIso: fechaIso,
       tasaCambio: tasa,
       lineas: lineasValidas.map((l) => ({
@@ -263,35 +254,6 @@ export default function NuevaOrdenScreen() {
     );
   }
 
-  if (picker === "camion") {
-    return (
-      <View style={styles.root}>
-        <Pressable style={styles.back} onPress={() => setPicker(null)}>
-          <Text style={styles.backText}>← Volver al formulario</Text>
-        </Pressable>
-        <FlatList
-          data={camiones}
-          keyExtractor={(c) => c.id}
-          contentContainerStyle={{ padding: 16 }}
-          ListEmptyComponent={
-            <Text style={styles.meta}>No hay camiones disponibles.</Text>
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              style={styles.row}
-              onPress={() => {
-                setCamionId(item.id);
-                setPicker(null);
-              }}
-            >
-              <Text style={styles.rowTitle}>{item.placa}</Text>
-            </Pressable>
-          )}
-        />
-      </View>
-    );
-  }
-
   if (picker === "productos") {
     return (
       <View style={styles.root}>
@@ -346,9 +308,6 @@ export default function NuevaOrdenScreen() {
     );
   }
 
-  const camionLabel =
-    camiones.find((c) => c.id === camionId)?.placa ?? "Elegir camión";
-
   return (
     <FlatList
       style={styles.root}
@@ -365,11 +324,6 @@ export default function NuevaOrdenScreen() {
             <Text style={styles.selectText}>
               {clienteLabel || "Elegir cliente"}
             </Text>
-          </Pressable>
-
-          <Text style={styles.label}>Camión</Text>
-          <Pressable style={styles.select} onPress={() => setPicker("camion")}>
-            <Text style={styles.selectText}>{camionLabel}</Text>
           </Pressable>
 
           <FechaDespachoPicker

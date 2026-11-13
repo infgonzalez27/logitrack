@@ -2,9 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
 import { retornaRadarDetalleReporteAction } from "@/lib/actions/radar";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout/page-header";
+import { RadarCamionSelector } from "../radar-camion-selector";
 import { RadarGerenciaActions } from "../radar-gerencia-actions";
 import { RadarParadasView } from "../radar-paradas-view";
 import { RadarRegenerarButton } from "../radar-regenerar-button";
@@ -37,7 +39,7 @@ export default async function RadarDetallePage({
   const supabase = await createClient();
   const { data: radarRow } = await supabase
     .from("radars")
-    .select("status_radar, carga_inventario_movil")
+    .select("status_radar, carga_inventario_movil, camion_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -46,6 +48,10 @@ export default async function RadarDetallePage({
       (reporte.ok && reporte.reporte.radar.status_radar === true),
   );
   const cargaInventarioMovil = Boolean(radarRow?.carga_inventario_movil);
+  const camionRadarId =
+    typeof radarRow?.camion_id === "string" ? radarRow.camion_id : null;
+  const camionesResult = await listarCamionesParaOrdenAction();
+  const camionesLista = camionesResult.ok ? camionesResult.camiones : [];
 
   const correlativo = reporte.ok ? reporte.reporte.radar.correlativo : null;
   const fechaDespacho = reporte.ok
@@ -80,6 +86,13 @@ export default async function RadarDetallePage({
             </Link>
           </div>
         }
+      />
+
+      <RadarCamionSelector
+        radarId={id}
+        camionId={camionRadarId}
+        camiones={camionesLista}
+        editable={puedeRegenerar && !radarAprobado && !cargaInventarioMovil}
       />
 
       {reporte.ok ? (

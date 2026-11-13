@@ -420,7 +420,8 @@ export type LineaCrearOrden = {
 export async function crearOrdenDistribucion(input: {
   vendedorId: string;
   clienteId: string;
-  camionId: string;
+  /** Opcional: el camión se asigna al armar el Radar. */
+  camionId?: string | null;
   fechaDespachoIso: string;
   lineas: LineaCrearOrden[];
   tasaCambio?: number | null;
@@ -452,7 +453,7 @@ export async function crearOrdenDistribucion(input: {
   const { data, error } = await supabase.rpc("crear_orden_distribucion", {
     p_vendedor_id: input.vendedorId,
     p_cliente_id: input.clienteId,
-    p_camion_id: input.camionId,
+    p_camion_id: input.camionId ?? null,
     p_tasa_cambio: input.tasaCambio ?? null,
     p_productos_json: productosJson,
     p_despachador_id: cliente.despachador_id,

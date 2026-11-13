@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { retornaListaRadarsSegunRangoFechasAction } from "@/lib/actions/radar";
+import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
 import { retornaUsuariosDespachadoresAction } from "@/lib/actions/rutas";
 import { fechaHoyCaracas, fechaIsoDia, restarDiasIso } from "@/lib/dates";
 import { PageHeader } from "@/components/layout/page-header";
@@ -55,6 +56,9 @@ export default async function RadarPage({
   const despachadores = canCreate
     ? await retornaUsuariosDespachadoresAction()
     : null;
+  const camionesResult = canCreate
+    ? await listarCamionesParaOrdenAction()
+    : null;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -81,7 +85,10 @@ export default async function RadarPage({
             {despachadores?.error ?? "No se pudieron cargar despachadores."}
           </p>
         ) : (
-          <RadarCrearForm despachadores={despachadores.despachadores} />
+          <RadarCrearForm
+            despachadores={despachadores.despachadores}
+            camiones={camionesResult?.ok ? camionesResult.camiones : []}
+          />
         )
       ) : null}
 

@@ -6,7 +6,6 @@ import { createOrdenAction } from "@/lib/actions/ordenes";
 import { listarProductosAction } from "@/lib/actions/productos";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProductoCatalogo } from "@/components/productos/producto-catalogo";
@@ -47,8 +46,6 @@ function precioNetoProducto(producto: ProductoListaRpc): number {
 
 export function NuevaOrdenForm({
   clientes,
-  camiones,
-  camionesError = null,
   productos,
   productosError = null,
   tasaActual = null,
@@ -57,8 +54,6 @@ export function NuevaOrdenForm({
   volverHref = null,
 }: {
   clientes: ClienteOrdenOption[];
-  camiones: Option[];
-  camionesError?: string | null;
   productos: ProductoListaRpc[];
   productosError?: string | null;
   tasaActual?: TasaCambio | null;
@@ -70,7 +65,6 @@ export function NuevaOrdenForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [clienteId, setClienteId] = useState(initialClienteId ?? "");
-  const [camionId, setCamionId] = useState("");
   const [fechaDespacho, setFechaDespacho] = useState(defaultFechaDespachoLocal);
   const [esCortesia, setEsCortesia] = useState(false);
   const [catalogoProductos, setCatalogoProductos] =
@@ -183,7 +177,6 @@ export function NuevaOrdenForm({
 
     const result = await createOrdenAction({
       cliente_id: clienteId,
-      camion_id: camionId,
       fecha_despacho: fechaDespacho,
       lineas,
       tasa_cambio: tasaActual?.tasa_cambio ?? null,
@@ -237,15 +230,6 @@ export function NuevaOrdenForm({
               onChange={setClienteId}
               disabled={lockCliente && Boolean(clienteId)}
             />
-            <Select
-              label="Camión"
-              name="camion_id"
-              required
-              placeholder="Selecciona camión"
-              options={camiones}
-              value={camionId}
-              onChange={(e) => setCamionId(e.target.value)}
-            />
             <FechaDespachoField
               name="fecha_despacho"
               required
@@ -285,7 +269,7 @@ export function NuevaOrdenForm({
           </div>
           <p className="mt-2 text-xs text-lt-text-muted">
             La fecha de entrega es la clave del Radar: junto con el despachador
-            del cliente agrupa la orden al crear el radar (gerente/vendedor).
+            del cliente agrupa la orden al crear el radar (gerente/vendedor). El camión se asigna al armar el Radar.
           </p>
           {clienteId && !clienteSeleccionado?.despachador_id ? (
             <p className="mt-2 text-sm text-amber-700">
@@ -297,9 +281,6 @@ export function NuevaOrdenForm({
             <p className="mt-2 text-sm text-amber-700">
               No hay tasa del día. Regístrala en Tasas de cambio.
             </p>
-          ) : null}
-          {camionesError ? (
-            <p className="mt-2 text-sm text-lt-danger-text">{camionesError}</p>
           ) : null}
         </Card>
 

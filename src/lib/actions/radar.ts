@@ -582,6 +582,17 @@ async function resolveCamionIdForRadar(
   radarId: string,
 ): Promise<string | null> {
   const supabase = await createClient();
+  // El camión se asigna al armar el Radar (radars.camion_id).
+  const { data: radar } = await supabase
+    .from("radars")
+    .select("camion_id")
+    .eq("id", radarId)
+    .maybeSingle();
+  const camionRadar =
+    radar && typeof radar.camion_id === "string" ? radar.camion_id.trim() : "";
+  if (camionRadar && UUID_RE.test(camionRadar)) return camionRadar;
+
+  // Compatibilidad con radares anteriores: camión de las órdenes vinculadas.
   const { data } = await supabase
     .from("ordenes_distribucion")
     .select("camion_id")
@@ -680,7 +691,7 @@ export async function solicitaCargarInventarioMovilDesdeAlmacenAction(
   if (!camionId) {
     return {
       ok: false,
-      error: "No se encontró un camión asignado a las órdenes de este radar.",
+      error: "Este radar no tiene camión asignado. Asigna un camión al radar antes de cargar.",
       code: "CAMION_INEXISTENTE",
     };
   }
@@ -767,7 +778,7 @@ export async function solicitaReversarCargaInventarioMovilAction(
   if (!camionId) {
     return {
       ok: false,
-      error: "No se encontró un camión asignado a las órdenes de este radar.",
+      error: "Este radar no tiene camión asignado. Asigna un camión al radar antes de cargar.",
       code: "CAMION_INEXISTENTE",
     };
   }
@@ -962,10 +973,66 @@ export async function quitarOrdenDeRadarAction(input: {
   };
 }
 
+/**
+ * INTEGRACION-RPC §2.3.7 — `asignar_camion_radar`.
+ * Asigna/cambia el camión de un radar pendiente (solo si aún no se cargó el
+ * inventario móvil). Solo se permiten camiones en estado `disponible`.
+ */
+export async function asignarCamionRadarAction(input: {
+  radar_id: string;
+  camion_id: string;
+}): Promise<
+  | { ok: true; message?: string }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (!canCreateRadar(rol)) {
+    return {
+      ok: false,
+      error: "Solo gerente, vendedor o admin pueden asignar el camión del radar.",
+      code: "ACCESO_DENEGADO",
+    };
+  }
+
+  const radarId = input.radar_id?.trim();
+  const camionId = input.camion_id?.trim();
+  if (!radarId || !UUID_RE.test(radarId) || !camionId || !UUID_RE.test(camionId)) {
+    return {
+      ok: false,
+      error: "Selecciona un camión válido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
+
+  const response = await callDbProcedure<{
+    radar_id?: string;
+    camion_id?: string;
+    placa?: string;
+  }>("asignar_camion_radar", {
+    p_radar_id: radarId,
+    p_camion_id: camionId,
+  });
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(response, "No se pudo asignar el camión al radar."),
+      code: response.error?.code,
+    };
+  }
+
+  revalidatePath("/radar");
+  revalidatePath(`/radar/${radarId}`);
+  revalidatePath("/ordenes");
+
+  return { ok: true, message: response.message };
+}
 /** INTEGRACION-RPC §2.19 — `crear_o_obtener_radar` */
 export async function crearOObtenerRadarAction(input: {
   despachador_id: string;
   fecha_despacho: string;
+  camion_id?: string | null;
 }): Promise<
   { ok: true; radar: RadarCabecera } | { ok: false; error: string; code?: string }
 > {
@@ -981,7 +1048,15 @@ export async function crearOObtenerRadarAction(input: {
 
   const despachadorId = input.despachador_id?.trim();
   const fecha = input.fecha_despacho?.trim().slice(0, 10);
+  const camionId = input.camion_id?.trim() || null;
 
+  if (camionId && !UUID_RE.test(camionId)) {
+    return {
+      ok: false,
+      error: "Selecciona un camión válido.",
+      code: "PARAMETRO_INVALIDO",
+    };
+  }
   if (!despachadorId || !UUID_RE.test(despachadorId)) {
     return {
       ok: false,
@@ -1000,6 +1075,7 @@ export async function crearOObtenerRadarAction(input: {
   const response = await callDbProcedure<RadarCabecera>("crear_o_obtener_radar", {
     p_despachador_id: despachadorId,
     p_fecha_despacho: fecha,
+    p_camion_id: camionId,
   });
 
   if (!response.success || !response.data) {

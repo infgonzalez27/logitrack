@@ -54,7 +54,8 @@ async function cargarStockPorProducto(
 ): Promise<Map<string, number>> {
   if (!ids.length) return new Map();
 
-  const { data } = await (await createAdminClient())
+  const supabase = await createClient();
+  const { data } = await supabase
     .from("inventario_almacen")
     .select("producto_id, stock_disponible")
     .in("producto_id", ids);
@@ -76,7 +77,8 @@ async function buscarProductosEnTabla(
   }
 
   const pattern = `%${q}%`;
-  const { data: rows, error } = await (await createAdminClient())
+  const supabase = await createClient();
+  const { data: rows, error } = await supabase
     .from("productos")
     .select(
       "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor, imagen_path",
@@ -133,7 +135,8 @@ async function enriquecerProductosLista(
     return { ok: true, productos: [] };
   }
 
-  const { data, error } = await (await createAdminClient())
+  const supabase = await createClient();
+  const { data, error } = await supabase
     .from("productos")
     .select(
       "id, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor, imagen_path",
@@ -232,8 +235,8 @@ export async function obtenerProductoParaEditarAction(
     return { ok: false, error: "ID de producto inválido." };
   }
 
-  const admin = await createAdminClient();
-  const { data, error } = await admin
+  const supabase = await createClient();
+  const { data, error } = await supabase
     .from("productos")
     .select(
       "id, nombre, codigo_producto, codigo_barras, precio_lista1, precio_lista2, precio_lista3, contenedor_id, unidades_por_contenedor, imagen_path",
@@ -245,7 +248,7 @@ export async function obtenerProductoParaEditarAction(
     return { ok: false, error: "Producto no encontrado." };
   }
 
-  const { data: inventario } = await admin
+  const { data: inventario } = await supabase
     .from("inventario_almacen")
     .select("stock_disponible")
     .eq("producto_id", productoId)

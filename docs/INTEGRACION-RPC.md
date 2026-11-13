@@ -2326,3 +2326,56 @@ Se agregó el tercer parámetro opcional `p_devolver_almacen` (por defecto `TRUE
 - **App Móvil (`apps/mobile/lib/ordenes.ts`, `apps/mobile/src/features/ordenes/screens/OrdenDetalleScreen.tsx`, `apps/mobile/app/(app)/ordenes/editar/[id].tsx`)**:
   - Se agregó `generarDespachoOrdenAlmacen` y los botones **"Anular Despacho"** y **"Generar Despacho"** en `OrdenDetalleScreen` exclusivamente para `admin` y `gerente`.
   - En `EditarOrdenScreen`, se habilitó la edición del **Precio USD** por línea para `admin` y `gerente` con recálculo en tiempo real.
+
+---
+
+## 20. Asignación y Selección de Camión en Radar (Desacople de Órdenes de Preventa)
+
+> **Fecha:** 2026-11-12  
+> **Parche SQL:** `supabase/tenant_patches/20261112170000_camion_en_radar.sql` / `supabase/migrations/20261112170000_camion_en_radar.sql`  
+> **Objetivo:** Eliminar la selección obligatoria de camión en la creación/edición de órdenes de preventa (ya que diferentes vendedores asignaban camiones distintos a un mismo despachador/fecha, causando conflictos al armar el Radar) y centralizar la selección del camión al momento de armar o configurar el Radar.
+
+### 20.1. Cambios en Base de Datos
+
+1. **Columna `camion_id` en `radars`**:
+   - `ALTER TABLE public.radars ADD COLUMN IF NOT EXISTS camion_id UUID REFERENCES public.camiones(id);`
+   - Índice: `idx_radars_camion ON public.radars(camion_id)`.
+   - Se realizó backfill para poblar `radars.camion_id` a partir de las órdenes ya vinculadas que tuvieran `camion_id` asignado.
+
+2. **Flexibilización de `ordenes_distribucion.camion_id`**:
+   - `ALTER TABLE public.ordenes_distribucion ALTER COLUMN camion_id DROP NOT NULL;`
+   - La orden de preventa ya no requiere camión para ser creada ni editada.
+
+3. **Propagación Automática por Triggers**:
+   - `trg_orden_camion_segun_radar`: Al vincular una orden a un radar (`radar_id IS NOT NULL`), hereda automáticamente el `camion_id` del radar si la orden no tenía uno. Al desvincularse (`radar_id IS NULL`), se limpia `camion_id = NULL`.
+   - `trg_radar_propaga_camion`: Al actualizar `radars.camion_id`, propaga automáticamente el nuevo `camion_id` a todas las órdenes hijas vinculadas (`ordenes_distribucion.radar_id = NEW.id`).
+
+4. **Validación de Disponibilidad del Camión (`lt_validar_camion_para_radar`)**:
+   - Si se envía un camión, la función valida su existencia y estado.
+   - Si `camion.estado = 'en_ruta'`, rechaza la operación inmediatamente con mensaje explicativo: `El camión con placa <PLACA> ya está en ruta y no puede ser asignado a un nuevo Radar.`
+   - Si `camion.estado` no es `'disponible'`, rechaza informando su estado actual (`mantenimiento`, `inactivo`, etc.).
+
+5. **RPC `crear_o_obtener_radar` actualizada**:
+   - **Firma:** `public.crear_o_obtener_radar(p_despachador_id UUID, p_fecha_despacho DATE, p_camion_id UUID DEFAULT NULL) RETURNS JSONB`
+   - Valida el camión opcional con `lt_validar_camion_para_radar`.
+   - Si el radar ya existía y se envía `p_camion_id`, lo asocia si aún estaba vacío o actualiza si `carga_inventario_movil = FALSE`.
+   - Al crear el radar, almacena `camion_id` en `public.radars`.
+
+6. **Nueva RPC `asignar_camion_radar`**:
+   - **Firma:** `public.asignar_camion_radar(p_radar_id UUID, p_camion_id UUID) RETURNS JSONB`
+   - Permite al usuario en Web reasignar o cambiar de camión a un Radar ya existente, siempre que no haya cargado inventario móvil (`carga_inventario_movil = FALSE`).
+   - Valida el camión seleccionado y propaga el cambio a las órdenes vinculadas.
+
+7. **RPC `crear_orden_distribucion` actualizada**:
+   - El parámetro `p_camion_id UUID DEFAULT NULL` ahora es opcional y no falla si se envía `NULL`.
+
+### 20.2. Integración en Frontend
+
+- **Web (Next.js)**:
+  - **`src/lib/actions/entities.ts`**: `CamionOrdenOption` ahora exporta también el campo `estado: string` (`'disponible' | 'en_ruta' | 'mantenimiento' | 'inactivo'`).
+  - **`src/app/(dashboard)/ordenes/nuevo` y `[id]/editar`**: Se removió el selector de camión. Las órdenes se crean limpias sin amarrar camión.
+  - **`src/app/(dashboard)/radar/radar-crear-form.tsx`**: Selector de camión obligatorio al armar el Radar. Muestra todas las unidades con su estado visual (`Placa - Marca/Modelo (Estado)`). Si el usuario selecciona un camión `'en_ruta'` u otro no disponible, se bloquea con aviso interactivo en rojo y no permite el submit.
+  - **`src/app/(dashboard)/radar/[id]/radar-camion-selector.tsx`**: Componente que permite visualizar el camión asignado al radar y cambiarlo antes de que se cargue a inventario móvil.
+- **Mobile (React Native / Expo)**:
+  - **`apps/mobile/app/(app)/ordenes/nueva.tsx`**: Removido selector de camión.
+  - **`apps/mobile/lib/ordenes.ts`**: `camionId` opcional en la creación de órdenes.

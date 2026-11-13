@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile, getSessionUser } from "@/lib/auth";
 import { canCreateOrden } from "@/lib/auth/orden-permissions";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
-import { listarCamionesParaOrdenAction } from "@/lib/actions/entities";
 import { listarProductosAction } from "@/lib/actions/productos";
 import { retornaUsuariosDespachadoresAction } from "@/lib/actions/rutas";
 import { retornaUltimaTasaCambioAction } from "@/lib/actions/tasa-cambio";
@@ -46,19 +45,16 @@ export default async function NuevaOrdenPage({
 
   const [
     { data: clientes },
-    camionesResult,
     despachadoresResult,
     productosResult,
     tasaResult,
   ] = await Promise.all([
     clientesQuery,
-    listarCamionesParaOrdenAction(),
     retornaUsuariosDespachadoresAction(),
     listarProductosAction(),
     retornaUltimaTasaCambioAction(),
   ]);
 
-  const camiones = camionesResult.ok ? camionesResult.camiones : [];
   const productos = productosResult.ok ? productosResult.productos : [];
   const despachadorNombrePorId = new Map(
     (despachadoresResult.ok ? despachadoresResult.despachadores : []).map(
@@ -85,11 +81,6 @@ export default async function NuevaOrdenPage({
   return (
     <NuevaOrdenForm
       clientes={clienteOptions}
-      camiones={camiones.map((c) => ({
-        value: c.id,
-        label: c.placa,
-      }))}
-      camionesError={camionesResult.ok ? null : camionesResult.error}
       productos={productos}
       productosError={productosResult.ok ? null : productosResult.error}
       tasaActual={tasaResult.ok ? tasaResult.tasa : null}

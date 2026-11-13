@@ -6,7 +6,6 @@ import { actualizaOrdenDistribucionAction } from "@/lib/actions/ordenes";
 import { listarProductosAction } from "@/lib/actions/productos";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProductoCatalogo } from "@/components/productos/producto-catalogo";
@@ -17,8 +16,6 @@ import { LogiImage } from "@/components/media/logi-image";
 import { resolveProductoImage } from "@/lib/product-images";
 import { formatDateOnly, formatNumber } from "@/lib/format";
 import type { ProductoListaRpc, TasaCambio } from "@/types/database";
-
-type Option = { value: string; label: string };
 
 type Linea = {
   producto_id: string;
@@ -31,7 +28,6 @@ export function EditarOrdenForm({
   ordenId,
   initial,
   clientes,
-  camiones,
   productos,
   productosError = null,
   tasaActual = null,
@@ -41,13 +37,11 @@ export function EditarOrdenForm({
   ordenId: string;
   initial: {
     cliente_id: string;
-    camion_id: string;
     factura_origen_numero: string;
     fecha_despacho: string;
     lineas: Linea[];
   };
   clientes: ClienteOrdenOption[];
-  camiones: Option[];
   productos: ProductoListaRpc[];
   productosError?: string | null;
   tasaActual?: TasaCambio | null;
@@ -57,7 +51,6 @@ export function EditarOrdenForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [clienteId, setClienteId] = useState(initial.cliente_id);
-  const [camionId, setCamionId] = useState(initial.camion_id);
   const [factura, setFactura] = useState(initial.factura_origen_numero);
   const [fechaDespacho, setFechaDespacho] = useState(initial.fecha_despacho);
   const [catalogoProductos, setCatalogoProductos] =
@@ -139,11 +132,6 @@ export function EditarOrdenForm({
       setPending(false);
       return;
     }
-    if (!camionId.trim()) {
-      setError("El camión es obligatorio.");
-      setPending(false);
-      return;
-    }
     if (!lineas.length) {
       setError("Agrega al menos un producto.");
       setPending(false);
@@ -158,7 +146,6 @@ export function EditarOrdenForm({
     const result = await actualizaOrdenDistribucionAction({
       correlativo,
       cliente_id: clienteId,
-      camion_id: camionId,
       factura_origen_numero: factura,
       fecha_despacho: fechaDespacho,
       lineas,
@@ -182,12 +169,6 @@ export function EditarOrdenForm({
       />
 
       <Card title="Cabecera">
-        {!initial.camion_id ? (
-          <p className="lt-alert-error mb-3 text-sm">
-            Esta orden no tiene camión asignado. Debes seleccionar uno antes de
-            guardar.
-          </p>
-        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <ClienteCombobox
             required
@@ -199,14 +180,6 @@ export function EditarOrdenForm({
             label="Factura origen"
             value={factura}
             onChange={(e) => setFactura(e.target.value)}
-          />
-          <Select
-            label="Camión"
-            required
-            options={camiones}
-            placeholder="Selecciona un camión"
-            value={camionId}
-            onChange={(e) => setCamionId(e.target.value)}
           />
           <Input
             label="Despachador del cliente"
