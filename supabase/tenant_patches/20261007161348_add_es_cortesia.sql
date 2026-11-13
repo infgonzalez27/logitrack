@@ -1,4 +1,5 @@
 ALTER TABLE IF EXISTS public.ordenes_distribucion ADD COLUMN IF NOT EXISTS es_cortesia BOOLEAN DEFAULT false;  
+DROP FUNCTION IF EXISTS public.crear_orden_distribucion(UUID, UUID, UUID, NUMERIC, JSONB, UUID, UUID, BOOLEAN);
 CREATE OR REPLACE FUNCTION public.crear_orden_distribucion(
     p_vendedor_id UUID,
     p_cliente_id UUID,
