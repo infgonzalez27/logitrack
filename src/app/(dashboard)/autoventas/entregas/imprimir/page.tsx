@@ -38,7 +38,11 @@ export default async function EntregasReporteImprimirPage({
 
   return (
     <div className="lt-carta-page mx-auto max-w-4xl space-y-4 px-2 py-4">
-      <CargaPrintControls descarga={false} />
+      <CargaPrintControls
+        descarga={false}
+        entregasData={data}
+        empresaNombre={empresa?.nombre_empresa ?? null}
+      />
       {data ? (
         <EntregasReporte
           data={data}

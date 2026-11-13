@@ -2379,3 +2379,24 @@ Se agregó el tercer parámetro opcional `p_devolver_almacen` (por defecto `TRUE
 - **Mobile (React Native / Expo)**:
   - **`apps/mobile/app/(app)/ordenes/nueva.tsx`**: Removido selector de camión.
   - **`apps/mobile/lib/ordenes.ts`**: `camionId` opcional en la creación de órdenes.
+
+
+---
+
+## 21. Actualización AutoVentas: Exportación a Excel de Entregas y Descargas, y Sincronización de Totales por Fecha y Camión (2026-11-13)
+
+### 21.1. Sincronización Reactiva de Jornada (Fecha + Camión)
+- **Web (`src/app/(dashboard)/autoventas/autoventas-client.tsx`)**:
+  - Se vinculó `fechaSeleccionada` al invocar `obtenerResumenAutoVentasJornada(camionId, fechaSeleccionada)` y se incluyó en las dependencias reactivas del `useEffect`.
+  - Al cambiar de fecha o camión, las tarjetas de totales (**Contenedores cargados** y **Contenedores retirados**), así como la tabla de ventas de la jornada, se actualizan dinámicamente con los datos exactos devueltos por `retorna_resumen_autoventas_jornada`.
+- **App Móvil (`apps/mobile/app/(app)/autoventas/index.tsx`)**:
+  - Se incorporó el control de fecha interactiva en la pestaña **Resumen** (con botones rápidos `-1 día`, `Hoy`, `+1 día` e input manual `AAAA-MM-DD`).
+  - Al seleccionar o cambiar la fecha, `loadResumen(camionId, fechaConsulta)` consulta a Supabase con `p_fecha` y actualiza inmediatamente las tarjetas de **Contenedores cargados** y **Contenedores retirados** con la jornada consultada.
+
+### 21.2. Exportación a Excel de Reportes de AutoVentas
+- **Generador de Excel (`src/lib/export/autoventas-excel.ts`)**:
+  - **`exportEntregasAutoventasToExcel`**: Exporta el reporte de productos entregados por cliente con código, cantidades cargadas, entregadas, devoluciones, precios unitarios, subtotales, detalle de envases/contenedores por cliente, resumen consolidado de contenedores y bloque final de totales generales.
+  - **`exportCargaDescargaAutoventasToExcel`**: Exporta el comprobante de carga o de descarga (sobrante a almacén) con código, descripción, cantidades cargadas/entregadas/disponibles y la tabla de vacíos retirados por orden.
+- **Vistas Web de Comprobantes**:
+  - `src/app/(dashboard)/autoventas/carga/imprimir/carga-print-controls.tsx`: Se añadió el botón **"📊 Exportar a Excel"** para descargar la planilla directamente en formato `.xlsx`.
+  - Vistas integradas: `/autoventas/entregas/imprimir` y `/autoventas/carga/imprimir`.

@@ -29,6 +29,24 @@ import { anularOrdenDistribucion } from "@/lib/ordenes";
 import { getEmpresaActual } from "@/lib/supabase";
 import { listarProductos, type ProductoLista } from "@/lib/productos";
 import { formatMoney } from "@/lib/format";
+import { Ionicons } from "@expo/vector-icons";
+
+function hoyIsoCaracas(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function desplazarFechaIso(fechaIso: string, deltaDias: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fechaIso.trim());
+  const base = match
+    ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+    : new Date();
+  base.setUTCDate(base.getUTCDate() + deltaDias);
+  return base.toISOString().slice(0, 10);
+}
 import { ErrorText, PrimaryButton, SectionTitle } from "@/components/ui";
 
 type Tab = "resumen" | "carga" | "reverso";
@@ -38,6 +56,7 @@ export default function AutoventasScreen() {
   const [tab, setTab] = useState<Tab>("resumen");
   const [camiones, setCamiones] = useState<CamionOption[]>([]);
   const [camionId, setCamionId] = useState("");
+  const [fechaConsulta, setFechaConsulta] = useState<string>(() => hoyIsoCaracas());
   const [resumen, setResumen] = useState<ResumenAutoVentaData | null>(null);
   const [inventario, setInventario] = useState<InventarioMovilRow[]>([]);
   const [productos, setProductos] = useState<ProductoLista[]>([]);
@@ -66,14 +85,15 @@ export default function AutoventasScreen() {
     useState<CargaCamionTicketData | null>(null);
   const [verDescarga, setVerDescarga] = useState(false);
 
-  const loadResumen = useCallback(async (id: string) => {
+  const loadResumen = useCallback(async (id: string, fecha?: string) => {
     if (!id) {
       setResumen(null);
       setInventario([]);
       return;
     }
+    const fechaAUsar = fecha || fechaConsulta;
     const [res, inv] = await Promise.all([
-      obtenerResumenAutoventas(id),
+      obtenerResumenAutoventas(id, fechaAUsar),
       listarInventarioMovil(id),
     ]);
     if (!res.ok) {
@@ -120,12 +140,12 @@ export default function AutoventasScreen() {
       setCamiones(camRes.camiones);
       const nextId = camionId || camRes.camiones[0]?.id || "";
       setCamionId(nextId);
-      if (nextId) await loadResumen(nextId);
+      if (nextId) await loadResumen(nextId, fechaConsulta);
     }
     await loadProductos(productoQ);
     setLoading(false);
     setRefreshing(false);
-  }, [camionId, loadResumen, loadProductos, productoQ]);
+  }, [camionId, fechaConsulta, loadResumen, loadProductos, productoQ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -389,7 +409,7 @@ export default function AutoventasScreen() {
               refreshing={refreshing}
               onRefresh={() => {
                 setRefreshing(true);
-                void loadResumen(camionId).finally(() =>
+                void loadResumen(camionId, fechaConsulta).finally(() =>
                   setRefreshing(false),
                 );
               }}
@@ -397,17 +417,84 @@ export default function AutoventasScreen() {
           }
           ListHeaderComponent={
             <View style={{ gap: 8, marginBottom: 8 }}>
-              <Text style={styles.section}>Resumen del día</Text>
-              <View style={styles.card}>
-                <Text style={styles.meta}>
-                  Ventas: {resumen?.total_ordenes_autoventa ?? 0}
-                </Text>
-                <Text style={styles.name}>
-                  ${formatMoney(resumen?.total_facturado_usd)}
-                </Text>
-                <Text style={styles.meta}>
-                  {formatMoney(resumen?.total_facturado_bs)} Bs
-                </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+                <Text style={styles.section}>Resumen de jornada</Text>
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  <Pressable
+                    onPress={() => {
+                      const prev = desplazarFechaIso(fechaConsulta, -1);
+                      setFechaConsulta(prev);
+                      if (camionId) void loadResumen(camionId, prev);
+                    }}
+                    style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "#E2E8F0" }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: "#334155" }}>-1 día</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const hoy = hoyIsoCaracas();
+                      setFechaConsulta(hoy);
+                      if (camionId) void loadResumen(camionId, hoy);
+                    }}
+                    style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "#E0F2FE" }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#0369A1" }}>Hoy</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const next = desplazarFechaIso(fechaConsulta, 1);
+                      setFechaConsulta(next);
+                      if (camionId) void loadResumen(camionId, next);
+                    }}
+                    style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "#E2E8F0" }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: "#334155" }}>+1 día</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
+                <Ionicons name="calendar-outline" size={15} color="#0B3A5C" />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B" }}>Fecha:</Text>
+                <TextInput
+                  value={fechaConsulta}
+                  onChangeText={(txt) => {
+                    setFechaConsulta(txt);
+                    if (txt.trim().length === 10 && camionId) {
+                      void loadResumen(camionId, txt.trim());
+                    }
+                  }}
+                  placeholder="AAAA-MM-DD"
+                  maxLength={10}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                    borderRadius: 6,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    fontSize: 13,
+                    color: "#0F172A",
+                    backgroundColor: "#FFFFFF",
+                    fontWeight: "600",
+                    minWidth: 110,
+                  }}
+                />
+              </View>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <View style={[styles.card, { flex: 1 }]}>
+                  <Text style={styles.meta}>Contenedores cargados</Text>
+                  <Text style={[styles.name, { fontSize: 20 }]}>
+                    {resumen?.total_contenedores_entregados ?? 0}
+                  </Text>
+                </View>
+                <View style={[styles.card, { flex: 1 }]}>
+                  <Text style={styles.meta}>Contenedores retirados</Text>
+                  <Text
+                    style={[styles.name, { fontSize: 20, color: "#047857" }]}
+                  >
+                    {resumen?.total_contenedores_retirados ?? 0}
+                  </Text>
+                </View>
               </View>
               <Text style={styles.section}>Inventario en camión</Text>
               {(resumen?.inventario_movil?.length ?? 0) === 0 ? (

@@ -209,6 +209,22 @@ export async function createProductoAction(
   if (error) return { error: error.message };
   if (!data) return { error: "No se pudo registrar el producto." };
 
+  const imagenFile = formData.get("imagen_file");
+  if (imagenFile instanceof File && imagenFile.size > 0) {
+    const { subirImagenProductoAction } = await import(
+      "@/lib/actions/productos"
+    );
+    const uploadFd = new FormData();
+    uploadFd.append("file", imagenFile);
+    const uploadRes = await subirImagenProductoAction(String(data), uploadFd);
+    if (!uploadRes.ok) {
+      revalidatePath("/productos");
+      return {
+        error: `Producto creado, pero falló la subida de imagen: ${uploadRes.error}`,
+      };
+    }
+  }
+
   revalidatePath("/productos");
   return { success: true };
 }

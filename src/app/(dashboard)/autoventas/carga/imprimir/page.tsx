@@ -32,7 +32,12 @@ export default async function CargaCamionImprimirPage({
 
   return (
     <div className="lt-carta-page mx-auto max-w-4xl space-y-4 px-2 py-4">
-      <CargaPrintControls descarga={data?.tipo === "descarga"} />
+      <CargaPrintControls
+        descarga={data?.tipo === "descarga"}
+        cargaData={data}
+        empresaNombre={empresa?.nombre_empresa ?? null}
+        vaciosPorOrden={vaciosPorOrden}
+      />
       {data ? (
         <CargaCamionReporte
           {...data}

@@ -21,6 +21,15 @@ export type ResumenAutoVentaVenta = {
   total_recaudar_usd: number;
   total_recaudar_bs: number;
   created_at: string;
+  contenedores_retirados?: number;
+};
+
+export type ResumenAutoVentaContenedor = {
+  contenedor_id: string;
+  codigo: string;
+  nombre: string;
+  total_entregado: number;
+  total_retirado: number;
 };
 
 export type ResumenAutoVentaData = {
@@ -29,6 +38,9 @@ export type ResumenAutoVentaData = {
   total_ordenes_autoventa: number;
   total_facturado_usd: number;
   total_facturado_bs: number;
+  total_contenedores_entregados: number;
+  total_contenedores_retirados: number;
+  resumen_contenedores: ResumenAutoVentaContenedor[];
   inventario_movil: ResumenAutoVentaItem[];
   ventas: ResumenAutoVentaVenta[];
 };
@@ -78,6 +90,9 @@ export async function obtenerResumenAutoventas(
 
   const inv = Array.isArray(raw.inventario_movil) ? raw.inventario_movil : [];
   const ventas = Array.isArray(raw.ventas) ? raw.ventas : [];
+  const resumenCont = Array.isArray(raw.resumen_contenedores)
+    ? raw.resumen_contenedores
+    : [];
 
   return {
     ok: true,
@@ -87,6 +102,20 @@ export async function obtenerResumenAutoventas(
       total_ordenes_autoventa: Number(raw.total_ordenes_autoventa) || 0,
       total_facturado_usd: Number(raw.total_facturado_usd) || 0,
       total_facturado_bs: Number(raw.total_facturado_bs) || 0,
+      total_contenedores_entregados:
+        Number(raw.total_contenedores_entregados) || 0,
+      total_contenedores_retirados:
+        Number(raw.total_contenedores_retirados) || 0,
+      resumen_contenedores: resumenCont.map((c) => {
+        const row = c as Record<string, unknown>;
+        return {
+          contenedor_id: String(row.contenedor_id ?? ""),
+          codigo: String(row.codigo ?? ""),
+          nombre: String(row.nombre ?? ""),
+          total_entregado: Number(row.total_entregado) || 0,
+          total_retirado: Number(row.total_retirado) || 0,
+        };
+      }),
       inventario_movil: inv.map((i) => {
         const row = i as Record<string, unknown>;
         return {
@@ -109,6 +138,7 @@ export async function obtenerResumenAutoventas(
           total_recaudar_usd: Number(row.total_recaudar_usd) || 0,
           total_recaudar_bs: Number(row.total_recaudar_bs) || 0,
           created_at: String(row.created_at ?? ""),
+          contenedores_retirados: Number(row.contenedores_retirados) || 0,
         };
       }),
     },

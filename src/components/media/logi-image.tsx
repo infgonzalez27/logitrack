@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { storagePublicUrl } from "@/lib/storage-url";
+import { useStorageBaseUrl } from "@/components/media/storage-context";
 
 const FALLBACK = {
   producto: "/images/placeholders/producto.svg",
@@ -25,9 +26,14 @@ export function LogiImage({
   width?: number;
   height?: number;
 }) {
+  const storageBaseUrl = useStorageBaseUrl();
   const placeholder = fallbackSrc || FALLBACK[type];
-  const initial = storagePublicUrl(path) ?? placeholder;
+  const initial = storagePublicUrl(path, storageBaseUrl) ?? placeholder;
   const [src, setSrc] = useState(initial);
+
+  useEffect(() => {
+    setSrc(initial);
+  }, [initial]);
 
   return (
     // Storage remoto + fallback local: <img> evita config extra de next/image.

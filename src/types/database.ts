@@ -279,6 +279,15 @@ export type ResumenAutoVentaVenta = {
   total_recaudar_usd: number;
   total_recaudar_bs: number;
   created_at: string;
+  contenedores_retirados?: number;
+};
+
+export type ResumenAutoVentaContenedor = {
+  contenedor_id: string;
+  codigo: string;
+  nombre: string;
+  total_entregado: number;
+  total_retirado: number;
 };
 
 export type ResumenAutoVentaData = {
@@ -287,6 +296,9 @@ export type ResumenAutoVentaData = {
   total_ordenes_autoventa: number;
   total_facturado_usd: number;
   total_facturado_bs: number;
+  total_contenedores_entregados?: number;
+  total_contenedores_retirados?: number;
+  resumen_contenedores?: ResumenAutoVentaContenedor[];
   inventario_movil: ResumenAutoVentaItem[];
   ventas: ResumenAutoVentaVenta[];
 };

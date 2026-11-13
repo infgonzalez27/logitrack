@@ -125,7 +125,7 @@ export function AutoVentasClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [camionId, setCamionId] = useState(camiones[0]?.id ?? "");
-  const [tab, setTab] = useState<"resumen" | "venta" | "carga">("carga");
+  const [tab, setTab] = useState<"resumen" | "venta" | "carga">("resumen");
   const [mensaje, setMensaje] = useState<{
     tipo: "success" | "error";
     texto: string;
@@ -185,7 +185,7 @@ export function AutoVentasClient({
     setMotivoAnular("");
     router.refresh();
     if (camionId) {
-      void obtenerResumenAutoVentasJornada(camionId).then((r) => {
+      void obtenerResumenAutoVentasJornada(camionId, fechaSeleccionada).then((r) => {
         if (r.success && r.data) setResumenRpc(r.data);
       });
     }
@@ -264,7 +264,7 @@ export function AutoVentasClient({
     }
     let cancelled = false;
     setCargandoResumen(true);
-    void obtenerResumenAutoVentasJornada(camionId).then((res) => {
+    void obtenerResumenAutoVentasJornada(camionId, fechaSeleccionada).then((res) => {
       if (cancelled) return;
       setCargandoResumen(false);
       if (res.success && res.data) setResumenRpc(res.data);
@@ -273,16 +273,12 @@ export function AutoVentasClient({
     return () => {
       cancelled = true;
     };
-  }, [camionId]);
+  }, [camionId, fechaSeleccionada]);
 
-  const ventasHoyCount =
-    resumenRpc?.total_ordenes_autoventa ?? ordenesCamion.length;
-  const totalFacturadoUsd =
-    resumenRpc?.total_facturado_usd ??
-    ordenesCamion.reduce((s, o) => s + o.total_recaudar_usd, 0);
-  const totalFacturadoBs =
-    resumenRpc?.total_facturado_bs ??
-    ordenesCamion.reduce((s, o) => s + o.total_recaudar_bs, 0);
+  const totalContenedoresCargados =
+    resumenRpc?.total_contenedores_entregados ?? 0;
+  const totalContenedoresRetirados =
+    resumenRpc?.total_contenedores_retirados ?? 0;
   const inventarioResumen =
     resumenRpc?.inventario_movil?.length
       ? resumenRpc.inventario_movil
@@ -312,19 +308,18 @@ export function AutoVentasClient({
         })),
       }
     : null;
-  const ventasResumen =
-    resumenRpc?.ventas?.length
-      ? resumenRpc.ventas
-      : ordenesCamion.map((o) => ({
-          orden_id: o.id,
-          correlativo: o.correlativo,
-          factura_origen_numero: o.factura_origen_numero,
-          cliente_nombre: o.clientes?.razon_social ?? "—",
-          estado: o.estado,
-          total_recaudar_usd: o.total_recaudar_usd,
-          total_recaudar_bs: o.total_recaudar_bs,
-          created_at: o.created_at,
-        }));
+  const ventasResumen = resumenRpc
+    ? (resumenRpc.ventas ?? [])
+    : ordenesCamion.map((o) => ({
+        orden_id: o.id,
+        correlativo: o.correlativo,
+        factura_origen_numero: o.factura_origen_numero,
+        cliente_nombre: o.clientes?.razon_social ?? "—",
+        estado: o.estado,
+        total_recaudar_usd: o.total_recaudar_usd,
+        total_recaudar_bs: o.total_recaudar_bs,
+        created_at: o.created_at,
+      }));
 
   const totalVentaUsd = esCortesia
     ? 0
@@ -762,29 +757,21 @@ export function AutoVentasClient({
               Consultando resumen de jornada…
             </p>
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-lt-text-subtle">
-                Ventas hoy
+                Contenedores cargados
               </p>
               <p className="mt-1 text-2xl font-bold text-lt-text">
-                {ventasHoyCount}
+                {formatNumber(totalContenedoresCargados)}
               </p>
             </Card>
             <Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-lt-text-subtle">
-                Facturado USD
+                Contenedores retirados
               </p>
               <p className="mt-1 text-2xl font-bold text-lt-success-text">
-                {formatCurrency(totalFacturadoUsd)}
-              </p>
-            </Card>
-            <Card className="p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-lt-text-subtle">
-                Facturado Bs
-              </p>
-              <p className="mt-1 text-2xl font-bold text-lt-text">
-                {formatNumber(totalFacturadoBs)}
+                {formatNumber(totalContenedoresRetirados)}
               </p>
             </Card>
           </div>
@@ -808,7 +795,7 @@ export function AutoVentasClient({
                     Imprimir carga
                   </Button>
                 ) : null}
-                {camionId && inventarioResumen.length > 0 ? (
+                {camionId ? (
                   <Button
                     href={`/autoventas/entregas/imprimir?camionId=${camionId}&fecha=${fechaSeleccionada}`}
                     variant="primary"
@@ -894,10 +881,10 @@ export function AutoVentasClient({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-base font-semibold text-lt-text">
-                  Ventas AutoVenta de hoy
+                  Ventas de la jornada ({fechaSeleccionada})
                 </h2>
                 <p className="text-sm text-lt-text-muted">
-                  Órdenes por liquidar listas para rendición
+                  Órdenes registradas en este camión para la fecha seleccionada
                 </p>
               </div>
               <Button href="/rendiciones/nuevo" variant="secondary">
