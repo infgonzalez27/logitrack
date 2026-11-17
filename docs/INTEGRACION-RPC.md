@@ -2400,3 +2400,32 @@ Se agregó el tercer parámetro opcional `p_devolver_almacen` (por defecto `TRUE
 - **Vistas Web de Comprobantes**:
   - `src/app/(dashboard)/autoventas/carga/imprimir/carga-print-controls.tsx`: Se añadió el botón **"📊 Exportar a Excel"** para descargar la planilla directamente en formato `.xlsx`.
   - Vistas integradas: `/autoventas/entregas/imprimir` y `/autoventas/carga/imprimir`.
+
+
+---
+
+## 22. Liberación Automática del Camión Asignado al Aprobar Radar (2026-11-17)
+
+### 22.1. Contexto y Causa Raíz
+Desde la implementación del parche `20261112170000_camion_en_radar.sql`, el camión ya no se asigna al crear órdenes individuales sino al armar el Radar (`radars.camion_id`), y solo camiones en estado `'disponible'` pueden ser asignados a un nuevo Radar.
+
+Sin embargo, las funciones de descarga y aprobación (`retorna_inventario_no_despachado_para_almacen` y `solicita_aprobar_radar`) mantenían dos comportamientos desfasados:
+1. Obtenían el `camion_id` únicamente a través de `ordenes_distribucion`, por lo que si una orden no tenía camión o no había órdenes devueltas, el camión no se detectaba.
+2. Contenían un filtro `NOT EXISTS (SELECT 1 FROM ordenes_distribucion WHERE camion_id = v_camion_id AND radar_id IS DISTINCT FROM p_radar_id AND estado = 'en_transito')`. Si en la base de datos existían órdenes históricas en `en_transito` o huérfanas de radares previos, dicho filtro bloqueaba de forma permanente el paso del camión a `'disponible'`.
+3. Si el usuario reintentaba la aprobación de un radar ya cerrado, la función devolvía un mensaje de éxito inmediato sin asegurar la liberación del camión.
+
+### 22.2. Solución en Base de Datos (`20261117183000_liberar_camion_al_aprobar_radar.sql`)
+1. **`retorna_inventario_no_despachado_para_almacen`**:
+   - Lee prioritariamente `radars.camion_id` como dueño de la asignación del camión (con fallback a `ordenes_distribucion` por compatibilidad histórica).
+   - Al retornar el inventario sobrante a almacén, vacía `inventario_movil` y cambia `camiones.estado = 'disponible'` verificando únicamente que el camión no esté asignado a otro radar activo en ruta (`status_radar = FALSE AND carga_inventario_movil = TRUE`).
+2. **`solicita_aprobar_radar`**:
+   - Garantiza explícitamente la liberación del camión a `'disponible'` al aprobar el radar.
+   - En caso de ser invocada sobre un radar previamente aprobado cuyos camiones hubieran quedado en `'en_ruta'`, los libera automáticamente a `'disponible'`.
+3. **Regularización Idempotente Inmediata**:
+   - Pasa automáticamente a `'disponible'` y limpia el inventario móvil de todos los camiones que hubieran quedado trabados en `'en_ruta'` cuando todos sus radares ya fueron aprobados.
+
+### 22.3. Frontend (Web y Mobile)
+- **Web (`src/lib/actions/radar.ts`)**:
+  - `solicitaAprobarRadarAction`: Se agregó `revalidatePath("/camiones")` para purgar de inmediato el caché de camiones en el dashboard web tras la aprobación del radar.
+- **Mobile (`apps/mobile`)**:
+  - Consume la misma RPC `solicita_aprobar_radar`. Al aprobar el radar, el camión queda inmediatamente `'disponible'` para ser seleccionado en nuevas rutas.

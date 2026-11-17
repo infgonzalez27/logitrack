@@ -570,6 +570,7 @@ export async function solicitaAprobarRadarAction(
   revalidatePath("/ordenes");
   revalidatePath("/inventario-almacen");
   revalidatePath("/inventario-movil");
+  revalidatePath("/camiones");
 
   return {
     ok: true,
