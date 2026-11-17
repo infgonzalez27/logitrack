@@ -48,6 +48,7 @@ function desplazarFechaIso(fechaIso: string, deltaDias: number): string {
   return base.toISOString().slice(0, 10);
 }
 import { ErrorText, PrimaryButton, SectionTitle } from "@/components/ui";
+import { CalendarPickerModal } from "@/components/calendar-picker-modal";
 
 type Tab = "resumen" | "carga" | "reverso";
 
@@ -57,6 +58,7 @@ export default function AutoventasScreen() {
   const [camiones, setCamiones] = useState<CamionOption[]>([]);
   const [camionId, setCamionId] = useState("");
   const [fechaConsulta, setFechaConsulta] = useState<string>(() => hoyIsoCaracas());
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [resumen, setResumen] = useState<ResumenAutoVentaData | null>(null);
   const [inventario, setInventario] = useState<InventarioMovilRow[]>([]);
   const [productos, setProductos] = useState<ProductoLista[]>([]);
@@ -456,29 +458,7 @@ export default function AutoventasScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
                 <Ionicons name="calendar-outline" size={15} color="#0B3A5C" />
                 <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B" }}>Fecha:</Text>
-                <TextInput
-                  value={fechaConsulta}
-                  onChangeText={(txt) => {
-                    setFechaConsulta(txt);
-                    if (txt.trim().length === 10 && camionId) {
-                      void loadResumen(camionId, txt.trim());
-                    }
-                  }}
-                  placeholder="AAAA-MM-DD"
-                  maxLength={10}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: "#CBD5E1",
-                    borderRadius: 6,
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                    fontSize: 13,
-                    color: "#0F172A",
-                    backgroundColor: "#FFFFFF",
-                    fontWeight: "600",
-                    minWidth: 110,
-                  }}
-                />
+                <Pressable onPress={() => setCalendarOpen(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#FFFFFF" }}><Text style={{ fontSize: 13, color: "#0F172A", fontWeight: "600" }}>{fechaConsulta}</Text><Ionicons name="chevron-down" size={14} color="#64748B" /></Pressable><CalendarPickerModal visible={calendarOpen} value={fechaConsulta} onClose={() => setCalendarOpen(false)} onSelect={(nuevaFecha) => { setFechaConsulta(nuevaFecha); if (camionId) void loadResumen(camionId, nuevaFecha); }} />
               </View>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <View style={[styles.card, { flex: 1 }]}>
