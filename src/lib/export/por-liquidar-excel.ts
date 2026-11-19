@@ -37,7 +37,7 @@ const EXCEL_STYLES = `
   <style>
     body, table {
       font-family: Calibri, Arial, sans-serif;
-      font-size: 10pt;
+      font-size: 9pt;
       line-height: 1.15;
       color: #1a202c;
     }
@@ -48,7 +48,7 @@ const EXCEL_STYLES = `
       padding: 3px 0;
     }
     .header-meta {
-      font-size: 10pt;
+      font-size: 9pt;
       color: #4a5568;
       padding: 1px 0;
       line-height: 1.15;
@@ -56,7 +56,7 @@ const EXCEL_STYLES = `
     .tramo-header {
       background-color: #e2e8f0;
       color: #0B3A5C;
-      font-size: 10pt;
+      font-size: 9pt;
       font-weight: bold;
       padding: 4px 6px;
       border: 0.5pt solid #cbd5e1;
@@ -64,7 +64,7 @@ const EXCEL_STYLES = `
     th {
       background-color: #0B3A5C;
       color: #ffffff;
-      font-size: 10pt;
+      font-size: 9pt;
       font-weight: bold;
       padding: 2.5px 6px;
       text-align: left;
@@ -75,7 +75,7 @@ const EXCEL_STYLES = `
       text-align: right;
     }
     td {
-      font-size: 10pt;
+      font-size: 9pt;
       line-height: 1.15;
       padding: 2px 6px;
       border: 0.5pt solid #e2e8f0;
@@ -111,7 +111,7 @@ const EXCEL_STYLES = `
       border-collapse: collapse;
     }
     .resumen-final td, .resumen-final th {
-      font-size: 10pt;
+      font-size: 9pt;
       line-height: 1.15;
       padding: 3px 6px;
     }
@@ -134,7 +134,7 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
     if (grupo.ordenes.length === 0) {
       rowsHtml = `
         <tr>
-          <td colspan="7" style="text-align:center; color:#718096; padding: 4px 6px;">Sin órdenes en este tramo.</td>
+          <td colspan="6" style="text-align:center; color:#718096; padding: 4px 6px;">Sin órdenes en este tramo.</td>
         </tr>
       `;
     } else {
@@ -145,7 +145,6 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
             <td class="text">${escapeHtml(ordenLabel)}</td>
             <td class="text">${escapeHtml(ord.factura_origen_numero || "—")}</td>
             <td class="text">${escapeHtml(ord.razon_social || "—")}</td>
-            <td class="text">${escapeHtml(ord.rif_nit || "—")}</td>
             <td class="text">${escapeHtml(formatFechaCorta(ord.fecha_despacho))}</td>
             <td class="int">${Number(ord.dias_vencidos) || 0}</td>
             <td class="num">${(Number(ord.monto_por_liquidar) || 0).toFixed(2)}</td>
@@ -155,24 +154,23 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
     }
 
     seccionesHtml += `
-      <tr><td colspan="7" style="height: 8px; border: none;"></td></tr>
+      <tr><td colspan="6" style="height: 8px; border: none;"></td></tr>
       <tr>
-        <td colspan="7" class="tramo-header">
+        <td colspan="6" class="tramo-header">
           ${escapeHtml(grupo.label)} (${escapeHtml(grupo.rangoTexto)}) — ${formatNumber(grupo.totalOrdenes)} orden(es)
         </td>
       </tr>
       <tr>
-        <th style="width: 90px;">Orden</th>
+        <th style="width: 68px;">Orden</th>
         <th style="width: 110px;">Factura</th>
         <th style="width: 260px;">Cliente (Razón Social)</th>
-        <th style="width: 120px;">RIF / NIT</th>
         <th style="width: 100px;">Fecha Despacho</th>
-        <th class="num" style="width: 95px;">Días Vencidos</th>
-        <th class="num" style="width: 135px;">Monto por Liquidar (USD)</th>
+        <th class="num" style="width: 72px;">Días Venc.</th>
+        <th class="num" style="width: 72px;">Por Cobrar</th>
       </tr>
       ${rowsHtml}
       <tr class="subtotal">
-        <td colspan="5" style="text-align: right;">Subtotal ${escapeHtml(grupo.label)}:</td>
+        <td colspan="4" style="text-align: right;">Subtotal ${escapeHtml(grupo.label)}:</td>
         <td class="int">${grupo.totalOrdenes}</td>
         <td class="num">${grupo.totalMonto.toFixed(2)}</td>
       </tr>
@@ -181,8 +179,10 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
 
   let resumenTramosHtml = "";
   for (const grupo of grupos) {
+    const rowStyle =
+      grupo.key === "mayor_90" ? ' style="height: 27pt;"' : "";
     resumenTramosHtml += `
-      <tr>
+      <tr${rowStyle}>
         <td class="text">${escapeHtml(grupo.label)}</td>
         <td class="int">${grupo.totalOrdenes}</td>
         <td class="num">${grupo.totalMonto.toFixed(2)}</td>
@@ -212,17 +212,25 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
       </head>
       <body>
         <table>
+          <colgroup>
+            <col style="width: 68px;" />
+            <col style="width: 110px;" />
+            <col style="width: 260px;" />
+            <col style="width: 100px;" />
+            <col style="width: 72px;" />
+            <col style="width: 72px;" />
+          </colgroup>
           <tr>
-            <td colspan="7" class="header-title">LOGITRACK — ÓRDENES POR LIQUIDAR POR ANTIGÜEDAD</td>
+            <td colspan="6" class="header-title">LOGITRACK — ÓRDENES POR LIQUIDAR POR ANTIGÜEDAD</td>
           </tr>
           <tr>
-            <td colspan="7" class="header-meta">Fecha de emisión: ${escapeHtml(hoy)} | Clientes: ${formatNumber(clientesUnicos)} | Total órdenes: ${formatNumber(totalOrdenes)}</td>
+            <td colspan="6" class="header-meta">Fecha de emisión: ${escapeHtml(hoy)} | Clientes: ${formatNumber(clientesUnicos)} | Total órdenes: ${formatNumber(totalOrdenes)}</td>
           </tr>
           <tbody>
             ${seccionesHtml}
-            <tr><td colspan="7" style="height: 8px; border: none;"></td></tr>
+            <tr><td colspan="6" style="height: 8px; border: none;"></td></tr>
             <tr class="total">
-              <td colspan="5" style="text-align: right;">TOTAL GENERAL POR LIQUIDAR:</td>
+              <td colspan="4" style="text-align: right;">TOTAL GENERAL POR LIQUIDAR:</td>
               <td class="int">${totalOrdenes}</td>
               <td class="num">${totalMontoUsd.toFixed(2)}</td>
             </tr>
@@ -236,7 +244,7 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
           <tr>
             <th style="width: 240px;">Tramo</th>
             <th class="num" style="width: 110px;">Cant. Órdenes</th>
-            <th class="num" style="width: 140px;">Monto (USD)</th>
+            <th class="num" style="width: 140px;">Por Cobrar (USD)</th>
           </tr>
           ${resumenTramosHtml}
           <tr class="total">
