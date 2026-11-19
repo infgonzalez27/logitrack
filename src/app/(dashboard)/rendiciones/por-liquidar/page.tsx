@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
-import { retornaOrdenesPorLiquidarAction } from "@/lib/actions/rendiciones";
+import { retornaOrdenesPorLiquidarAntiguedadAction } from "@/lib/actions/rendiciones";
 import { PageHeader } from "@/components/layout/page-header";
 import { PrintButton } from "@/components/print/print-button";
 import { ExportPorLiquidarExcelButton } from "./export-por-liquidar-excel-button";
@@ -21,14 +21,14 @@ export default async function OrdenesPorLiquidarPage() {
     redirect("/");
   }
 
-  const result = await retornaOrdenesPorLiquidarAction();
+  const result = await retornaOrdenesPorLiquidarAntiguedadAction();
   const items = result.ok ? result.items : [];
 
   return (
     <div className="lt-print-document mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Órdenes por liquidar"
-        description="Cartera por cliente (días vencidos y montos desde el SP)."
+        description="Órdenes pendientes agrupadas por tramo de antigüedad desde la fecha de despacho."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <ExportPorLiquidarExcelButton items={items} />

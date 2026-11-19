@@ -717,6 +717,32 @@ export type OrdenPorLiquidarCliente = {
   monto_por_liquidar: number;
 };
 
+export type TramoAntiguedadKey =
+  | "menor_7"
+  | "entre_7_15"
+  | "entre_16_30"
+  | "entre_31_45"
+  | "entre_46_90"
+  | "mayor_90";
+
+/** ?rdenes por liquidar con antig?edad individual (`retorna_ordenes_por_liquidar_antiguedad`). */
+export type OrdenPorLiquidarDetalle = {
+  orden_id: string;
+  correlativo: number;
+  factura_origen_numero: string | null;
+  cliente_id: string;
+  razon_social: string;
+  rif_nit: string;
+  vendedor_id: string | null;
+  fecha_despacho: string | null;
+  dias_vencidos: number;
+  tramo_key: TramoAntiguedadKey;
+  tramo_orden: number;
+  total_orden_usd: number;
+  abonado_usd: number;
+  monto_por_liquidar: number;
+};
+
 export type RadarReporteProducto = {
   producto_id: string;
   codigo_producto: string | null;

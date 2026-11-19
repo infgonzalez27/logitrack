@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { OrdenPorLiquidarCliente } from "@/types/database";
+import type { OrdenPorLiquidarDetalle } from "@/types/database";
 import { exportPorLiquidarToExcel } from "@/lib/export/por-liquidar-excel";
 
 interface ExportPorLiquidarExcelButtonProps {
-  items: OrdenPorLiquidarCliente[];
+  items: OrdenPorLiquidarDetalle[];
   label?: string;
 }
 
@@ -30,7 +30,7 @@ export function ExportPorLiquidarExcelButton({
       onClick={handleExport}
       disabled={exporting || items.length === 0}
       className="lt-no-print inline-flex items-center gap-1.5 rounded-xl border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-      title="Exportar listado a archivo Excel (.xls)"
+      title="Exportar listado por antigüedad a archivo Excel (.xls)"
     >
       <svg
         className="h-4 w-4"

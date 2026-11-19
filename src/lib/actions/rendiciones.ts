@@ -18,7 +18,7 @@ import {
   esFormaPagoEnBs,
   resolverMontosOrden,
 } from "@/lib/rendiciones/moneda";
-import type { CuentaBancariaEmpresa, EntidadBancaria, Fpago, OrdenPorLiquidarCliente, ReporteFormasPagoData } from "@/types/database";
+import type { CuentaBancariaEmpresa, EntidadBancaria, Fpago, OrdenPorLiquidarCliente, OrdenPorLiquidarDetalle, ReporteFormasPagoData, TramoAntiguedadKey } from "@/types/database";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1008,6 +1008,107 @@ export async function retornaOrdenesPorLiquidarAction(): Promise<
 
   const local = await retornaOrdenesPorLiquidarLocal();
   return { ok: true, items: local };
+}
+
+function resolverTramoAntiguedad(dias: number, rawKey?: unknown): {
+  key: TramoAntiguedadKey;
+  orden: number;
+} {
+  const validKeys: Record<TramoAntiguedadKey, number> = {
+    menor_7: 1,
+    entre_7_15: 2,
+    entre_16_30: 3,
+    entre_31_45: 4,
+    entre_46_90: 5,
+    mayor_90: 6,
+  };
+  if (typeof rawKey === "string" && rawKey in validKeys) {
+    const k = rawKey as TramoAntiguedadKey;
+    return { key: k, orden: validKeys[k] };
+  }
+  if (dias < 7) return { key: "menor_7", orden: 1 };
+  if (dias <= 15) return { key: "entre_7_15", orden: 2 };
+  if (dias <= 30) return { key: "entre_16_30", orden: 3 };
+  if (dias <= 45) return { key: "entre_31_45", orden: 4 };
+  if (dias <= 90) return { key: "entre_46_90", orden: 5 };
+  return { key: "mayor_90", orden: 6 };
+}
+
+function mapOrdenPorLiquidarDetalle(
+  raw: unknown,
+): OrdenPorLiquidarDetalle | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const ordenId = typeof r.orden_id === "string" ? r.orden_id : null;
+  const clienteId = typeof r.cliente_id === "string" ? r.cliente_id : null;
+  if (!ordenId || !clienteId) return null;
+
+  const dias = Math.max(0, Math.trunc(Number(r.dias_vencidos ?? 0)));
+  const tramo = resolverTramoAntiguedad(dias, r.tramo_key);
+
+  return {
+    orden_id: ordenId,
+    correlativo: Number(r.correlativo ?? 0),
+    factura_origen_numero:
+      typeof r.factura_origen_numero === "string"
+        ? r.factura_origen_numero
+        : null,
+    cliente_id: clienteId,
+    razon_social: String(r.razon_social ?? "?"),
+    rif_nit: String(r.rif_nit ?? "?"),
+    vendedor_id: typeof r.vendedor_id === "string" ? r.vendedor_id : null,
+    fecha_despacho:
+      typeof r.fecha_despacho === "string" ? r.fecha_despacho : null,
+    dias_vencidos: dias,
+    tramo_key: tramo.key,
+    tramo_orden: Number(r.tramo_orden ?? tramo.orden),
+    total_orden_usd: Number(r.total_orden_usd ?? 0),
+    abonado_usd: Number(r.abonado_usd ?? 0),
+    monto_por_liquidar: Number(r.monto_por_liquidar ?? 0),
+  };
+}
+
+/** ?rdenes por liquidar con antig?edad por orden (`retorna_ordenes_por_liquidar_antiguedad`). */
+export async function retornaOrdenesPorLiquidarAntiguedadAction(): Promise<
+  | { ok: true; items: OrdenPorLiquidarDetalle[] }
+  | { ok: false; error: string; code?: string }
+> {
+  const profile = await getCurrentProfile();
+  const rol = getRoleNameFromProfile(profile);
+  if (
+    rol !== "admin" &&
+    rol !== "gerente" &&
+    rol !== "vendedor" &&
+    rol !== "cobrador"
+  ) {
+    return { ok: false, error: "No tienes acceso a ?rdenes por liquidar." };
+  }
+
+  const response = await callDbProcedure<unknown>(
+    "retorna_ordenes_por_liquidar_antiguedad",
+  );
+
+  if (!response.success) {
+    return {
+      ok: false,
+      error: rpcErrorMessage(
+        response,
+        "No se pudieron consultar las ?rdenes por liquidar.",
+      ),
+    };
+  }
+
+  const rows = Array.isArray(response.data)
+    ? response.data
+    : response.data
+      ? [response.data]
+      : [];
+
+  const items = rows
+    .map(mapOrdenPorLiquidarDetalle)
+    .filter((x): x is OrdenPorLiquidarDetalle => x != null);
+
+  return { ok: true, items };
 }
 
 /** §2.42 — `reporte_formas_pago_rendicion` (rendiciones aprobadas). */

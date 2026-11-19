@@ -2429,3 +2429,27 @@ Sin embargo, las funciones de descarga y aprobación (`retorna_inventario_no_des
   - `solicitaAprobarRadarAction`: Se agregó `revalidatePath("/camiones")` para purgar de inmediato el caché de camiones en el dashboard web tras la aprobación del radar.
 - **Mobile (`apps/mobile`)**:
   - Consume la misma RPC `solicita_aprobar_radar`. Al aprobar el radar, el camión queda inmediatamente `'disponible'` para ser seleccionado en nuevas rutas.
+
+
+---
+
+## 23. Órdenes por liquidar agrupadas por antigüedad (2026-11-19)
+
+### 23.1. Nuevo RPC en Base de Datos (`20261119134500_ordenes_por_liquidar_antiguedad.sql`)
+- **`public.retorna_ordenes_por_liquidar_antiguedad()`**
+  - Devuelve un arreglo JSONB con una fila por cada orden en estado `'por_liquidar'` (excluyendo cortesías), sin modificar `retorna_ordenes_por_liquidar()`.
+  - Calcula `dias_vencidos = GREATEST(0, (CURRENT_DATE - COALESCE(fecha_despacho::date, created_at::date, CURRENT_DATE))::INT)` y asigna el tramo de antigüedad en orden:
+    1. `menor_7` (`tramo_orden = 1`): 0–6 días — *Vencidas menores de 7 días*
+    2. `entre_7_15` (`tramo_orden = 2`): 7–15 días — *Entre 7 y 15 días*
+    3. `entre_16_30` (`tramo_orden = 3`): 16–30 días — *Entre 16 y 30 días*
+    4. `entre_31_45` (`tramo_orden = 4`): 31–45 días — *Entre 31 y 45 días*
+    5. `entre_46_90` (`tramo_orden = 5`): 46–90 días — *Entre 46 y 90 días*
+    6. `mayor_90` (`tramo_orden = 6`): > 90 días — *Vencidas mayores a 90 días*
+  - Campos por orden: `orden_id`, `correlativo`, `factura_origen_numero`, `cliente_id`, `razon_social`, `rif_nit`, `vendedor_id`, `fecha_despacho`, `dias_vencidos`, `tramo_key`, `tramo_orden`, `total_orden_usd`, `abonado_usd`, `monto_por_liquidar`.
+
+### 23.2. Integración Frontend Web
+- **`src/types/database.ts`**: Tipos `TramoAntiguedadKey` y `OrdenPorLiquidarDetalle`.
+- **`src/lib/actions/rendiciones.ts`**: Server Action `retornaOrdenesPorLiquidarAntiguedadAction()`.
+- **`src/lib/rendiciones/antiguedad.ts`**: Definición canónica de los 6 tramos (`TRAMOS_ANTIGUEDAD`) y helper `agruparPorTramoAntiguedad()`.
+- **`src/app/(dashboard)/rendiciones/por-liquidar/page.tsx` y `por-liquidar-lista.tsx`**: Vista de Cobranzas > Órdenes por liquidar con las 6 secciones en el orden indicado, subtotales por tramo y buscador por cliente, RIF, correlativo o factura.
+- **`src/lib/export/por-liquidar-excel.ts`**: Exportación a Excel (`.xls`) agrupada por los 6 tramos con subtotales por tramo y tabla de resumen final.

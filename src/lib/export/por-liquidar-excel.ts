@@ -1,5 +1,6 @@
-import type { OrdenPorLiquidarCliente } from "@/types/database";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import type { OrdenPorLiquidarDetalle } from "@/types/database";
+import { formatNumber } from "@/lib/format";
+import { agruparPorTramoAntiguedad } from "@/lib/rendiciones/antiguedad";
 
 function escapeHtml(text: unknown): string {
   if (text == null) return "";
@@ -25,13 +26,13 @@ function downloadExcel(html: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-/**
- * Estilos para Excel:
- * - Fuente a 10pt.
- * - Line-height compacto (1.15).
- * - Menos espaciado entre registros.
- * - Resumen compacto al final con montos totales.
- */
+function formatFechaCorta(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
 const EXCEL_STYLES = `
   <style>
     body, table {
@@ -51,6 +52,14 @@ const EXCEL_STYLES = `
       color: #4a5568;
       padding: 1px 0;
       line-height: 1.15;
+    }
+    .tramo-header {
+      background-color: #e2e8f0;
+      color: #0B3A5C;
+      font-size: 10pt;
+      font-weight: bold;
+      padding: 4px 6px;
+      border: 0.5pt solid #cbd5e1;
     }
     th {
       background-color: #0B3A5C;
@@ -83,19 +92,25 @@ const EXCEL_STYLES = `
     td.text {
       mso-number-format: "\\@";
     }
+    tr.subtotal td {
+      font-weight: bold;
+      background-color: #f8fafc;
+      border-top: 1pt solid #94a3b8;
+      padding: 2.5px 6px;
+    }
     tr.total td {
       font-weight: bold;
-      background-color: #f7fafc;
-      border-top: 1pt solid #4a5568;
+      background-color: #edf2f7;
+      border-top: 1.5pt solid #0B3A5C;
+      color: #0B3A5C;
       line-height: 1.15;
       padding: 3px 6px;
     }
     .resumen-final {
       margin-top: 10px;
       border-collapse: collapse;
-      width: 320px;
     }
-    .resumen-final td {
+    .resumen-final td, .resumen-final th {
       font-size: 10pt;
       line-height: 1.15;
       padding: 3px 6px;
@@ -103,25 +118,74 @@ const EXCEL_STYLES = `
   </style>
 `;
 
-export function exportPorLiquidarToExcel(items: OrdenPorLiquidarCliente[]) {
+export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
   const hoy = new Date().toISOString().slice(0, 10);
-  const totalClientes = items.length;
-  const totalOrdenes = items.reduce((s, i) => s + (Number(i.cant_ordenes) || 0), 0);
-  const totalMontoUsd = items.reduce((s, i) => s + (Number(i.monto_por_liquidar) || 0), 0);
+  const grupos = agruparPorTramoAntiguedad(items);
+  const clientesUnicos = new Set(items.map((i) => i.cliente_id)).size;
+  const totalOrdenes = items.length;
+  const totalMontoUsd = items.reduce(
+    (s, i) => s + (Number(i.monto_por_liquidar) || 0),
+    0,
+  );
 
-  let rowsHtml = "";
-  for (const item of items) {
-    const dias = Number(item.dias_vencidos) || 0;
-    const ordenes = Number(item.cant_ordenes) || 0;
-    const monto = Number(item.monto_por_liquidar) || 0;
+  let seccionesHtml = "";
+  for (const grupo of grupos) {
+    let rowsHtml = "";
+    if (grupo.ordenes.length === 0) {
+      rowsHtml = `
+        <tr>
+          <td colspan="7" style="text-align:center; color:#718096; padding: 4px 6px;">Sin órdenes en este tramo.</td>
+        </tr>
+      `;
+    } else {
+      for (const ord of grupo.ordenes) {
+        const ordenLabel = ord.correlativo ? `#${ord.correlativo}` : ord.orden_id.slice(0, 8);
+        rowsHtml += `
+          <tr>
+            <td class="text">${escapeHtml(ordenLabel)}</td>
+            <td class="text">${escapeHtml(ord.factura_origen_numero || "—")}</td>
+            <td class="text">${escapeHtml(ord.razon_social || "—")}</td>
+            <td class="text">${escapeHtml(ord.rif_nit || "—")}</td>
+            <td class="text">${escapeHtml(formatFechaCorta(ord.fecha_despacho))}</td>
+            <td class="int">${Number(ord.dias_vencidos) || 0}</td>
+            <td class="num">${(Number(ord.monto_por_liquidar) || 0).toFixed(2)}</td>
+          </tr>
+        `;
+      }
+    }
 
-    rowsHtml += `
+    seccionesHtml += `
+      <tr><td colspan="7" style="height: 8px; border: none;"></td></tr>
       <tr>
-        <td class="text">${escapeHtml(item.razon_social || "—")}</td>
-        <td class="text">${escapeHtml(item.rif_nit || "—")}</td>
-        <td class="int">${dias}</td>
-        <td class="int">${ordenes}</td>
-        <td class="num">${monto.toFixed(2)}</td>
+        <td colspan="7" class="tramo-header">
+          ${escapeHtml(grupo.label)} (${escapeHtml(grupo.rangoTexto)}) — ${formatNumber(grupo.totalOrdenes)} orden(es)
+        </td>
+      </tr>
+      <tr>
+        <th style="width: 90px;">Orden</th>
+        <th style="width: 110px;">Factura</th>
+        <th style="width: 260px;">Cliente (Razón Social)</th>
+        <th style="width: 120px;">RIF / NIT</th>
+        <th style="width: 100px;">Fecha Despacho</th>
+        <th class="num" style="width: 95px;">Días Vencidos</th>
+        <th class="num" style="width: 135px;">Monto por Liquidar (USD)</th>
+      </tr>
+      ${rowsHtml}
+      <tr class="subtotal">
+        <td colspan="5" style="text-align: right;">Subtotal ${escapeHtml(grupo.label)}:</td>
+        <td class="int">${grupo.totalOrdenes}</td>
+        <td class="num">${grupo.totalMonto.toFixed(2)}</td>
+      </tr>
+    `;
+  }
+
+  let resumenTramosHtml = "";
+  for (const grupo of grupos) {
+    resumenTramosHtml += `
+      <tr>
+        <td class="text">${escapeHtml(grupo.label)}</td>
+        <td class="int">${grupo.totalOrdenes}</td>
+        <td class="num">${grupo.totalMonto.toFixed(2)}</td>
       </tr>
     `;
   }
@@ -135,7 +199,7 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarCliente[]) {
           <x:ExcelWorkbook>
             <x:ExcelWorksheets>
               <x:ExcelWorksheet>
-                <x:Name>CuentasPorCobrar</x:Name>
+                <x:Name>OrdenesPorLiquidar</x:Name>
                 <x:WorksheetOptions>
                   <x:DisplayGridlines/>
                 </x:WorksheetOptions>
@@ -149,53 +213,41 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarCliente[]) {
       <body>
         <table>
           <tr>
-            <td colspan="5" class="header-title">LOGITRACK — REPORTE DE CUENTAS POR COBRAR (POR LIQUIDAR)</td>
+            <td colspan="7" class="header-title">LOGITRACK — ÓRDENES POR LIQUIDAR POR ANTIGÜEDAD</td>
           </tr>
           <tr>
-            <td colspan="5" class="header-meta">Fecha de emisión: ${escapeHtml(hoy)} | Total clientes con deuda: ${formatNumber(totalClientes)}</td>
+            <td colspan="7" class="header-meta">Fecha de emisión: ${escapeHtml(hoy)} | Clientes: ${formatNumber(clientesUnicos)} | Total órdenes: ${formatNumber(totalOrdenes)}</td>
           </tr>
-          <tr><td colspan="5" style="height: 6px;"></td></tr>
-          <thead>
-            <tr>
-              <th style="width: 280px;">Cliente (Razón Social)</th>
-              <th style="width: 140px;">RIF / NIT</th>
-              <th class="num" style="width: 100px;">Días Vencidos</th>
-              <th class="num" style="width: 110px;">Cant. Órdenes</th>
-              <th class="num" style="width: 140px;">Monto por Liquidar (USD)</th>
-            </tr>
-          </thead>
           <tbody>
-            ${rowsHtml || `<tr><td colspan="5" style="text-align:center; padding: 8px;">No hay registros de cuentas por cobrar.</td></tr>`}
+            ${seccionesHtml}
+            <tr><td colspan="7" style="height: 8px; border: none;"></td></tr>
             <tr class="total">
-              <td colspan="2" style="text-align: right;">TOTAL GENERAL:</td>
-              <td class="int">—</td>
+              <td colspan="5" style="text-align: right;">TOTAL GENERAL POR LIQUIDAR:</td>
               <td class="int">${totalOrdenes}</td>
               <td class="num">${totalMontoUsd.toFixed(2)}</td>
             </tr>
           </tbody>
         </table>
 
-        <!-- Resumen final compacto con montos totales -->
         <table class="resumen-final" style="margin-top: 14px;">
           <tr>
-            <td colspan="2" class="header-title" style="font-size: 11pt; border-bottom: 1pt solid #0B3A5C;">RESUMEN DE CARTERA</td>
+            <td colspan="3" class="header-title" style="font-size: 11pt; border-bottom: 1pt solid #0B3A5C;">RESUMEN POR TRAMO DE ANTIGÜEDAD</td>
           </tr>
           <tr>
-            <td class="text" style="background:#f7fafc; font-weight:bold; width: 180px;">Total Clientes con Saldo:</td>
-            <td class="int" style="background:#f7fafc; font-weight:bold; width: 140px;">${totalClientes}</td>
+            <th style="width: 240px;">Tramo</th>
+            <th class="num" style="width: 110px;">Cant. Órdenes</th>
+            <th class="num" style="width: 140px;">Monto (USD)</th>
           </tr>
-          <tr>
-            <td class="text" style="background:#ffffff; font-weight:bold;">Total Órdenes por Liquidar:</td>
-            <td class="int" style="background:#ffffff; font-weight:bold;">${totalOrdenes}</td>
-          </tr>
-          <tr>
-            <td class="text" style="background:#f7fafc; font-weight:bold; color: #0B3A5C;">Monto Total por Liquidar (USD):</td>
-            <td class="num" style="background:#f7fafc; font-weight:bold; color: #0B3A5C;">${totalMontoUsd.toFixed(2)}</td>
+          ${resumenTramosHtml}
+          <tr class="total">
+            <td class="text">TOTAL GENERAL</td>
+            <td class="int">${totalOrdenes}</td>
+            <td class="num">${totalMontoUsd.toFixed(2)}</td>
           </tr>
         </table>
       </body>
     </html>
   `;
 
-  downloadExcel(html, `Cuentas_Por_Cobrar_${hoy}.xls`);
+  downloadExcel(html, `Ordenes_Por_Liquidar_${hoy}.xls`);
 }
