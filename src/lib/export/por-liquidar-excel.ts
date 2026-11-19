@@ -161,7 +161,7 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
         </td>
       </tr>
       <tr>
-        <th style="width: 68px;">Orden</th>
+        <th style="width: 118px;">Orden</th>
         <th style="width: 110px;">Factura</th>
         <th style="width: 260px;">Cliente (Razón Social)</th>
         <th style="width: 100px;">Fecha Despacho</th>
@@ -180,10 +180,16 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
   let resumenTramosHtml = "";
   for (const grupo of grupos) {
     const rowStyle =
-      grupo.key === "mayor_90" ? ' style="height: 27pt;"' : "";
+      grupo.key === "mayor_90" ? ' style="height: 12pt;"' : "";
+    const labelResumen =
+      grupo.key === "menor_7"
+        ? "Menores de 7 días"
+        : grupo.key === "mayor_90"
+          ? "Mayores a 90 días"
+          : grupo.label;
     resumenTramosHtml += `
       <tr${rowStyle}>
-        <td class="text">${escapeHtml(grupo.label)}</td>
+        <td class="text">${escapeHtml(labelResumen)}</td>
         <td class="int">${grupo.totalOrdenes}</td>
         <td class="num">${grupo.totalMonto.toFixed(2)}</td>
       </tr>
@@ -213,7 +219,7 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
       <body>
         <table>
           <colgroup>
-            <col style="width: 68px;" />
+            <col style="width: 118px;" />
             <col style="width: 110px;" />
             <col style="width: 260px;" />
             <col style="width: 100px;" />
