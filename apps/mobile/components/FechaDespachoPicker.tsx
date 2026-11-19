@@ -518,11 +518,11 @@ const styles = StyleSheet.create({
   gridDias: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     rowGap: 6,
   },
   diaCelda: {
-    width: 40,
+    width: "14.285%",
     height: 40,
     borderRadius: 20,
     alignItems: "center",
