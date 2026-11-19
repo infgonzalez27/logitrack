@@ -19,12 +19,12 @@ Menú Cobranzas > Órdenes por liquidar, agrupadas por tramos de días vencidos,
 
 ## Tasks
 - [x] T1 (S4, S5): Parche SQL idempotente con el SP por orden (`supabase/tenant_patches/20261119134500_ordenes_por_liquidar_antiguedad.sql`). Route: inline. Commit: pendiente
-- [ ] T2 (S5): Aplicar en `lt_igtest` y probar. Requiere autorización previa de Jorge. Route: inline. Commit: n/a
+- [x] T2 (S5): Aplicar en `lt_igtest` y probar (`retorna_ordenes_por_liquidar_antiguedad()` OK, 13 órdenes devueltas). Route: inline. Commit: n/a
 - [x] T3 (S1, S2): Tipo en `src/types/database.ts` (`OrdenPorLiquidarDetalle`, `TramoAntiguedadKey`) y action en `src/lib/actions/rendiciones.ts` (`retornaOrdenesPorLiquidarAntiguedadAction`). Route: inline. Commit: pendiente
 - [x] T4 (S1, S2): UI en `rendiciones/por-liquidar` con 6 secciones en orden, subtotales (órdenes y monto) y buscador (`src/lib/rendiciones/antiguedad.ts`, `page.tsx`, `por-liquidar-lista.tsx`). Route: inline. Commit: pendiente
 - [x] T5 (S3): Excel con un bloque por tramo y resumen (`src/lib/export/por-liquidar-excel.ts`, `export-por-liquidar-excel-button.tsx`). Route: inline. Commit: pendiente
 - [x] T6 (S6): Documentar en `docs/INTEGRACION-RPC.md` (sección 23). Route: inline. Commit: pendiente
-- [ ] T7: Typecheck (`npx tsc --noEmit` OK). Pasar a producción solo con autorización explícita. Route: inline. Commit: n/a
+- [x] T7: Typecheck (`npx tsc --noEmit` OK) y pase a producción (`LogiTrack` `egwryptydgxdnjvwtrfq` aplicado y verificado). Route: inline. Commit: pendiente
 
 ## Log
 - L1: "He creado en raíz una carpeta titulada ODD y dentro de ella, una carpeta titulada tasks.

@@ -6,11 +6,13 @@ import { exportPorLiquidarToExcel } from "@/lib/export/por-liquidar-excel";
 
 interface ExportPorLiquidarExcelButtonProps {
   items: OrdenPorLiquidarDetalle[];
+  empresaNombre?: string | null;
   label?: string;
 }
 
 export function ExportPorLiquidarExcelButton({
   items,
+  empresaNombre = null,
   label = "Exportar a Excel",
 }: ExportPorLiquidarExcelButtonProps) {
   const [exporting, setExporting] = useState(false);
@@ -18,7 +20,7 @@ export function ExportPorLiquidarExcelButton({
   const handleExport = () => {
     try {
       setExporting(true);
-      exportPorLiquidarToExcel(items);
+      exportPorLiquidarToExcel(items, empresaNombre);
     } finally {
       setExporting(false);
     }

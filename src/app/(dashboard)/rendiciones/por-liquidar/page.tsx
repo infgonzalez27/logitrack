@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
 import { getRoleNameFromProfile } from "@/lib/auth/roles";
+import { resolveUserEmpresa } from "@/lib/supabase/central";
 import { retornaOrdenesPorLiquidarAntiguedadAction } from "@/lib/actions/rendiciones";
 import { PageHeader } from "@/components/layout/page-header";
 import { PrintButton } from "@/components/print/print-button";
@@ -21,8 +22,12 @@ export default async function OrdenesPorLiquidarPage() {
     redirect("/");
   }
 
-  const result = await retornaOrdenesPorLiquidarAntiguedadAction();
+  const [result, empresa] = await Promise.all([
+    retornaOrdenesPorLiquidarAntiguedadAction(),
+    profile ? resolveUserEmpresa(profile.id) : null,
+  ]);
   const items = result.ok ? result.items : [];
+  const empresaNombre = empresa?.nombre_empresa ?? null;
 
   return (
     <div className="lt-print-document mx-auto max-w-5xl space-y-6">
@@ -31,7 +36,10 @@ export default async function OrdenesPorLiquidarPage() {
         description="Órdenes pendientes agrupadas por tramo de antigüedad desde la fecha de despacho."
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <ExportPorLiquidarExcelButton items={items} />
+            <ExportPorLiquidarExcelButton
+              items={items}
+              empresaNombre={empresaNombre}
+            />
             <PrintButton label="Imprimir" />
             <Link
               href="/rendiciones/nuevo"

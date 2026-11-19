@@ -118,8 +118,12 @@ const EXCEL_STYLES = `
   </style>
 `;
 
-export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
+export function exportPorLiquidarToExcel(
+  items: OrdenPorLiquidarDetalle[],
+  empresaNombre?: string | null,
+) {
   const hoy = new Date().toISOString().slice(0, 10);
+  const empresaTitulo = (empresaNombre?.trim() || "LOGITRACK").toUpperCase();
   const grupos = agruparPorTramoAntiguedad(items);
   const clientesUnicos = new Set(items.map((i) => i.cliente_id)).size;
   const totalOrdenes = items.length;
@@ -146,8 +150,8 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
             <td class="text">${escapeHtml(ord.factura_origen_numero || "—")}</td>
             <td class="text">${escapeHtml(ord.razon_social || "—")}</td>
             <td class="text">${escapeHtml(formatFechaCorta(ord.fecha_despacho))}</td>
-            <td class="int">${Number(ord.dias_vencidos) || 0}</td>
-            <td class="num">${(Number(ord.monto_por_liquidar) || 0).toFixed(2)}</td>
+            <td class="int" x:num="${Number(ord.dias_vencidos) || 0}">${Number(ord.dias_vencidos) || 0}</td>
+            <td class="num" x:num="${(Number(ord.monto_por_liquidar) || 0).toFixed(2)}">${(Number(ord.monto_por_liquidar) || 0).toFixed(2)}</td>
           </tr>
         `;
       }
@@ -171,8 +175,8 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
       ${rowsHtml}
       <tr class="subtotal">
         <td colspan="4" style="text-align: right;">Subtotal ${escapeHtml(grupo.label)}:</td>
-        <td class="int">${grupo.totalOrdenes}</td>
-        <td class="num">${grupo.totalMonto.toFixed(2)}</td>
+        <td class="int" x:num="${grupo.totalOrdenes}">${grupo.totalOrdenes}</td>
+        <td class="num" x:num="${grupo.totalMonto.toFixed(2)}">${grupo.totalMonto.toFixed(2)}</td>
       </tr>
     `;
   }
@@ -190,8 +194,8 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
     resumenTramosHtml += `
       <tr${rowStyle}>
         <td class="text">${escapeHtml(labelResumen)}</td>
-        <td class="int">${grupo.totalOrdenes}</td>
-        <td class="num">${grupo.totalMonto.toFixed(2)}</td>
+        <td class="int" x:num="${grupo.totalOrdenes}">${grupo.totalOrdenes}</td>
+        <td class="num" x:num="${grupo.totalMonto.toFixed(2)}">${grupo.totalMonto.toFixed(2)}</td>
       </tr>
     `;
   }
@@ -227,7 +231,10 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
             <col style="width: 72px;" />
           </colgroup>
           <tr>
-            <td colspan="6" class="header-title">LOGITRACK — ÓRDENES POR LIQUIDAR POR ANTIGÜEDAD</td>
+            <td colspan="6" class="header-title">${escapeHtml(empresaTitulo)}</td>
+          </tr>
+          <tr>
+            <td colspan="6" class="header-title" style="font-size: 11pt;">ÓRDENES POR LIQUIDAR POR ANTIGÜEDAD</td>
           </tr>
           <tr>
             <td colspan="6" class="header-meta">Fecha de emisión: ${escapeHtml(hoy)} | Clientes: ${formatNumber(clientesUnicos)} | Total órdenes: ${formatNumber(totalOrdenes)}</td>
@@ -237,8 +244,8 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
             <tr><td colspan="6" style="height: 8px; border: none;"></td></tr>
             <tr class="total">
               <td colspan="4" style="text-align: right;">TOTAL GENERAL POR LIQUIDAR:</td>
-              <td class="int">${totalOrdenes}</td>
-              <td class="num">${totalMontoUsd.toFixed(2)}</td>
+              <td class="int" x:num="${totalOrdenes}">${totalOrdenes}</td>
+              <td class="num" x:num="${totalMontoUsd.toFixed(2)}">${totalMontoUsd.toFixed(2)}</td>
             </tr>
           </tbody>
         </table>
@@ -255,8 +262,8 @@ export function exportPorLiquidarToExcel(items: OrdenPorLiquidarDetalle[]) {
           ${resumenTramosHtml}
           <tr class="total">
             <td class="text">TOTAL GENERAL</td>
-            <td class="int">${totalOrdenes}</td>
-            <td class="num">${totalMontoUsd.toFixed(2)}</td>
+            <td class="int" x:num="${totalOrdenes}">${totalOrdenes}</td>
+            <td class="num" x:num="${totalMontoUsd.toFixed(2)}">${totalMontoUsd.toFixed(2)}</td>
           </tr>
         </table>
       </body>
