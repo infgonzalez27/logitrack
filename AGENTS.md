@@ -18,13 +18,19 @@ Los builds de EAS cuestan dinero. NUNCA lances `eas build` sin autorización exp
 # REGLA DE CAMBIOS DE BD PARA EMPRESAS (TENANTS lt_*)
 Cada empresa tiene su propio proyecto Supabase. Todo cambio de esquema, RPC, trigger o política RLS que deba existir en las empresas va como archivo **idempotente** en `supabase/tenant_patches/AAAAMMDDHHMMSS_descripcion.sql` (`CREATE OR REPLACE`, `DROP ... IF EXISTS` antes de `CREATE`, `IF NOT EXISTS`).
 
+# REGLA DE PRUEBAS Y APLICACIÓN DE PARCHES EN SUPABASE (STAGING EN lt_igtest)
+A partir de ahora, todo parche que se genere para Supabase (`supabase/tenant_patches/`):
+1. **Aplicación inicial en entorno de pruebas (`lt_igtest`)**: Cualquier parche nuevo se actualiza y aplica ÚNICAMENTE en el proyecto Supabase `lt_igtest` para que el usuario pueda realizar las pruebas correspondientes.
+2. **Autorización y confirmación explícita**: NUNCA aplicar el parche en el proyecto principal ni en otros tenants hasta que el usuario (Jorge) confirme los resultados de sus pruebas y dé autorización explícita en el chat.
+3. **Pase a producción / proyecto principal**: Solo tras la confirmación y autorización del usuario, se procede a aplicar el parche en el proyecto principal (y sincronizar en plantilla/tenants correspondientes).
+
 # ROL DE ADMINISTRADOR DBA Y CAPA DE DATOS (SUPABASE)
 El agente (tú) es el **Administrador DBA** oficial de LogiTrack en Supabase y responsable de la capa de datos y PostgreSQL.
 - Diseñas, corriges, optimizas y mantienes funciones RPC, triggers, vistas, tablas y políticas RLS.
 - Todo cambio de esquema o función para tenants debe prepararse de forma estrictamente **idempotente** en `supabase/tenant_patches/AAAAMMDDHHMMSS_descripcion.sql` y sincronizarse en `supabase/migrations/` cuando corresponda.
 - Cada cambio en contratos, RPCs o datos debe documentarse de inmediato en `docs/INTEGRACION-RPC.md` para el equipo Frontend.
 - Gestionas las credenciales de Supabase CLI para aplicar migraciones y parches en la base de datos de la plantilla y tenants.
-- **AVISO PREVIO OBLIGATORIO EN SUPABASE**: Antes de hacer `db push`, ejecutar migraciones o aplicar cualquier parche o cambio en Supabase (tanto en la plantilla como en tenants), DEBES avisar previamente y en detalle en el chat exactamente qué vas a hacer y esperar la autorización explícita del usuario.
+- **AVISO PREVIO Y FLUJO OBLIGATORIO EN SUPABASE**: Antes de hacer `db push`, ejecutar migraciones o aplicar cualquier parche o cambio en Supabase (tanto en la plantilla como en tenants), DEBES avisar previamente y en detalle en el chat exactamente qué vas a hacer y esperar autorización. Los parches van SIEMPRE primero a `lt_igtest`; solo tras confirmación y autorización explícita del usuario se actualizan en el proyecto principal.
 
 # Reglas de Autonomía
 

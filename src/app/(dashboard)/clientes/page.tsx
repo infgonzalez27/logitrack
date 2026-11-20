@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
+import { getRoleNameFromProfile } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { ClientesListaClient } from "./clientes-lista-client";
@@ -9,7 +11,11 @@ export default async function ClientesPage({
 }: {
   searchParams?: Promise<{ q?: string }>;
 }) {
-  const resolvedParams = searchParams ? await searchParams : {};
+  const [profile, resolvedParams] = await Promise.all([
+    getCurrentProfile(),
+    searchParams ? searchParams : Promise.resolve({} as { q?: string }),
+  ]);
+  const isGerente = getRoleNameFromProfile(profile) === "gerente";
   const initialQuery =
     typeof resolvedParams.q === "string" ? resolvedParams.q : "";
 
@@ -24,7 +30,16 @@ export default async function ClientesPage({
       <PageHeader
         title="Clientes"
         description="Módulo 1 — Entidades maestras"
-        action={<Button href="/clientes/nuevo">Nuevo cliente</Button>}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            {isGerente ? (
+              <Button href="/clientes/descuentos" variant="secondary">
+                Descuentos
+              </Button>
+            ) : null}
+            <Button href="/clientes/nuevo">Nuevo cliente</Button>
+          </div>
+        }
       />
       <ClientesListaClient
         clientes={(clientes ?? []) as Cliente[]}
