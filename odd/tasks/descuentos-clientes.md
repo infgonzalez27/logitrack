@@ -17,11 +17,11 @@ Opera sobre la tabla `descuentos_cliente_producto` manteniendo el flujo actual d
 
 ## Tasks
 - [x] T0 (S7, S8): Analizar si es necesario crear funciones/RPC en Supabase (o si alcanza con consultas/updates directos sobre `descuentos_cliente_producto`) e informar al usuario los procedimientos a realizar antes de implementar. Resultado: no se requiere RPC; todo con server actions (ver informe en chat). Route: inline. Commit: n/a
-- [x] T1 (S1, S2, S3, S9, S10): Server actions en `src/lib/actions/descuentos.ts` (`obtenerClientesConDescuentosAction`, `toggleTodosDescuentosAction`) con guardia `rol === "gerente"`. Route: inline. Commit: pendiente
-- [x] T2 (S4, S5, S10): Server actions en `src/lib/actions/descuentos.ts` (`obtenerTodosDescuentosClienteAction`, `actualizarPorcentajeDescuentoAction`, `toggleDescuentoProductoAction`) con guardia `rol === "gerente"` y reutilización de `guardarDescuentoClienteAction`. Route: inline. Commit: pendiente
-- [x] T3 (S1, S2, S3, S9, S10): Botón `Descuentos` en `src/app/(dashboard)/clientes/page.tsx` (solo gerente) y módulo `/clientes/descuentos` con listado de clientes con descuentos y botón `"Desactivar descuentos"` / `"Activar descuentos"`. Route: inline. Commit: pendiente
-- [x] T4 (S4, S5, S10): Módulo `/clientes/descuentos/[clienteId]` con edición de `porcentaje_descuento`, botón `Desactivar`/`Activar` por producto y modal para agregar producto con descuento. Route: inline. Commit: pendiente
-- [x] T5 (S6): Verificar que el registro actual de productos con descuentos en clientes se mantiene intacto y validar con `npx tsc --noEmit` (OK, exit code 0). Route: inline. Commit: pendiente
+- [x] T1 (S1, S2, S3, S9, S10): Server actions en `src/lib/actions/descuentos.ts` (`obtenerClientesConDescuentosAction`, `toggleTodosDescuentosAction`) con guardia `rol === "gerente"`. Route: inline. Commit: 25c8f35
+- [x] T2 (S4, S5, S10): Server actions en `src/lib/actions/descuentos.ts` (`obtenerTodosDescuentosClienteAction`, `actualizarPorcentajeDescuentoAction`, `toggleDescuentoProductoAction`) con guardia `rol === "gerente"` y reutilización de `guardarDescuentoClienteAction`. Route: inline. Commit: 25c8f35
+- [x] T3 (S1, S2, S3, S9, S10): Botón `Descuentos` en `src/app/(dashboard)/clientes/page.tsx` (solo gerente) y módulo `/clientes/descuentos` con listado de clientes con descuentos y botón `"Desactivar descuentos"` / `"Activar descuentos"`. Route: inline. Commit: 25c8f35
+- [x] T4 (S4, S5, S10): Módulo `/clientes/descuentos/[clienteId]` con edición de `porcentaje_descuento`, botón `Desactivar`/`Activar` por producto y modal para agregar producto con descuento. Route: inline. Commit: 25c8f35
+- [x] T5 (S6): Verificar que el registro actual de productos con descuentos en clientes se mantiene intacto y validar con `npx tsc --noEmit` (OK, exit code 0). Route: inline. Commit: 25c8f35
 
 ## Log
 - L1: "Crea un documento en la carpeta de tasks con la siguiente solicitud de tarea
