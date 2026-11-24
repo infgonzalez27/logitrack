@@ -2453,3 +2453,38 @@ Sin embargo, las funciones de descarga y aprobación (`retorna_inventario_no_des
 - **`src/lib/rendiciones/antiguedad.ts`**: Definición canónica de los 6 tramos (`TRAMOS_ANTIGUEDAD`) y helper `agruparPorTramoAntiguedad()`.
 - **`src/app/(dashboard)/rendiciones/por-liquidar/page.tsx` y `por-liquidar-lista.tsx`**: Vista de Cobranzas > Órdenes por liquidar con las 6 secciones en el orden indicado, subtotales por tramo y buscador por cliente, RIF, correlativo o factura.
 - **`src/lib/export/por-liquidar-excel.ts`**: Exportación a Excel (`.xls`) agrupada por los 6 tramos con subtotales por tramo y tabla de resumen final.
+
+
+---
+
+## 24. Reserva Inmediata de Stock en Almacén para Notas de Distribución (2026-11-24)
+
+### 24.1. Regla de Negocio y Causa Raíz
+- **Regla (Esquema 1 — Reserva Inmediata):** Al registrar o editar una nota de distribución (`PREVENTA`), ningún vendedor puede comprometer más unidades que el `stock_disponible` actual en `public.inventario_almacen` (si quedan 5 unidades, el máximo reservable es 5). Las unidades pasan de inmediato de `stock_disponible` a `stock_comprometido`.
+- **Causa raíz corregida:**
+  1. `crear_orden_distribucion` y `actualiza_orden_distribucion_segun_correlativo` no validaban ni reservaban `inventario_almacen`.
+  2. `solicita_cargar_inventario_movil_desde_almacen` recortaba el descuento con `GREATEST(0, ...)` pero acreditaba la cantidad total en `inventario_movil`, generando stock fantasma en camión.
+  3. En Web (`ProductoCatalogo`, `NuevaOrdenForm`, `EditarOrdenForm`, `AutoVentasClient`) solo se bloqueaba `stock <= 0`, permitiendo superar `stock_disponible` con stock `>= 1`. En APK (`nueva.tsx`, `editar/[id].tsx`, `autoventas/index.tsx`) ni siquiera se bloqueaba `stock <= 0`.
+
+### 24.2. Cambios en Base de Datos (`supabase/tenant_patches/20261124160000_reserva_stock_almacen_ordenes.sql`)
+1. **Nueva columna idempotente en `public.ordenes_distribucion`:**
+   - `stock_reservado BOOLEAN NOT NULL DEFAULT FALSE`: indica si la orden mantiene actualmente unidades reservadas en `inventario_almacen.stock_comprometido` (distingue órdenes nuevas de órdenes históricas previas al parche, reversadas o reprogramadas).
+2. **`public.crear_orden_distribucion(...)`**:
+   - Bloquea filas de `inventario_almacen` con `FOR UPDATE` (orden determinístico por `producto_id`).
+   - Rechaza duplicados (`PRODUCTO_DUPLICADO`) y exceso de cantidad sobre `stock_disponible` con código `STOCK_INSUFICIENTE_ALMACEN` (retorna `success: false`, `message` y `error.code = 'STOCK_INSUFICIENTE_ALMACEN'`).
+   - Descuenta `stock_disponible` e incrementa `stock_comprometido` atómicamente, marcando `stock_reservado = TRUE`.
+3. **`public.actualiza_orden_distribucion_segun_correlativo(...)`**:
+   - Bloquea con `FOR UPDATE` la unión de SKUs previos y nuevos.
+   - Si `stock_reservado = TRUE`, calcula el delta neto (`new_qty - old_qty`); si `stock_reservado = FALSE`, reserva la cantidad nueva completa.
+   - Rechaza con `STOCK_INSUFICIENTE_ALMACEN` si el incremento supera `stock_disponible`. Libera a `stock_disponible` si se reduce o elimina un SKU, y deja `stock_reservado = TRUE`.
+4. **`public.anular_orden_distribucion(...)`**:
+   - Al anular una orden en `borrador` o `aprobada` con `stock_reservado = TRUE`, devuelve `stock_comprometido -> stock_disponible` y limpia `stock_reservado = FALSE`.
+5. **`public.generar_despacho_orden_almacen(...)`**:
+   - Si `stock_reservado = TRUE`, consume primero `stock_comprometido` (evitando doble descuento sobre `stock_disponible`), valida cualquier remanente contra `stock_disponible` y limpia `stock_reservado = FALSE`.
+6. **`public.solicita_cargar_inventario_movil_desde_almacen(...)`**:
+   - Bloquea `inventario_almacen FOR UPDATE` y valida estrictamente la disponibilidad antes de cargar el camión (rechaza con `STOCK_INSUFICIENTE_ALMACEN` en vez de usar `GREATEST(0, ...)`).
+   - Solo las cargas de Radar (`p_radar_id IS NOT NULL`) pueden consumir `stock_comprometido` hasta lo reservado por sus propias órdenes `aprobada` (`stock_reservado = TRUE`); AutoVentas (`p_radar_id IS NULL`) consume únicamente `stock_disponible`. Al pasar las órdenes del Radar a `en_transito`, limpia `stock_reservado = FALSE`.
+
+### 24.3. Contrato de UI (Web y Mobile APK)
+- **Web:** `ProductoCatalogo` limita cantidad por defecto y edición manual al saldo restante (`stock_disponible - cantidad_en_carrito`), y `NuevaOrdenForm`, `EditarOrdenForm` y `AutoVentasClient` validan el tope en cada cambio y al enviar (en edición, el tope de una línea ya reservada es `stock_disponible + cantidad_previa_en_orden`).
+- **Mobile APK:** `apps/mobile/app/(app)/ordenes/nueva.tsx`, `editar/[id].tsx` y `autoventas/index.tsx` deshabilitan productos sin existencia (`<= 0`) y bloquean cualquier incremento/envío que supere el tope disponible.
