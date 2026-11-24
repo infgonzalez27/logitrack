@@ -334,20 +334,42 @@ export function AutoVentasClient({
   }
 
   function agregarCarga(producto: ProductoListaRpc, cantidad: number) {
+    const maxStock = Math.max(0, Math.floor(producto.stock_disponible));
+    if (maxStock <= 0) {
+      setMensaje({
+        tipo: "error",
+        texto: `Sin existencia en almacén para ${producto.nombre}.`,
+      });
+      return;
+    }
     const qty = Math.max(1, Math.floor(cantidad) || 1);
     registrarEnCatalogo(producto);
+    let excedio = false;
     setLineasCarga((prev) => {
       const idx = prev.findIndex((l) => l.producto_id === producto.id);
       if (idx >= 0) {
+        const propuesta = prev[idx].cantidad + qty;
+        if (propuesta > maxStock) {
+          excedio = true;
+        }
         const next = [...prev];
         next[idx] = {
           ...next[idx],
-          cantidad: next[idx].cantidad + qty,
+          cantidad: Math.min(maxStock, propuesta),
         };
         return next;
       }
-      return [...prev, { producto_id: producto.id, cantidad: qty }];
+      if (qty > maxStock) {
+        excedio = true;
+      }
+      return [...prev, { producto_id: producto.id, cantidad: Math.min(maxStock, qty) }];
     });
+    if (excedio) {
+      setMensaje({
+        tipo: "error",
+        texto: `Stock insuficiente en almacén para ${producto.nombre}: disponible ${maxStock}.`,
+      });
+    }
   }
 
   async function agregarVenta(producto: ProductoListaRpc, cantidad: number) {
@@ -482,6 +504,17 @@ export function AutoVentasClient({
         texto: "Selecciona camión y al menos un producto a cargar.",
       });
       return;
+    }
+    for (const linea of lineasCarga) {
+      const producto = catalogo[linea.producto_id];
+      const maxStock = producto ? Math.max(0, Math.floor(producto.stock_disponible)) : null;
+      if (maxStock !== null && linea.cantidad > maxStock) {
+        setMensaje({
+          tipo: "error",
+          texto: `Stock insuficiente en almacén para ${producto?.nombre ?? "el producto"} (Disponible: ${maxStock}, Solicitado: ${linea.cantidad}).`,
+        });
+        return;
+      }
     }
     startTransition(async () => {
       const res = await cargarInventarioMovilAutoVentasAction(
@@ -1051,6 +1084,9 @@ export function AutoVentasClient({
               productos={productos}
               onAdd={agregarCarga}
               selectedIds={lineasCarga.map((l) => l.producto_id)}
+              selectedQuantities={Object.fromEntries(
+                lineasCarga.map((l) => [l.producto_id, l.cantidad]),
+              )}
               addLabel="Añadir a la carga"
               stockLabel="Almacén"
             />
@@ -1090,26 +1126,35 @@ export function AutoVentasClient({
                           {producto?.codigo_producto ?? "—"}
                         </p>
                         <Input
-                          label="Cantidad a cargar"
+                          label={`Cantidad a cargar${producto ? ` (Almacén: ${producto.stock_disponible})` : ""}`}
                           type="number"
                           min={1}
                           max={producto?.stock_disponible}
                           value={linea.cantidad}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const maxStock = producto
+                              ? Math.max(0, Math.floor(producto.stock_disponible))
+                              : null;
+                            const raw = Math.floor(Number(e.target.value) || 1);
+                            let nextQty = Math.max(1, raw);
+                            if (maxStock !== null && nextQty > maxStock) {
+                              nextQty = Math.max(1, maxStock);
+                              setMensaje({
+                                tipo: "error",
+                                texto: `Stock insuficiente en almacén para ${producto?.nombre ?? "el producto"}: disponible ${maxStock}.`,
+                              });
+                            }
                             setLineasCarga((prev) =>
                               prev.map((l) =>
                                 l.producto_id === linea.producto_id
                                   ? {
                                       ...l,
-                                      cantidad: Math.max(
-                                        1,
-                                        Number(e.target.value) || 1,
-                                      ),
+                                      cantidad: nextQty,
                                     }
                                   : l,
                               ),
-                            )
-                          }
+                            );
+                          }}
                         />
                       </div>
                       <div className="flex items-start justify-end">

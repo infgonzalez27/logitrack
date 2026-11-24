@@ -18,6 +18,7 @@ export function ProductoCatalogo({
   productos,
   onAdd,
   selectedIds = [],
+  selectedQuantities = {},
   addLabel = "Añadir al carrito",
   stockLabel = "Stock",
   showPrice = true,
@@ -25,6 +26,7 @@ export function ProductoCatalogo({
   productos: ProductoListaRpc[];
   onAdd: (producto: ProductoListaRpc, cantidad: number) => void;
   selectedIds?: string[];
+  selectedQuantities?: Record<string, number>;
   addLabel?: string;
   stockLabel?: string;
   showPrice?: boolean;
@@ -53,24 +55,47 @@ export function ProductoCatalogo({
 
   const selected = new Set(selectedIds);
 
-  function qtyOf(id: string): number | "" {
-    return cantidades[id] ?? QTY_DEFAULT;
+  function restanteOf(producto: ProductoListaRpc): number {
+    const enCarrito = Math.max(
+      0,
+      Math.floor(selectedQuantities[producto.id] ?? 0),
+    );
+    return Math.max(0, Math.floor(producto.stock_disponible) - enCarrito);
   }
 
-  function setQty(id: string, value: number | "") {
+  function qtyOf(producto: ProductoListaRpc): number | "" {
+    const maxRestante = restanteOf(producto);
+    const stored = cantidades[producto.id];
+    if (stored === "") return "";
+    const base = stored ?? Math.min(QTY_DEFAULT, Math.max(1, maxRestante));
+    return maxRestante > 0 ? Math.min(maxRestante, Math.max(1, base)) : 1;
+  }
+
+  function setQty(producto: ProductoListaRpc, value: number | "") {
     if (value === "") {
-      setCantidades((prev) => ({ ...prev, [id]: "" }));
+      setCantidades((prev) => ({ ...prev, [producto.id]: "" }));
     } else {
-      const next = Math.max(1, Math.floor(value));
-      setCantidades((prev) => ({ ...prev, [id]: next }));
+      const maxRestante = Math.max(1, restanteOf(producto));
+      const next = Math.min(maxRestante, Math.max(1, Math.floor(value)));
+      setCantidades((prev) => ({ ...prev, [producto.id]: next }));
     }
   }
 
   function añadir(producto: ProductoListaRpc) {
-    const val = qtyOf(producto.id);
-    const cantidad = val === "" || val < 1 ? 1 : val;
+    const maxRestante = restanteOf(producto);
+    if (maxRestante <= 0) return;
+    const val = qtyOf(producto);
+    const raw = val === "" || val < 1 ? 1 : Math.floor(val);
+    const cantidad = Math.min(maxRestante, raw);
     onAdd(producto, cantidad);
-    setCantidades((prev) => ({ ...prev, [producto.id]: QTY_DEFAULT }));
+    const nuevoRestante = maxRestante - cantidad;
+    setCantidades((prev) => ({
+      ...prev,
+      [producto.id]: Math.min(QTY_DEFAULT, Math.max(1, nuevoRestante)),
+    }));
+    if (nuevoRestante <= 0) {
+      setActivoId(null);
+    }
   }
 
   return (
@@ -137,8 +162,10 @@ export function ProductoCatalogo({
             const pct = Number(p.porcentaje_descuento ?? 0);
             const ya = selected.has(p.id);
             const activo = activoId === p.id;
-            const qty = qtyOf(p.id);
+            const restante = restanteOf(p);
+            const qty = qtyOf(p);
             const sinStock = p.stock_disponible <= 0;
+            const sinRestante = restante <= 0;
 
             return (
               <article
@@ -151,7 +178,7 @@ export function ProductoCatalogo({
               >
                 <button
                   type="button"
-                  disabled={sinStock}
+                  disabled={sinStock || sinRestante}
                   onClick={() => setActivoId(activo ? null : p.id)}
                   className="flex aspect-square items-center justify-center bg-white p-2.5 text-left sm:p-4 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -194,6 +221,15 @@ export function ProductoCatalogo({
                     >
                       Sin stock
                     </Button>
+                  ) : sinRestante ? (
+                    <Button
+                      type="button"
+                      className="mt-auto w-full px-2 text-xs sm:text-sm"
+                      variant="secondary"
+                      disabled
+                    >
+                      Máximo alcanzado
+                    </Button>
                   ) : !activo ? (
                     <Button
                       type="button"
@@ -210,17 +246,24 @@ export function ProductoCatalogo({
                           type="button"
                           aria-label="Disminuir cantidad"
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lt-surface-muted text-lg font-medium text-lt-text hover:bg-lt-primary-muted"
-                          onClick={() => setQty(p.id, typeof qty === "number" ? qty - 1 : 1)}
+                          onClick={() =>
+                            setQty(p, typeof qty === "number" ? qty - 1 : 1)
+                          }
                         >
                           −
                         </button>
                         <input
                           type="number"
                           min={1}
-                          max={p.stock_disponible}
+                          max={restante}
                           value={qty}
                           onChange={(e) =>
-                            setQty(p.id, e.target.value === "" ? "" : Number(e.target.value))
+                            setQty(
+                              p,
+                              e.target.value === ""
+                                ? ""
+                                : Number(e.target.value),
+                            )
                           }
                           className="w-14 rounded-lg border border-lt-border bg-lt-surface px-1 py-1.5 text-center text-sm font-semibold tabular-nums outline-none focus:border-lt-primary focus:ring-2 focus:ring-lt-primary/25"
                         />
@@ -230,8 +273,11 @@ export function ProductoCatalogo({
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lt-surface-muted text-lg font-medium text-lt-text hover:bg-lt-primary-muted"
                           onClick={() =>
                             setQty(
-                              p.id,
-                              Math.min(p.stock_disponible, (typeof qty === "number" ? qty : 0) + 1),
+                              p,
+                              Math.min(
+                                restante,
+                                (typeof qty === "number" ? qty : 0) + 1,
+                              ),
                             )
                           }
                         >

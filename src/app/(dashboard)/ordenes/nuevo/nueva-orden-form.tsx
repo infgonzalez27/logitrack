@@ -120,29 +120,66 @@ export function NuevaOrdenForm({
   }
 
   function agregarProducto(producto: ProductoListaRpc, cantidad: number) {
+    const maxStock = Math.max(0, Math.floor(producto.stock_disponible));
+    if (maxStock <= 0) {
+      setError(`Sin existencia en almacén para ${producto.nombre}.`);
+      return;
+    }
     const qty = Math.max(1, Math.floor(cantidad) || 1);
     registrarProducto(producto);
+    let excedio = false;
     setLineas((prev) => {
       const existente = prev.find((l) => l.producto_id === producto.id);
       if (existente) {
+        const propuesta = existente.cantidad_solicitada + qty;
+        if (propuesta > maxStock) {
+          excedio = true;
+        }
         return prev.map((l) =>
           l.producto_id === producto.id
-            ? { ...l, cantidad_solicitada: l.cantidad_solicitada + qty }
+            ? { ...l, cantidad_solicitada: Math.min(maxStock, propuesta) }
             : l,
         );
+      }
+      if (qty > maxStock) {
+        excedio = true;
       }
       return [
         ...prev,
         {
           producto_id: producto.id,
-          cantidad_solicitada: qty,
+          cantidad_solicitada: Math.min(maxStock, qty),
           valor_unitario_usd: precioNetoProducto(producto),
         },
       ];
     });
+    if (excedio) {
+      setError(
+        `Stock insuficiente en almacén para ${producto.nombre}: disponible ${maxStock}.`,
+      );
+    } else {
+      setError(null);
+    }
   }
 
   function updateLinea(productoId: string, patch: Partial<Linea>) {
+    if (patch.cantidad_solicitada !== undefined) {
+      const producto = catalogo[productoId];
+      const maxStock = producto
+        ? Math.max(0, Math.floor(producto.stock_disponible))
+        : null;
+      const raw = Math.floor(patch.cantidad_solicitada);
+      let nextQty = Number.isFinite(raw) ? Math.max(1, raw) : 1;
+      if (maxStock !== null && nextQty > maxStock) {
+        nextQty = Math.max(1, maxStock);
+        setError(
+          `Stock insuficiente en almacén para ${producto?.nombre ?? "el producto"}: disponible ${maxStock}.`,
+        );
+      } else {
+        setError(null);
+      }
+      patch = { ...patch, cantidad_solicitada: nextQty };
+    }
     setLineas((prev) =>
       prev.map((l) => (l.producto_id === productoId ? { ...l, ...patch } : l)),
     );
@@ -173,6 +210,18 @@ export function NuevaOrdenForm({
       setError("La fecha de despacho es obligatoria para el Radar.");
       setPending(false);
       return;
+    }
+
+    for (const linea of lineas) {
+      const producto = catalogo[linea.producto_id];
+      const maxStock = producto ? Math.max(0, Math.floor(producto.stock_disponible)) : null;
+      if (maxStock !== null && linea.cantidad_solicitada > maxStock) {
+        setError(
+          `Stock insuficiente en almacén para ${producto?.nombre ?? "el producto"} (Disponible: ${maxStock}, Solicitado: ${linea.cantidad_solicitada}).`,
+        );
+        setPending(false);
+        return;
+      }
     }
 
     const result = await createOrdenAction({
@@ -301,6 +350,9 @@ export function NuevaOrdenForm({
             productos={catalogoProductos}
             onAdd={agregarProducto}
             selectedIds={lineas.map((l) => l.producto_id)}
+            selectedQuantities={Object.fromEntries(
+              lineas.map((l) => [l.producto_id, l.cantidad_solicitada]),
+            )}
           />
         </Card>
 
@@ -342,9 +394,10 @@ export function NuevaOrdenForm({
                       </p>
                       <div className="grid grid-cols-2 gap-2">
                         <Input
-                          label="Cantidad"
+                          label={`Cantidad${producto ? ` (Disp: ${producto.stock_disponible})` : ""}`}
                           type="number"
                           min={1}
+                          max={producto?.stock_disponible}
                           required
                           value={linea.cantidad_solicitada}
                           onChange={(e) =>

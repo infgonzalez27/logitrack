@@ -60,6 +60,22 @@ export function EditarOrdenForm({
   );
   const [lineas, setLineas] = useState<Linea[]>(initial.lineas);
 
+  const initialQuantities = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const l of initial.lineas) {
+      map[l.producto_id] = (map[l.producto_id] ?? 0) + l.cantidad_solicitada;
+    }
+    return map;
+  }, [initial.lineas]);
+
+  function maxPermitido(productoId: string): number | null {
+    const producto = catalogo[productoId];
+    if (!producto) return null;
+    const disp = Math.max(0, Math.floor(producto.stock_disponible));
+    const previo = Math.max(0, Math.floor(initialQuantities[productoId] ?? 0));
+    return disp + previo;
+  }
+
   const clienteSeleccionado = useMemo(
     () => clientes.find((c) => c.value === clienteId) ?? null,
     [clientes, clienteId],
@@ -94,22 +110,37 @@ export function EditarOrdenForm({
   }, [clienteId]);
 
   function agregarProducto(producto: ProductoListaRpc, cantidad: number) {
+    const disp = Math.max(0, Math.floor(producto.stock_disponible));
+    const previo = Math.max(0, Math.floor(initialQuantities[producto.id] ?? 0));
+    const maxStock = disp + previo;
+    if (maxStock <= 0) {
+      setError(`Sin existencia en almacén para ${producto.nombre}.`);
+      return;
+    }
     const qty = Math.max(1, Math.floor(cantidad) || 1);
     setCatalogo((prev) => ({ ...prev, [producto.id]: producto }));
+    let excedio = false;
     setLineas((prev) => {
       const existente = prev.find((l) => l.producto_id === producto.id);
       if (existente) {
+        const propuesta = existente.cantidad_solicitada + qty;
+        if (propuesta > maxStock) {
+          excedio = true;
+        }
         return prev.map((l) =>
           l.producto_id === producto.id
-            ? { ...l, cantidad_solicitada: l.cantidad_solicitada + qty }
+            ? { ...l, cantidad_solicitada: Math.min(maxStock, propuesta) }
             : l,
         );
+      }
+      if (qty > maxStock) {
+        excedio = true;
       }
       return [
         ...prev,
         {
           producto_id: producto.id,
-          cantidad_solicitada: qty,
+          cantidad_solicitada: Math.min(maxStock, qty),
           valor_unitario_usd:
             producto.precio_final_usd ??
             producto.precio ??
@@ -118,6 +149,13 @@ export function EditarOrdenForm({
         },
       ];
     });
+    if (excedio) {
+      setError(
+        `Stock insuficiente en almacén para ${producto.nombre}: máximo permitido ${maxStock}.`,
+      );
+    } else {
+      setError(null);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -141,6 +179,18 @@ export function EditarOrdenForm({
       setError("La fecha de despacho es obligatoria para el Radar.");
       setPending(false);
       return;
+    }
+
+    for (const linea of lineas) {
+      const maxStock = maxPermitido(linea.producto_id);
+      if (maxStock !== null && linea.cantidad_solicitada > maxStock) {
+        const producto = catalogo[linea.producto_id];
+        setError(
+          `Stock insuficiente en almacén para ${producto?.nombre ?? "el producto"} (Máximo permitido: ${maxStock}, Solicitado: ${linea.cantidad_solicitada}).`,
+        );
+        setPending(false);
+        return;
+      }
     }
 
     const result = await actualizaOrdenDistribucionAction({
@@ -220,6 +270,15 @@ export function EditarOrdenForm({
           productos={catalogoProductos}
           onAdd={agregarProducto}
           selectedIds={lineas.map((l) => l.producto_id)}
+          selectedQuantities={Object.fromEntries(
+            lineas.map((l) => [
+              l.producto_id,
+              Math.max(
+                0,
+                l.cantidad_solicitada - (initialQuantities[l.producto_id] ?? 0),
+              ),
+            ]),
+          )}
         />
       </Card>
 
@@ -255,23 +314,37 @@ export function EditarOrdenForm({
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <Input
-                        label="Cantidad"
+                        label={`Cantidad${maxPermitido(linea.producto_id) !== null ? ` (Máx: ${maxPermitido(linea.producto_id)})` : ""}`}
                         type="number"
                         min={1}
+                        max={maxPermitido(linea.producto_id) ?? undefined}
                         required
                         value={linea.cantidad_solicitada}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const maxStock = maxPermitido(linea.producto_id);
+                          const raw = Math.floor(Number(e.target.value));
+                          let nextQty = Number.isFinite(raw)
+                            ? Math.max(1, raw)
+                            : 1;
+                          if (maxStock !== null && nextQty > maxStock) {
+                            nextQty = Math.max(1, maxStock);
+                            setError(
+                              `Stock insuficiente en almacén para ${producto?.nombre ?? "el producto"}: máximo permitido ${maxStock}.`,
+                            );
+                          } else {
+                            setError(null);
+                          }
                           setLineas((prev) =>
                             prev.map((l) =>
                               l.producto_id === linea.producto_id
                                 ? {
                                     ...l,
-                                    cantidad_solicitada: Number(e.target.value),
+                                    cantidad_solicitada: nextQty,
                                   }
                                 : l,
                             ),
-                          )
-                        }
+                          );
+                        }}
                       />
                       <Input
                         label="Precio unitario (USD)"
