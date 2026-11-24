@@ -39,3 +39,4 @@
   - Commits on `fix/reserva-stock-almacen-ordenes`: `0533e28` (T1 DB patch + `docs/INTEGRACION-RPC.md`), `5c0a3b1` (T2 Web), `84175b4` (T3 Mobile APK).
   - Checks: `npx tsc --noEmit` (Web) passed (exit 0); `npm --prefix apps/mobile run typecheck` passed with 0 errors in touched files (2 pre-existing `TS2307` on `expo-image-picker`/`expo-print` in untouched files); independent read-only verifier (`odd-verifier`) passed `S1..S4` with 0 blockers.
   - Next step: Present exact deployment plan for Supabase staging `lt_igtest` (`dcikhsfzmnzoktkxxxuy`) and wait for explicit user authorization before executing any remote DB or git push action.
+- **L5 (2026-11-24)**: User authorized and confirmed testing in `lt_igtest`, then authorized applying the patch to the principal Supabase project (`egwryptydgxdnjvwtrfq`) and pushing to GitHub. Patch applied to both `lt_igtest` (`dcikhsfzmnzoktkxxxuy`) and principal (`egwryptydgxdnjvwtrfq`).
