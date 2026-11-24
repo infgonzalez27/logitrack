@@ -69,10 +69,22 @@ export default function EditarOrdenScreen() {
   const [fecha, setFecha] = useState("");
   const [factura, setFactura] = useState("");
   const [lineas, setLineas] = useState<LineaDraft[]>([]);
+  const [initialQuantities, setInitialQuantities] = useState<Record<string, number>>({});
+  const [stockMap, setStockMap] = useState<Record<string, number>>({});
   const [picker, setPicker] = useState<"productos" | null>(null);
   const [search, setSearch] = useState("");
   const [productos, setProductos] = useState<ProductoLista[]>([]);
   const [searching, setSearching] = useState(false);
+
+  const maxPermitido = useCallback(
+    (productoId: string): number | null => {
+      if (stockMap[productoId] === undefined) return null;
+      const disp = Math.max(0, Math.floor(stockMap[productoId]));
+      const previo = Math.max(0, Math.floor(initialQuantities[productoId] ?? 0));
+      return disp + previo;
+    },
+    [stockMap, initialQuantities],
+  );
 
   const esGerencia =
     profile?.rol === "admin" || profile?.rol === "gerente";
@@ -96,6 +108,13 @@ export default function EditarOrdenScreen() {
       setOrden(res.orden);
       setFecha(toLocalInput(res.orden.fecha_despacho));
       setFactura(res.orden.factura_origen_numero ?? "");
+      const initQty: Record<string, number> = {};
+      for (const d of res.orden.detalle_distribucion ?? []) {
+        if (d.producto_id) {
+          initQty[d.producto_id] = (initQty[d.producto_id] ?? 0) + d.cantidad_solicitada;
+        }
+      }
+      setInitialQuantities(initQty);
       setLineas(
         (res.orden.detalle_distribucion ?? []).map((d) => {
           const unit = Number(d.valor_unitario_usd ?? 0);
@@ -110,6 +129,18 @@ export default function EditarOrdenScreen() {
           };
         }),
       );
+      if (res.orden.cliente_id) {
+        const prodRes = await listarProductos(".F.", res.orden.cliente_id);
+        if (prodRes.ok) {
+          setStockMap((prev) => {
+            const next = { ...prev };
+            for (const p of prodRes.productos) {
+              next[p.id] = p.stock_disponible;
+            }
+            return next;
+          });
+        }
+      }
     }
     setLoading(false);
   }, [id]);
@@ -131,7 +162,16 @@ export default function EditarOrdenScreen() {
       setError(null);
       const res = await listarProductos(term.trim() || ".F.", orden.cliente_id);
       if (!res.ok) setError(res.error);
-      else setProductos(res.productos);
+      else {
+        setProductos(res.productos);
+        setStockMap((prev) => {
+          const next = { ...prev };
+          for (const p of res.productos) {
+            next[p.id] = p.stock_disponible;
+          }
+          return next;
+        });
+      }
       setSearching(false);
     },
     [orden?.cliente_id],
@@ -144,12 +184,26 @@ export default function EditarOrdenScreen() {
   }, [picker, orden?.cliente_id, loadProductos]);
 
   function addProducto(p: ProductoLista) {
+    const disp = Math.max(0, Math.floor(p.stock_disponible));
+    const previo = Math.max(0, Math.floor(initialQuantities[p.id] ?? 0));
+    const maxStock = disp + previo;
+    if (maxStock <= 0) {
+      setError(`Sin existencia en almacén para ${p.nombre}.`);
+      return;
+    }
+    setStockMap((prev) => ({ ...prev, [p.id]: p.stock_disponible }));
     const neto = precioNeto(p);
+    let excedio = false;
     setLineas((prev) => {
       const idx = prev.findIndex((l) => l.producto_id === p.id);
       if (idx >= 0) {
         const copy = [...prev];
-        copy[idx] = { ...copy[idx], cantidad: copy[idx].cantidad + 1 };
+        if (copy[idx].cantidad + 1 > maxStock) {
+          excedio = true;
+          copy[idx] = { ...copy[idx], cantidad: maxStock };
+        } else {
+          copy[idx] = { ...copy[idx], cantidad: copy[idx].cantidad + 1 };
+        }
         return copy;
       }
       return [
@@ -165,6 +219,13 @@ export default function EditarOrdenScreen() {
         },
       ];
     });
+    if (excedio) {
+      setError(
+        `Stock insuficiente en almacén para ${p.nombre}: máximo permitido ${maxStock}.`,
+      );
+    } else {
+      setError(null);
+    }
     setPicker(null);
     setSearch("");
   }
@@ -172,10 +233,22 @@ export default function EditarOrdenScreen() {
   function updateCantidad(productoId: string, cantidad: number) {
     if (cantidad <= 0) {
       setLineas((prev) => prev.filter((l) => l.producto_id !== productoId));
+      setError(null);
       return;
     }
+    const maxStock = maxPermitido(productoId);
+    let nextQty = cantidad;
+    let errMsg: string | null = null;
+    if (maxStock !== null && nextQty > maxStock) {
+      nextQty = Math.max(1, maxStock);
+      const linea = lineas.find((l) => l.producto_id === productoId);
+      errMsg = `Stock insuficiente en almacén para ${linea?.nombre ?? "el producto"}: máximo permitido ${maxStock}.`;
+    }
+    setError(errMsg);
     setLineas((prev) =>
-      prev.map((l) => (l.producto_id === productoId ? { ...l, cantidad } : l)),
+      prev.map((l) =>
+        l.producto_id === productoId ? { ...l, cantidad: nextQty } : l,
+      ),
     );
   }
 
@@ -204,6 +277,15 @@ export default function EditarOrdenScreen() {
     if (!orden.cliente_id) {
       setError("La orden no tiene cliente asignado.");
       return;
+    }
+    for (const l of lineas) {
+      const maxStock = maxPermitido(l.producto_id);
+      if (maxStock !== null && l.cantidad > maxStock) {
+        setError(
+          `Stock insuficiente en almacén para ${l.nombre} (Máximo permitido: ${maxStock}, Solicitado: ${l.cantidad}).`,
+        );
+        return;
+      }
     }
 
     setSaving(true);
@@ -313,15 +395,20 @@ export default function EditarOrdenScreen() {
             renderItem={({ item }) => {
               const neto = precioNeto(item);
               const pct = Number(item.porcentaje_descuento ?? 0);
+              const sinStock =
+                item.stock_disponible <= 0 &&
+                (initialQuantities[item.id] ?? 0) <= 0;
               return (
                 <Pressable
-                  style={styles.productRow}
+                  style={[styles.productRow, sinStock && { opacity: 0.45 }]}
+                  disabled={sinStock}
                   onPress={() => addProducto(item)}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{item.nombre}</Text>
                     <Text style={styles.meta}>
-                      {item.codigo_producto ?? "—"} · Stock {item.stock_disponible}
+                      {item.codigo_producto ?? "—"} ·{" "}
+                      {sinStock ? "Sin stock" : `Stock ${item.stock_disponible}`}
                     </Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
@@ -434,10 +521,20 @@ export default function EditarOrdenScreen() {
                         }
                         const n = Number.parseInt(digits, 10);
                         if (Number.isFinite(n)) {
+                          const maxStock = maxPermitido(item.producto_id);
+                          const capped =
+                            maxStock !== null ? Math.min(maxStock, n) : n;
+                          if (maxStock !== null && n > maxStock) {
+                            setError(
+                              `Stock insuficiente en almacén para ${item.nombre}: máximo permitido ${maxStock}.`,
+                            );
+                          } else {
+                            setError(null);
+                          }
                           setLineas((prev) =>
                             prev.map((l) =>
                               l.producto_id === item.producto_id
-                                ? { ...l, cantidad: n }
+                                ? { ...l, cantidad: capped }
                                 : l,
                             ),
                           );

@@ -27,6 +27,7 @@ type LineaDraft = {
   nombre: string;
   codigo: string | null;
   cantidad: number;
+  stockDisponible: number;
   precio: number;
   pctDescuento: number;
 };
@@ -122,12 +123,28 @@ export default function NuevaOrdenScreen() {
   );
 
   const addProducto = (p: ProductoLista) => {
+    const maxStock = Math.max(0, Math.floor(p.stock_disponible));
+    if (maxStock <= 0) {
+      setError(`Sin existencia en almacén para ${p.nombre}.`);
+      return;
+    }
     const precio = precioNeto(p);
+    let excedio = false;
     setLineas((prev) => {
       const existing = prev.find((l) => l.producto_id === p.id);
       if (existing) {
+        if (existing.cantidad + 1 > maxStock) {
+          excedio = true;
+          return prev.map((l) =>
+            l.producto_id === p.id
+              ? { ...l, cantidad: maxStock, stockDisponible: maxStock }
+              : l,
+          );
+        }
         return prev.map((l) =>
-          l.producto_id === p.id ? { ...l, cantidad: l.cantidad + 1 } : l,
+          l.producto_id === p.id
+            ? { ...l, cantidad: l.cantidad + 1, stockDisponible: maxStock }
+            : l,
         );
       }
       return [
@@ -137,24 +154,38 @@ export default function NuevaOrdenScreen() {
           nombre: p.nombre,
           codigo: p.codigo_producto,
           cantidad: 1,
+          stockDisponible: maxStock,
           precio,
           pctDescuento: Number(p.porcentaje_descuento ?? 0),
         },
       ];
     });
+    if (excedio) {
+      setError(
+        `Stock insuficiente en almacén para ${p.nombre}: disponible ${maxStock}.`,
+      );
+    } else {
+      setError(null);
+    }
     setPicker(null);
   };
 
   const updateCantidad = (productoId: string, cantidad: number) => {
+    let errMsg: string | null = null;
     setLineas((prev) =>
       prev
-        .map((l) =>
-          l.producto_id === productoId
-            ? { ...l, cantidad: Math.max(0, cantidad) }
-            : l,
-        )
+        .map((l) => {
+          if (l.producto_id !== productoId) return l;
+          if (cantidad <= 0) return { ...l, cantidad: 0 };
+          if (cantidad > l.stockDisponible) {
+            errMsg = `Stock insuficiente en almacén para ${l.nombre}: disponible ${l.stockDisponible}.`;
+            return { ...l, cantidad: l.stockDisponible };
+          }
+          return { ...l, cantidad };
+        })
         .filter((l) => l.cantidad > 0),
     );
+    setError(errMsg);
   };
 
   const submit = async () => {
@@ -167,6 +198,14 @@ export default function NuevaOrdenScreen() {
     if (lineasValidas.length === 0) {
       setError("Agrega al menos un producto.");
       return;
+    }
+    for (const l of lineasValidas) {
+      if (l.cantidad > l.stockDisponible) {
+        setError(
+          `Stock insuficiente en almacén para ${l.nombre} (Disponible: ${l.stockDisponible}, Solicitado: ${l.cantidad}).`,
+        );
+        return;
+      }
     }
     setSaving(true);
     setError(null);
@@ -288,12 +327,17 @@ export default function NuevaOrdenScreen() {
             renderItem={({ item }) => {
               const neto = precioNeto(item);
               const pct = Number(item.porcentaje_descuento ?? 0);
+              const sinStock = item.stock_disponible <= 0;
               return (
-                <Pressable style={styles.row} onPress={() => addProducto(item)}>
+                <Pressable
+                  style={[styles.row, sinStock && { opacity: 0.45 }]}
+                  disabled={sinStock}
+                  onPress={() => addProducto(item)}
+                >
                   <Text style={styles.rowTitle}>{item.nombre}</Text>
                   <Text style={styles.meta}>
-                    {item.codigo_producto ?? "—"} · stock{" "}
-                    {item.stock_disponible}
+                    {item.codigo_producto ?? "—"} ·{" "}
+                    {sinStock ? "Sin stock" : `stock ${item.stock_disponible}`}
                   </Text>
                   <Text style={styles.price}>
                     ${formatMoney(neto)}
@@ -360,6 +404,7 @@ export default function NuevaOrdenScreen() {
         <View style={styles.line}>
           <Text style={styles.rowTitle}>{item.nombre}</Text>
           {item.codigo ? <Text style={styles.meta}>{item.codigo}</Text> : null}
+          <Text style={styles.meta}>Disponible en almacén: {item.stockDisponible}</Text>
           {item.pctDescuento > 0 ? (
             <Text style={styles.discount}>Descuento {item.pctDescuento}%</Text>
           ) : null}
@@ -388,10 +433,18 @@ export default function NuevaOrdenScreen() {
                 }
                 const n = Number.parseInt(digits, 10);
                 if (Number.isFinite(n)) {
+                  const capped = Math.min(item.stockDisponible, n);
+                  if (n > item.stockDisponible) {
+                    setError(
+                      `Stock insuficiente en almacén para ${item.nombre}: disponible ${item.stockDisponible}.`,
+                    );
+                  } else {
+                    setError(null);
+                  }
                   setLineas((prev) =>
                     prev.map((l) =>
                       l.producto_id === item.producto_id
-                        ? { ...l, cantidad: n }
+                        ? { ...l, cantidad: capped }
                         : l,
                     ),
                   );

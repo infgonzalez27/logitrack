@@ -76,7 +76,7 @@ export default function AutoventasScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [productosVistos, setProductosVistos] = useState<
-    Record<string, { codigo: string; nombre: string }>
+    Record<string, { codigo: string; nombre: string; stock: number }>
   >({});
   const [ultimaCarga, setUltimaCarga] = useState<CargaCamionTicketData | null>(
     null,
@@ -126,7 +126,11 @@ export default function AutoventasScreen() {
       setProductosVistos((prev) => {
         const next = { ...prev };
         for (const p of lista) {
-          next[p.id] = { codigo: p.codigo_producto ?? "", nombre: p.nombre };
+          next[p.id] = {
+            codigo: p.codigo_producto ?? "",
+            nombre: p.nombre,
+            stock: Math.max(0, Math.floor(p.stock_disponible)),
+          };
         }
         return next;
       });
@@ -174,13 +178,23 @@ export default function AutoventasScreen() {
     const items = Object.entries(cantidadesCarga)
       .map(([producto_id, raw]) => ({
         producto_id,
-        cantidad_solicitada: Number(String(raw).replace(",", ".")) || 0,
+        cantidad_solicitada: Math.floor(Number(String(raw).replace(",", ".")) || 0),
       }))
       .filter((p) => p.cantidad_solicitada > 0);
 
     if (!items.length) {
       setError("Indica cantidades a cargar.");
       return;
+    }
+
+    for (const item of items) {
+      const info = productosVistos[item.producto_id];
+      if (info && item.cantidad_solicitada > info.stock) {
+        setError(
+          `Stock insuficiente en almacén para ${info.nombre} (Disponible: ${info.stock}, Solicitado: ${item.cantidad_solicitada}).`,
+        );
+        return;
+      }
     }
 
     setSaving(true);
@@ -611,24 +625,46 @@ export default function AutoventasScreen() {
               />
             </View>
           }
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.name}>{item.nombre}</Text>
-              <Text style={styles.meta}>
-                {item.codigo_producto ?? ""} · Stock almacén{" "}
-                {item.stock_disponible}
-              </Text>
-              <TextInput
-                style={styles.qty}
-                keyboardType="decimal-pad"
-                placeholder="Cantidad"
-                value={cantidadesCarga[item.id] ?? ""}
-                onChangeText={(t) =>
-                  setCantidadesCarga((prev) => ({ ...prev, [item.id]: t }))
-                }
-              />
-            </View>
-          )}
+          renderItem={({ item }) => {
+            const maxStock = Math.max(0, Math.floor(item.stock_disponible));
+            const sinStock = maxStock <= 0;
+            return (
+              <View style={[styles.card, sinStock && { opacity: 0.55 }]}>
+                <Text style={styles.name}>{item.nombre}</Text>
+                <Text style={styles.meta}>
+                  {item.codigo_producto ?? ""} ·{" "}
+                  {sinStock ? "Sin stock en almacén" : `Stock almacén ${maxStock}`}
+                </Text>
+                <TextInput
+                  style={styles.qty}
+                  keyboardType="number-pad"
+                  editable={!sinStock}
+                  placeholder={sinStock ? "Sin stock" : `Cantidad (máx ${maxStock})`}
+                  value={cantidadesCarga[item.id] ?? ""}
+                  onChangeText={(t) => {
+                    const digits = t.replace(/[^0-9]/g, "");
+                    if (!digits) {
+                      setCantidadesCarga((prev) => ({ ...prev, [item.id]: "" }));
+                      return;
+                    }
+                    const n = Number.parseInt(digits, 10);
+                    if (Number.isFinite(n) && n > maxStock) {
+                      setError(
+                        `Stock insuficiente en almacén para ${item.nombre}: disponible ${maxStock}.`,
+                      );
+                      setCantidadesCarga((prev) => ({
+                        ...prev,
+                        [item.id]: String(maxStock),
+                      }));
+                      return;
+                    }
+                    setError(null);
+                    setCantidadesCarga((prev) => ({ ...prev, [item.id]: digits }));
+                  }}
+                />
+              </View>
+            );
+          }}
         />
       ) : (
         <FlatList
