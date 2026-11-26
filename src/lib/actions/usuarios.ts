@@ -27,12 +27,13 @@ export async function listarUsuariosAction(params?: {
   | { ok: true; usuarios: UsuarioListaRpc[] }
   | { ok: false; error: string }
 > {
+  const rolFiltro = params?.rol?.trim() ?? "";
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(
     "retorna_lista_usuarios_segun_parametros",
     {
       p_nombre: params?.nombre?.trim() ?? "",
-      p_rol: params?.rol?.trim() ?? "",
+      p_rol: rolFiltro,
     },
   );
 
@@ -47,18 +48,45 @@ export async function listarUsuariosAction(params?: {
     return { ok: true, usuarios: [] };
   }
 
-  const { data: perfiles, error: perfilesError } = await (await createAdminClient())
+  // Si ya se filtró por un rol específico (ej. "vendedor" en /clientes/[id]),
+  // evitamos depender de createAdminClient() que puede fallar en tenants sin SUPABASE_ACCESS_TOKEN.
+  if (rolFiltro) {
+    return {
+      ok: true,
+      usuarios: usuarios.map((u) => ({
+        ...u,
+        rol_nombre: u.rol_nombre ?? rolFiltro,
+      })),
+    };
+  }
+
+  const rolPorId = new Map<string, string | null>();
+  const { data: perfiles } = await supabase
     .from("perfiles_usuario")
     .select("id, roles(nombre)")
     .in("id", ids);
 
-  if (perfilesError) {
-    return { ok: false, error: perfilesError.message };
+  for (const p of perfiles ?? []) {
+    rolPorId.set(p.id, joinOne(p.roles)?.nombre ?? null);
   }
 
-  const rolPorId = new Map(
-    (perfiles ?? []).map((p) => [p.id, joinOne(p.roles)?.nombre ?? null]),
-  );
+  const faltantes = ids.filter((id) => !rolPorId.has(id));
+  if (faltantes.length > 0) {
+    try {
+      const admin = await createAdminClient();
+      const { data: perfilesAdmin } = await admin
+        .from("perfiles_usuario")
+        .select("id, roles(nombre)")
+        .in("id", faltantes);
+
+      for (const p of perfilesAdmin ?? []) {
+        rolPorId.set(p.id, joinOne(p.roles)?.nombre ?? null);
+      }
+    } catch {
+      // En tenants donde no hay SUPABASE_ACCESS_TOKEN / service_role configurado,
+      // degradamos sin romper el render con 500.
+    }
+  }
 
   return {
     ok: true,
