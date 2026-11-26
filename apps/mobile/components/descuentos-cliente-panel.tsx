@@ -5,7 +5,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -41,10 +40,19 @@ export function DescuentosClientePanel({ clienteId }: { clienteId: string }) {
 
   const load = useCallback(async () => {
     setError(null);
-    const res = await obtenerDescuentosCliente(clienteId);
-    if (!res.ok) setError(res.error);
-    else setDescuentos(res.descuentos);
-    setLoading(false);
+    try {
+      const res = await obtenerDescuentosCliente(clienteId);
+      if (!res.ok) setError(res.error);
+      else setDescuentos(res.descuentos);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron cargar los descuentos.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }, [clienteId]);
 
   useFocusEffect(
@@ -55,12 +63,20 @@ export function DescuentosClientePanel({ clienteId }: { clienteId: string }) {
   );
 
   async function buscarProductos() {
-    const res = await listarProductos(search.trim() || ".F.", clienteId);
-    if (res.ok) {
-      setProductos(res.productos);
-      setShowPicker(true);
-    } else {
-      setError(res.error);
+    try {
+      const res = await listarProductos(search.trim() || ".F.", clienteId);
+      if (res.ok) {
+        setProductos(res.productos);
+        setShowPicker(true);
+      } else {
+        setError(res.error);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron buscar los productos.",
+      );
     }
   }
 
@@ -87,23 +103,32 @@ export function DescuentosClientePanel({ clienteId }: { clienteId: string }) {
     }
 
     setSaving(true);
-    const res = await guardarDescuentoCliente({
-      cliente_id: clienteId,
-      producto_id: productoId,
-      porcentaje_descuento: pctNum,
-      precio_pactado_usd: pactadoNum,
-    });
-    setSaving(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
+    try {
+      const res = await guardarDescuentoCliente({
+        cliente_id: clienteId,
+        producto_id: productoId,
+        porcentaje_descuento: pctNum,
+        precio_pactado_usd: pactadoNum,
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setOkMsg("Descuento guardado.");
+      setProductoId("");
+      setProductoLabel("");
+      setPct("");
+      setPactado("");
+      void load();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo guardar el descuento.",
+      );
+    } finally {
+      setSaving(false);
     }
-    setOkMsg("Descuento guardado.");
-    setProductoId("");
-    setProductoLabel("");
-    setPct("");
-    setPactado("");
-    void load();
   }
 
   function eliminar(id: string) {
@@ -114,11 +139,19 @@ export function DescuentosClientePanel({ clienteId }: { clienteId: string }) {
         style: "destructive",
         onPress: () => {
           void (async () => {
-            const res = await eliminarDescuentoCliente(id);
-            if (!res.ok) setError(res.error);
-            else {
-              setOkMsg("Descuento eliminado.");
-              setDescuentos((prev) => prev.filter((d) => d.id !== id));
+            try {
+              const res = await eliminarDescuentoCliente(id);
+              if (!res.ok) setError(res.error);
+              else {
+                setOkMsg("Descuento eliminado.");
+                setDescuentos((prev) => prev.filter((d) => d.id !== id));
+              }
+            } catch (err) {
+              setError(
+                err instanceof Error
+                  ? err.message
+                  : "No se pudo eliminar el descuento.",
+              );
             }
           })();
         },

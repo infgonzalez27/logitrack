@@ -39,7 +39,7 @@ export function DescuentosClientePanel({
 }) {
   const [descuentos, setDescuentos] = useState<DescuentoConProducto[]>([]);
   const [productos, setProductos] = useState<ProductoListaRpc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedClienteId, setLoadedClienteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -54,29 +54,39 @@ export function DescuentosClientePanel({
   const [busquedaLista, setBusquedaLista] = useState("");
   const [tipoLista, setTipoLista] = useState<TipoFiltroLista>("todos");
 
+  const loading = Boolean(clienteId) && loadedClienteId !== clienteId;
+
   useEffect(() => {
     if (!clienteId) return;
 
     let mounted = true;
-    setLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
 
     void Promise.all([
       obtenerDescuentosClienteAction(clienteId),
       listarProductosAction(""),
-    ]).then(([resDesc, resProd]) => {
-      if (!mounted) return;
-      if (resDesc.ok) {
-        setDescuentos(resDesc.descuentos);
-      } else {
-        setErrorMsg(resDesc.error);
-      }
-      if (resProd.ok) {
-        setProductos(resProd.productos);
-      }
-      setLoading(false);
-    });
+    ])
+      .then(([resDesc, resProd]) => {
+        if (!mounted) return;
+        if (resDesc.ok) {
+          setDescuentos(resDesc.descuentos);
+        } else {
+          setErrorMsg(resDesc.error);
+        }
+        if (resProd.ok) {
+          setProductos(resProd.productos);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!mounted) return;
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : "No se pudieron cargar los descuentos.",
+        );
+      })
+      .finally(() => {
+        if (mounted) setLoadedClienteId(clienteId);
+      });
 
     return () => {
       mounted = false;
@@ -128,8 +138,7 @@ export function DescuentosClientePanel({
     return productosFiltrados;
   }, [productos, productosFiltrados, selectedProductoId]);
 
-  async function handleGuardarDescuento(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleGuardarDescuento() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
@@ -157,40 +166,68 @@ export function DescuentosClientePanel({
     }
 
     setSaving(true);
-    const res = await guardarDescuentoClienteAction({
-      cliente_id: clienteId,
-      producto_id: selectedProductoId,
-      porcentaje_descuento: pct,
-      precio_pactado_usd: pactado,
-    });
-    setSaving(false);
+    try {
+      const res = await guardarDescuentoClienteAction({
+        cliente_id: clienteId,
+        producto_id: selectedProductoId,
+        porcentaje_descuento: pct,
+        precio_pactado_usd: pactado,
+      });
 
-    if (!res.ok) {
-      setErrorMsg(res.error);
-      return;
+      if (!res.ok) {
+        setErrorMsg(res.error);
+        return;
+      }
+
+      setSuccessMsg("Descuento guardado.");
+      setSelectedProductoId("");
+      setPorcentajeDescuento("");
+      setPrecioPactadoUsd("");
+      const resDesc = await obtenerDescuentosClienteAction(clienteId);
+      if (resDesc.ok) setDescuentos(resDesc.descuentos);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "No se pudo guardar el descuento.",
+      );
+    } finally {
+      setSaving(false);
     }
+  }
 
-    setSuccessMsg("Descuento guardado.");
-    setSelectedProductoId("");
-    setPorcentajeDescuento("");
-    setPrecioPactadoUsd("");
-    const resDesc = await obtenerDescuentosClienteAction(clienteId);
-    if (resDesc.ok) setDescuentos(resDesc.descuentos);
+  function handleInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!saving && selectedProductoId) {
+        void handleGuardarDescuento();
+      }
+    }
   }
 
   async function handleEliminarDescuento(id: string) {
     setDeletingId(id);
     setErrorMsg(null);
     setSuccessMsg(null);
-    const res = await eliminarDescuentoClienteAction(id, clienteId);
-    setDeletingId(null);
+    try {
+      const res = await eliminarDescuentoClienteAction(id, clienteId);
 
-    if (!res.ok) {
-      setErrorMsg(res.error);
-      return;
+      if (!res.ok) {
+        setErrorMsg(res.error);
+        return;
+      }
+      setSuccessMsg("Descuento eliminado.");
+      setDescuentos((prev) => prev.filter((d) => d.id !== id));
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "No se pudo eliminar el descuento.",
+      );
+    } finally {
+      setDeletingId(null);
     }
-    setSuccessMsg("Descuento eliminado.");
-    setDescuentos((prev) => prev.filter((d) => d.id !== id));
   }
 
   return (
@@ -211,10 +248,7 @@ export function DescuentosClientePanel({
         </div>
       ) : null}
 
-      <form
-        onSubmit={handleGuardarDescuento}
-        className="space-y-4 rounded-xl border border-lt-border bg-lt-surface-muted/40 p-4"
-      >
+      <div className="space-y-4 rounded-xl border border-lt-border bg-lt-surface-muted/40 p-4">
         <h3 className="text-sm font-semibold text-lt-text">
           Asignar o modificar descuento
         </h3>
@@ -225,6 +259,12 @@ export function DescuentosClientePanel({
             placeholder="Nombre, código o código de barras…"
             value={busquedaProducto}
             onChange={(e) => setBusquedaProducto(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
             disabled={loading}
             autoComplete="off"
           />
@@ -308,8 +348,9 @@ export function DescuentosClientePanel({
               value={porcentajeDescuento}
               onChange={(e) => {
                 setPorcentajeDescuento(e.target.value);
-                if (e.target.value) setPrecioPactadoUsd("");
+                if (Number(e.target.value) > 0) setPrecioPactadoUsd("");
               }}
+              onKeyDown={handleInputKeyDown}
               disabled={saving}
             />
           </div>
@@ -326,8 +367,9 @@ export function DescuentosClientePanel({
               value={precioPactadoUsd}
               onChange={(e) => {
                 setPrecioPactadoUsd(e.target.value);
-                if (e.target.value) setPorcentajeDescuento("");
+                if (Number(e.target.value) > 0) setPorcentajeDescuento("");
               }}
+              onKeyDown={handleInputKeyDown}
               disabled={saving}
             />
           </div>
@@ -351,11 +393,15 @@ export function DescuentosClientePanel({
         ) : null}
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={saving || !selectedProductoId}>
+          <Button
+            type="button"
+            disabled={saving || !selectedProductoId}
+            onClick={() => void handleGuardarDescuento()}
+          >
             {saving ? "Guardando…" : "Guardar descuento"}
           </Button>
         </div>
-      </form>
+      </div>
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -375,6 +421,12 @@ export function DescuentosClientePanel({
               placeholder="Filtrar por nombre o código…"
               value={busquedaLista}
               onChange={(e) => setBusquedaLista(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
               autoComplete="off"
             />
             <div className="flex flex-wrap gap-2">

@@ -20,10 +20,11 @@ export function DescuentosClientesListaClient({
 }) {
   const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
-  const [activoGlobal, setActivoGlobal] = useState(hayAlgunDescuentoActivo);
   const [pendingGlobal, setPendingGlobal] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const activoGlobal = hayAlgunDescuentoActivo;
 
   const filtrados = useMemo(() => {
     const term = busqueda.trim().toLowerCase();
@@ -49,21 +50,29 @@ export function DescuentosClientesListaClient({
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const res = await toggleTodosDescuentosAction(activar);
-    setPendingGlobal(false);
+    try {
+      const res = await toggleTodosDescuentosAction(activar);
 
-    if (!res.ok) {
-      setErrorMsg(res.error);
-      return;
+      if (!res.ok) {
+        setErrorMsg(res.error);
+        return;
+      }
+
+      setSuccessMsg(
+        activar
+          ? "Todos los descuentos fueron activados."
+          : "Todos los descuentos fueron desactivados.",
+      );
+      router.refresh();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "No se pudo actualizar el estado de los descuentos.",
+      );
+    } finally {
+      setPendingGlobal(false);
     }
-
-    setActivoGlobal(activar);
-    setSuccessMsg(
-      activar
-        ? "Todos los descuentos fueron activados."
-        : "Todos los descuentos fueron desactivados.",
-    );
-    router.refresh();
   }
 
   return (
